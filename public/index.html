@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WordWefter</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --paper: #f7f4ec;
+      --accent: #0f8b8d;
+      --warm: #f2b134;
+      --rose: #d94f70;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(15, 139, 141, 0.16), transparent 34%),
+        linear-gradient(315deg, rgba(217, 79, 112, 0.14), transparent 40%),
+        var(--paper);
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    main {
+      width: min(92vw, 980px);
+      padding: clamp(2rem, 7vw, 5rem);
+      text-align: center;
+    }
+
+    .brand {
+      position: relative;
+      display: inline-block;
+      margin: 0;
+      font-size: clamp(3rem, 13vw, 8rem);
+      line-height: 0.92;
+      letter-spacing: 0;
+      text-transform: none;
+      text-wrap: balance;
+      color: var(--ink);
+      text-shadow:
+        0.04em 0.04em 0 var(--warm),
+        -0.03em 0.07em 0 rgba(15, 139, 141, 0.7);
+    }
+
+    .brand::before,
+    .brand::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      width: 64%;
+      height: 0.12em;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, var(--accent), var(--rose), var(--warm));
+    }
+
+    .brand::before {
+      top: -0.2em;
+    }
+
+    .brand::after {
+      bottom: -0.24em;
+      width: 42%;
+    }
+
+    @media (max-width: 520px) {
+      body {
+        overflow: auto;
+      }
+
+      main {
+        width: 100%;
+        padding-inline: 1.25rem;
+      }
+
+      .brand {
+        font-size: clamp(2.7rem, 17vw, 4.6rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main aria-label="WordWefter home">
+    <h1 class="brand">WordWefter</h1>
+  </main>
+
+  <script src="./jquery-4.0.0.min.js"></script>
+  <script src="./lodash.js"></script>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
