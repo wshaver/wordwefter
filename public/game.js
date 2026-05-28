@@ -73,8 +73,75 @@ class WordWefterGameState {
 }
 
 const gameState = new WordWefterGameState();
+const boardSize = 12;
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
+
+function renderBoard() {
+  const board = document.querySelector("#board");
+
+  if (!board) {
+    return;
+  }
+
+  board.replaceChildren();
+
+  for (let index = 0; index < boardSize * boardSize; index += 1) {
+    const cell = document.createElement("div");
+    cell.className = "board-cell";
+    cell.dataset.row = Math.floor(index / boardSize);
+    cell.dataset.column = index % boardSize;
+    board.append(cell);
+  }
+}
+
+function renderRack() {
+  const rack = document.querySelector("#rack");
+
+  if (!rack) {
+    return;
+  }
+
+  rack.replaceChildren();
+
+  gameState.currentRack.forEach((tile) => {
+    const tileElement = document.createElement("div");
+    const letterElement = document.createElement("span");
+    const pointsElement = document.createElement("span");
+
+    tileElement.className = "tile";
+    letterElement.textContent = tile.letter;
+    pointsElement.className = "tile-points";
+    pointsElement.textContent = tile.points;
+
+    tileElement.append(letterElement, pointsElement);
+    rack.append(tileElement);
+  });
+}
+
+function startNewGame() {
+  document.body.classList.add("game-started");
+  gameState.reset();
+  gameState.drawSevenTiles();
+  renderBoard();
+  renderRack();
+}
+
+function bindGameControls() {
+  const newGameButton = document.querySelector("#new-game-button");
+
+  if (newGameButton) {
+    newGameButton.addEventListener("click", startNewGame);
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bindGameControls);
+} else {
+  bindGameControls();
+}
+
+window.startWordWefterGame = startNewGame;
 
 export { WordWefterGameState, gameState };
