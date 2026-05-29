@@ -14,6 +14,7 @@ class WordWefterGameState {
     this.activePlacements = new Map();
     this.nextTileId = 1;
     this.flashActivePlacements = false;
+    this.currentScore = 0;
   }
 
   get tilesRemaining() {
@@ -80,6 +81,7 @@ class WordWefterGameState {
     this.activePlacements = new Map();
     this.nextTileId = 1;
     this.flashActivePlacements = false;
+    this.currentScore = 0;
   }
 
   normalizeWord(word) {
@@ -426,6 +428,63 @@ class WordWefterGameState {
     return words;
   }
 
+  getWordAt(row, column, direction) {
+    const rowStep = direction === "column" ? 1 : 0;
+    const columnStep = direction === "row" ? 1 : 0;
+    let startRow = row;
+    let startColumn = column;
+
+    while (
+      startRow - rowStep >= 0 &&
+      startColumn - columnStep >= 0 &&
+      this.getTileAt(startRow - rowStep, startColumn - columnStep)
+    ) {
+      startRow -= rowStep;
+      startColumn -= columnStep;
+    }
+
+    const tiles = [];
+    let currentRow = startRow;
+    let currentColumn = startColumn;
+
+    while (
+      currentRow < boardSize &&
+      currentColumn < boardSize &&
+      this.getTileAt(currentRow, currentColumn)
+    ) {
+      tiles.push(this.getTileAt(currentRow, currentColumn));
+      currentRow += rowStep;
+      currentColumn += columnStep;
+    }
+
+    return {
+      direction,
+      key: `${direction}:${startRow},${startColumn}`,
+      score: tiles.reduce((total, tile) => total + tile.points, 0),
+      word: tiles.map((tile) => tile.letter).join("")
+    };
+  }
+
+  getChangedWords() {
+    const changedWords = new Map();
+
+    this.activePlacements.forEach((tile) => {
+      ["row", "column"].forEach((direction) => {
+        const word = this.getWordAt(tile.row, tile.column, direction);
+
+        if (word.word.length > 1) {
+          changedWords.set(word.key, word);
+        }
+      });
+    });
+
+    return Array.from(changedWords.values());
+  }
+
+  getCurrentTurnScore() {
+    return this.getChangedWords().reduce((total, word) => total + word.score, 0);
+  }
+
   validateBoardWords() {
     const words = this.getBoardWords();
     const invalidWords = words.filter((word) => !this.isRealWord(word));
@@ -472,6 +531,9 @@ class WordWefterGameState {
       return validation;
     }
 
+    const turnWords = this.getChangedWords();
+    const turnScore = this.getCurrentTurnScore();
+
     this.activePlacements.forEach((tile, cellKey) => {
       this.boardTiles.set(cellKey, {
         ...tile,
@@ -480,9 +542,14 @@ class WordWefterGameState {
     });
     this.activePlacements.clear();
     this.flashActivePlacements = false;
+    this.currentScore += turnScore;
     this.drawTiles(Math.max(0, 7 - this.currentRack.length));
 
-    return validation;
+    return {
+      ...validation,
+      turnScore,
+      turnWords
+    };
   }
 }
 
@@ -580,11 +647,25 @@ function updatePlacementControls() {
   document.body.classList.toggle("has-active-placement", gameState.hasActivePlacements());
 }
 
+function renderScore() {
+  const currentScoreElement = document.querySelector("#current-score");
+  const currentTurnScoreElement = document.querySelector("#current-turn-score");
+
+  if (currentScoreElement) {
+    currentScoreElement.textContent = gameState.currentScore;
+  }
+
+  if (currentTurnScoreElement) {
+    currentTurnScoreElement.textContent = gameState.getCurrentTurnScore();
+  }
+}
+
 function renderGame() {
   destroySortables();
   renderBoard();
   renderRack();
   updatePlacementControls();
+  renderScore();
   initializeSortables();
 }
 

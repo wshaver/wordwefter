@@ -285,6 +285,24 @@
       font: 700 0.9rem/1.3 system-ui, sans-serif;
     }
 
+    .score-panel {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem;
+      padding: 0.7rem 0.85rem;
+      border: 2px solid rgba(23, 32, 42, 0.28);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.46);
+      font: 700 0.95rem/1.2 system-ui, sans-serif;
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
     @media (max-width: 520px) {
       main {
         width: 100%;
@@ -322,6 +340,16 @@
           <button class="game-button draw-tile-button" type="button" id="draw-tile-button">Draw Tile</button>
           <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
+        </div>
+        <div class="score-panel" aria-label="Score">
+          <div class="score-row">
+            <span>Current score</span>
+            <span id="current-score">0</span>
+          </div>
+          <div class="score-row">
+            <span>Current turn</span>
+            <span id="current-turn-score">0</span>
+          </div>
         </div>
         <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
       </div>
