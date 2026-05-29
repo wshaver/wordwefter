@@ -15,6 +15,7 @@
       --board-line: #9ca79c;
       --tile: #fbdfa3;
       --tile-edge: #c69238;
+      --play-width: min(78vh, 92vw, 640px);
     }
 
     * {
@@ -47,7 +48,7 @@
     .masthead {
       display: grid;
       justify-items: center;
-      gap: 2rem;
+      gap: 2.35rem;
       transition: transform 220ms ease, padding 220ms ease;
     }
 
@@ -88,7 +89,14 @@
       width: 42%;
     }
 
-    .new-game-button {
+    .game-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+
+    .game-button {
       min-height: 2.75rem;
       border: 2px solid var(--ink);
       border-radius: 8px;
@@ -100,7 +108,7 @@
       box-shadow: 0.18rem 0.18rem 0 var(--warm);
     }
 
-    .new-game-button:hover {
+    .game-button:hover {
       background: #0b7375;
     }
 
@@ -114,7 +122,8 @@
     .board {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
-      width: min(78vh, 92vw, 640px);
+      grid-template-rows: repeat(12, minmax(0, 1fr));
+      width: var(--play-width);
       aspect-ratio: 1;
       border: 3px solid var(--ink);
       background: var(--board-line);
@@ -123,21 +132,24 @@
     }
 
     .board-cell {
+      position: relative;
+      display: grid;
+      place-items: center;
       min-width: 0;
+      min-height: 0;
+      overflow: hidden;
       background: rgba(255, 255, 255, 0.68);
     }
 
-    .rack-wrap {
-      width: min(92vw, 680px);
-      display: grid;
-      gap: 0.45rem;
-      justify-items: start;
+    .board-cell.drop-ready {
+      background: rgba(15, 139, 141, 0.24);
     }
 
-    .rack-label {
-      font: 700 0.85rem/1 system-ui, sans-serif;
-      text-transform: uppercase;
-      color: var(--ink);
+    .rack-wrap {
+      width: var(--play-width);
+      display: grid;
+      gap: 0.75rem;
+      justify-items: start;
     }
 
     .rack {
@@ -145,6 +157,7 @@
       min-height: 4.75rem;
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-rows: minmax(0, 1fr);
       gap: clamp(0.35rem, 1.8vw, 0.75rem);
       padding: clamp(0.45rem, 1.8vw, 0.75rem);
       border: 3px solid var(--ink);
@@ -163,6 +176,38 @@
       color: var(--ink);
       font: 800 clamp(1.35rem, 6vw, 2.25rem)/1 Georgia, "Times New Roman", serif;
       box-shadow: inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08);
+      user-select: none;
+    }
+
+    .tile[draggable="true"] {
+      cursor: pointer;
+    }
+
+    .tile:active {
+      cursor: pointer;
+    }
+
+    .tile-active-placement {
+      outline: 2px solid var(--rose);
+      outline-offset: -3px;
+      box-shadow:
+        inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(217, 79, 112, 0.24);
+    }
+
+    .tile-placement-error {
+      animation: tile-flash 420ms ease-in-out 2;
+    }
+
+    @keyframes tile-flash {
+      0%,
+      100% {
+        background: var(--tile);
+      }
+
+      50% {
+        background: #ffd1dc;
+      }
     }
 
     .tile-points {
@@ -172,21 +217,72 @@
       font: 700 clamp(0.58rem, 2.2vw, 0.78rem)/1 system-ui, sans-serif;
     }
 
+    .board .tile {
+      width: calc(100% - 8px);
+      max-width: 100%;
+      border-width: 2px;
+      border-radius: 6px;
+      font-size: clamp(1rem, 3.4vw, 1.9rem);
+      box-shadow: inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08);
+      cursor: default;
+    }
+
+    .board .tile[draggable="true"] {
+      cursor: pointer;
+    }
+
+    .board .tile-points {
+      right: 0.2rem;
+      bottom: 0.18rem;
+      font-size: clamp(0.48rem, 1.4vw, 0.68rem);
+    }
+
     body.game-started main {
       align-content: start;
       padding-top: clamp(1.25rem, 3vw, 2rem);
     }
 
     body.game-started .masthead {
-      gap: 0.8rem;
+      gap: 1.15rem;
     }
 
     body.game-started .brand {
-      font-size: clamp(2.1rem, 6vw, 4rem);
+      font-size: clamp(1.85rem, 5vw, 3.35rem);
     }
 
     body.game-started .game-area {
       display: grid;
+    }
+
+    .draw-tile-button {
+      display: none;
+    }
+
+    body.game-started .draw-tile-button {
+      display: inline-block;
+    }
+
+    .rack-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      justify-self: center;
+      gap: 0.75rem;
+    }
+
+    .placement-action {
+      display: none;
+    }
+
+    body.has-active-placement .placement-action {
+      display: inline-block;
+    }
+
+    .game-message {
+      min-height: 1.25rem;
+      justify-self: center;
+      color: var(--rose);
+      font: 700 0.9rem/1.3 system-ui, sans-serif;
     }
 
     @media (max-width: 520px) {
@@ -200,7 +296,7 @@
       }
 
       .board {
-        width: min(92vw, 62vh);
+        width: var(--play-width);
       }
 
       .rack {
@@ -213,14 +309,21 @@
   <main aria-label="WordWefter home">
     <header class="masthead">
       <h1 class="brand">WordWefter</h1>
-      <button class="new-game-button" type="button" id="new-game-button">New Game</button>
+      <div class="game-controls" aria-label="Game controls">
+        <button class="game-button" type="button" id="new-game-button">New Game</button>
+      </div>
     </header>
 
     <section class="game-area" aria-label="Game board">
       <div class="board" id="board" aria-label="12 by 12 board"></div>
       <div class="rack-wrap">
-        <div class="rack-label">Rack</div>
         <div class="rack" id="rack" aria-label="Rack"></div>
+        <div class="rack-controls" aria-label="Rack controls">
+          <button class="game-button draw-tile-button" type="button" id="draw-tile-button">Draw Tile</button>
+          <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
+          <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
+        </div>
+        <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
       </div>
     </section>
   </main>
