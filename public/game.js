@@ -488,8 +488,8 @@ class WordWefterGameState {
 
 const gameState = new WordWefterGameState();
 const boardSize = 12;
-let draggedTileId = null;
-let draggedTileSource = "rack";
+let rackSortable = null;
+let boardSortables = [];
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
@@ -502,24 +502,13 @@ function createTileElement(tile, options = {}) {
 
   tileElement.className = "tile";
   tileElement.dataset.tileId = tile.id;
+  tileElement.dataset.tileSource = options.source || "rack";
   letterElement.textContent = tile.letter;
   pointsElement.className = "tile-points";
   pointsElement.textContent = tile.points;
 
-  if (options.draggable) {
-    tileElement.draggable = true;
-    tileElement.addEventListener("dragstart", (event) => {
-      draggedTileId = tile.id;
-      draggedTileSource = options.source || "rack";
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", tile.id);
-      event.dataTransfer.setData("application/x-wordwefter-source", draggedTileSource);
-    });
-    tileElement.addEventListener("dragend", () => {
-      draggedTileId = null;
-      draggedTileSource = "rack";
-      clearDropReadyState();
-    });
+  if (options.movable) {
+    tileElement.classList.add("tile-movable");
   }
 
   if (options.source === "board" && options.active) {
@@ -563,8 +552,8 @@ function renderBoard() {
     if (tile) {
       cell.append(createTileElement(tile, {
         active: tile.active,
-        draggable: tile.active,
         flash: tile.active && gameState.flashActivePlacements,
+        movable: tile.active,
         source: "board"
       }));
     }
@@ -583,7 +572,7 @@ function renderRack() {
   rack.replaceChildren();
 
   gameState.currentRack.forEach((tile) => {
-    rack.append(createTileElement(tile, { draggable: true, source: "rack" }));
+    rack.append(createTileElement(tile, { movable: true, source: "rack" }));
   });
 }
 
@@ -592,9 +581,11 @@ function updatePlacementControls() {
 }
 
 function renderGame() {
+  destroySortables();
   renderBoard();
   renderRack();
   updatePlacementControls();
+  initializeSortables();
 }
 
 function setGameMessage(message) {
@@ -620,7 +611,7 @@ function drawTileToRack() {
   }
 
   gameState.drawTiles(1);
-  renderRack();
+  renderGame();
 }
 
 function finishPlacement() {
@@ -642,129 +633,103 @@ function resetPlacement() {
   renderGame();
 }
 
-function clearDropReadyState() {
-  document.querySelectorAll(".board-cell.drop-ready").forEach((cell) => {
-    cell.classList.remove("drop-ready");
-  });
-}
-
-function bindBoardDragAndDrop() {
-  const board = document.querySelector("#board");
-
-  if (!board) {
-    return;
+function destroySortables() {
+  if (rackSortable) {
+    rackSortable.destroy();
+    rackSortable = null;
   }
 
-  board.addEventListener("dragover", (event) => {
-    const cell = event.target.closest(".board-cell");
-
-    clearDropReadyState();
-
-    if (!cell) {
-      return;
-    }
-
-    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
-    const tileSource = event.dataTransfer.getData("application/x-wordwefter-source") ||
-      draggedTileSource ||
-      "rack";
-
-    if (gameState.canPlaceTile(tileId, cell.dataset.row, cell.dataset.column, tileSource)) {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      cell.classList.add("drop-ready");
-    }
-  });
-
-  board.addEventListener("dragleave", (event) => {
-    if (!board.contains(event.relatedTarget)) {
-      clearDropReadyState();
-    }
-  });
-
-  board.addEventListener("drop", (event) => {
-    const cell = event.target.closest(".board-cell");
-
-    clearDropReadyState();
-
-    if (!cell) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
-    const tileSource = event.dataTransfer.getData("application/x-wordwefter-source") ||
-      draggedTileSource ||
-      "rack";
-    const wasPlaced = tileSource === "board"
-      ? gameState.moveActiveTile(tileId, cell.dataset.row, cell.dataset.column)
-      : gameState.placeRackTile(tileId, cell.dataset.row, cell.dataset.column);
-
-    if (wasPlaced) {
-      draggedTileId = null;
-      draggedTileSource = "rack";
-      renderGame();
-    }
-  });
+  boardSortables.forEach((sortable) => sortable.destroy());
+  boardSortables = [];
 }
 
-function getRackDropIndex(event, rack) {
-  const tiles = Array.from(rack.querySelectorAll(".tile"));
-
-  for (let index = 0; index < tiles.length; index += 1) {
-    const tileRect = tiles[index].getBoundingClientRect();
-    const tileMidpoint = tileRect.left + tileRect.width / 2;
-
-    if (event.clientY < tileRect.bottom && event.clientX < tileMidpoint) {
-      return index;
-    }
-  }
-
-  return tiles.length;
+function getSortableSource(event) {
+  return event.from && event.from.id === "rack" ? "rack" : "board";
 }
 
-function bindRackDragAndDrop() {
+function initializeRackSortable() {
   const rack = document.querySelector("#rack");
 
-  if (!rack) {
+  if (!rack || !window.Sortable) {
     return;
   }
 
-  rack.addEventListener("dragover", (event) => {
-    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
-    const tileSource = event.dataTransfer.getData("application/x-wordwefter-source") ||
-      draggedTileSource ||
-      "rack";
+  rackSortable = Sortable.create(rack, {
+    animation: 120,
+    draggable: ".tile-movable",
+    group: {
+      name: "wordwefter-tiles",
+      pull: true,
+      put: true
+    },
+    onAdd(event) {
+      if (getSortableSource(event) !== "board") {
+        renderGame();
+        return;
+      }
 
-    if (
-      (tileSource === "rack" && gameState.currentRack.some((tile) => tile.id === tileId)) ||
-      (tileSource === "board" && gameState.findActiveTileById(tileId))
-    ) {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-    }
-  });
+      if (gameState.moveActiveTileToRack(event.item.dataset.tileId, event.newIndex)) {
+        setGameMessage("");
+      }
 
-  rack.addEventListener("drop", (event) => {
-    event.preventDefault();
-
-    const tileId = event.dataTransfer.getData("text/plain") || draggedTileId;
-    const tileSource = event.dataTransfer.getData("application/x-wordwefter-source") ||
-      draggedTileSource ||
-      "rack";
-    const targetIndex = getRackDropIndex(event, rack);
-    const wasMoved = tileSource === "board"
-      ? gameState.moveActiveTileToRack(tileId, targetIndex)
-      : gameState.moveRackTile(tileId, targetIndex);
-
-    if (wasMoved) {
-      draggedTileId = null;
-      draggedTileSource = "rack";
-      setGameMessage("");
+      renderGame();
+    },
+    onUpdate(event) {
+      gameState.moveRackTile(event.item.dataset.tileId, event.newIndex);
       renderGame();
     }
   });
+}
+
+function initializeBoardSortables() {
+  if (!window.Sortable) {
+    return;
+  }
+
+  document.querySelectorAll(".board-cell").forEach((cell) => {
+    const sortable = Sortable.create(cell, {
+      animation: 120,
+      draggable: ".tile-movable",
+      group: {
+        name: "wordwefter-tiles",
+        pull: true,
+        put(to, from, dragElement) {
+          const tileSource = from.el.id === "rack" ? "rack" : "board";
+
+          return gameState.canPlaceTile(
+            dragElement.dataset.tileId,
+            cell.dataset.row,
+            cell.dataset.column,
+            tileSource
+          );
+        }
+      },
+      onAdd(event) {
+        const tileSource = getSortableSource(event);
+        const wasPlaced = tileSource === "board"
+          ? gameState.moveActiveTile(event.item.dataset.tileId, cell.dataset.row, cell.dataset.column)
+          : gameState.placeRackTile(event.item.dataset.tileId, cell.dataset.row, cell.dataset.column);
+
+        if (wasPlaced) {
+          setGameMessage("");
+        }
+
+        renderGame();
+      }
+    });
+
+    boardSortables.push(sortable);
+  });
+}
+
+function initializeSortables() {
+  if (!window.Sortable) {
+    setGameMessage("Drag and drop is unavailable because Sortable could not load.");
+    return;
+  }
+
+  initializeRackSortable();
+  initializeBoardSortables();
 }
 
 function bindGameControls() {
@@ -788,9 +753,6 @@ function bindGameControls() {
   if (resetPlacementButton) {
     resetPlacementButton.addEventListener("click", resetPlacement);
   }
-
-  bindBoardDragAndDrop();
-  bindRackDragAndDrop();
 }
 
 if (document.readyState === "loading") {
