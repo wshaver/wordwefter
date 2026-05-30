@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WordWefter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
   <style>
     :root {
       color-scheme: light;
@@ -97,8 +100,7 @@
 
     .identity-panel,
     .identity-bar,
-    .welcome-actions,
-    .play-menu {
+    .identity-menu {
       display: none;
       flex-wrap: wrap;
       justify-content: center;
@@ -110,6 +112,7 @@
     }
 
     .identity-bar {
+      position: relative;
       align-items: center;
       color: var(--ink);
       font: 700 0.92rem/1.25 system-ui, sans-serif;
@@ -118,6 +121,59 @@
     .identity-name {
       color: var(--accent);
       font-weight: 800;
+    }
+
+    .menu-button {
+      width: 2.75rem;
+      min-width: 2.75rem;
+      height: 2.75rem;
+      display: grid;
+      place-items: center;
+      line-height: 1;
+    }
+
+    .game-button.menu-button {
+      padding: 0;
+      padding-inline: 0;
+    }
+
+    .material-symbols-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      width: 24px;
+      height: 24px;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: "liga";
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 600,
+        "GRAD" 0,
+        "opsz" 24;
+    }
+
+    .identity-menu {
+      position: absolute;
+      top: calc(100% + 0.45rem);
+      right: 0;
+      z-index: 10;
+      min-width: 10rem;
+      padding: 0.55rem;
+      border: 2px solid rgba(23, 32, 42, 0.28);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0.25rem 0.25rem 0 rgba(242, 177, 52, 0.7);
+    }
+
+    body.menu-open .identity-menu {
+      display: grid;
     }
 
     .player-setup {
@@ -241,10 +297,6 @@
     }
 
     body.has-player .identity-bar {
-      display: flex;
-    }
-
-    body.screen-welcome.has-player .welcome-actions {
       display: flex;
     }
 
@@ -415,10 +467,6 @@
       font-size: clamp(1.85rem, 5vw, 3.35rem);
     }
 
-    body.screen-play .play-menu {
-      display: flex;
-    }
-
     .draw-tile-button {
       display: none;
     }
@@ -469,28 +517,99 @@
       box-shadow: none;
     }
 
-    .score-panel {
+    .game-state-panel {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.5rem;
-      padding: 0.7rem 0.85rem;
+      gap: 0.75rem;
+      padding: 0.85rem;
       border: 2px solid rgba(23, 32, 42, 0.28);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.46);
       font: 700 0.95rem/1.2 system-ui, sans-serif;
+      text-align: left;
     }
 
-    .score-row {
+    .game-state-summary {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 0.5rem 1rem;
+    }
+
+    .game-state-kicker {
+      color: rgba(23, 32, 42, 0.72);
+      font: 800 0.76rem/1.2 system-ui, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .game-state-value {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 1.05rem;
+    }
+
+    .player-score-list {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .player-score-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.55rem 0.65rem;
+      border: 2px solid rgba(23, 32, 42, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
+    }
+
+    .player-score-row.current-turn {
+      border-color: var(--accent);
+      background: rgba(15, 139, 141, 0.12);
+    }
+
+    .player-score-name {
+      overflow-wrap: anywhere;
+    }
+
+    .turn-badge {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.12rem 0.35rem;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #ffffff;
+      font: 800 0.72rem/1.2 system-ui, sans-serif;
+    }
+
+    .player-score-points {
+      font: 800 1rem/1 system-ui, sans-serif;
     }
 
     .state-debug {
       width: 100%;
-      display: grid;
+      display: none;
       gap: 0.5rem;
+    }
+
+    body.debug-open .state-debug {
+      display: grid;
+    }
+
+    .debug-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem;
+      font: 700 0.86rem/1.25 system-ui, sans-serif;
+    }
+
+    .debug-summary div {
+      padding: 0.45rem 0.55rem;
+      border: 2px solid rgba(23, 32, 42, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
     }
 
     .state-debug textarea {
@@ -527,8 +646,8 @@
         min-height: 3.8rem;
       }
 
-      .score-panel {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .debug-summary {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -545,11 +664,14 @@
         </div>
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
           <span>Playing as <span class="identity-name" id="identity-name-display"></span></span>
-          <button class="game-button secondary" type="button" id="logout-button">Logout</button>
-        </div>
-        <div class="welcome-actions" id="welcome-actions" aria-label="Welcome menu">
-          <button class="game-button" type="button" id="show-new-game-button">New Game</button>
-          <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
+          <button class="game-button secondary menu-button" type="button" id="identity-menu-button" aria-label="Menu" aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+          </button>
+          <div class="identity-menu" id="identity-menu" aria-label="Player menu">
+            <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
+            <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
+            <button class="game-button secondary" type="button" id="logout-button">Logout</button>
+          </div>
         </div>
         <div class="player-setup" id="player-setup" aria-label="Player setup">
           <div class="player-name-list" id="player-name-list">
@@ -567,7 +689,6 @@
           <div class="game-controls">
             <button class="game-button secondary" type="button" id="add-player-button">Add Player</button>
             <button class="game-button" type="button" id="create-game-button">Create Game</button>
-            <button class="game-button secondary" type="button" id="setup-game-list-button">Game List</button>
           </div>
         </div>
       </div>
@@ -578,10 +699,6 @@
     </header>
 
     <section class="game-area" aria-label="Game board">
-      <div class="play-menu" aria-label="Game menu">
-        <button class="game-button secondary" type="button" id="play-new-game-button">New Game</button>
-        <button class="game-button secondary" type="button" id="play-game-list-button">Game List</button>
-      </div>
       <div class="board" id="board" aria-label="12 by 12 board"></div>
       <div class="rack-wrap">
         <div class="rack" id="rack" aria-label="Rack"></div>
@@ -590,25 +707,30 @@
           <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
         </div>
-        <div class="score-panel" aria-label="Score">
-          <div class="score-row">
-            <span>Who's turn</span>
-            <span id="current-player-name">Player 1</span>
+        <div class="game-state-panel" aria-label="Game state">
+          <div class="game-state-summary">
+            <div>
+              <span class="game-state-kicker">Game</span>
+              <span class="game-state-value" id="current-game-id">-----</span>
+            </div>
+            <div>
+              <span class="game-state-kicker">Turn</span>
+              <span class="game-state-value" id="current-turn-index">0</span>
+            </div>
+            <div>
+              <span class="game-state-kicker">Playing now</span>
+              <span class="game-state-value" id="current-player-name">Player 1</span>
+            </div>
           </div>
-          <div class="score-row">
-            <span>Game ID</span>
-            <span id="current-game-id">-----</span>
-          </div>
-          <div class="score-row">
-            <span>Current score</span>
-            <span id="current-score">0</span>
-          </div>
-          <div class="score-row">
-            <span>Current turn</span>
-            <span id="current-turn-score">0</span>
-          </div>
+          <div class="player-score-list" id="player-score-list"></div>
         </div>
+        <button class="game-button secondary" type="button" id="debug-toggle-button" aria-expanded="false">Debug</button>
         <div class="state-debug" aria-label="Game state JSON debug">
+          <div class="debug-summary">
+            <div>Current score: <span id="current-score">0</span></div>
+            <div>Current turn score: <span id="current-turn-score">0</span></div>
+            <div>Tiles left: <span id="tiles-remaining">0</span></div>
+          </div>
           <textarea id="game-state-json" spellcheck="false" aria-label="Game state JSON"></textarea>
           <button class="game-button" type="button" id="install-game-state-button">Install</button>
         </div>
@@ -619,6 +741,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=turn-polling"></script>
+  <script type="module" src="./game.js?v=game-url-hash"></script>
 </body>
 </html>

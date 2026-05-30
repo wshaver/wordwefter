@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 header('Content-Type: application/json');
 
-$saveDirectory = realpath(__DIR__ . '/../saved-games');
+$saveDirectory = realpath(__DIR__ . '/saved-games');
 
 if ($saveDirectory === false) {
-    $saveDirectory = __DIR__ . '/../saved-games';
+    $saveDirectory = __DIR__ . '/saved-games';
     mkdir($saveDirectory, 0775, true);
 }
 
@@ -25,6 +25,11 @@ function game_path(string $saveDirectory, string $id): string
     }
 
     return $saveDirectory . DIRECTORY_SEPARATOR . $id . '.json';
+}
+
+function turn_index(array $state): int
+{
+    return max(0, (int) ($state['turnIndex'] ?? 0));
 }
 
 $action = $_GET['action'] ?? 'list';
@@ -48,6 +53,7 @@ if ($action === 'list') {
         $games[] = [
             'id' => (string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)),
             'startDate' => (string) ($state['startDate'] ?? ''),
+            'turnIndex' => turn_index($state),
             'playerNames' => $players,
             'currentPlayerName' => $players[$currentPlayerIndex] ?? ($players[0] ?? '')
         ];
@@ -70,6 +76,17 @@ if ($action === 'load') {
         send_json(['ok' => false, 'error' => 'Saved game is not valid JSON.'], 500);
     }
 
+    $requestedTurnIndex = isset($_GET['turnIndex']) ? (int) $_GET['turnIndex'] : null;
+    $savedTurnIndex = turn_index($state);
+
+    if ($requestedTurnIndex !== null && $savedTurnIndex <= $requestedTurnIndex) {
+        send_json([
+            'ok' => true,
+            'changed' => false,
+            'turnIndex' => $savedTurnIndex
+        ]);
+    }
+
     send_json(['ok' => true, 'gameState' => $state]);
 }
 
@@ -87,6 +104,28 @@ if ($action === 'save') {
 
     $id = strtoupper((string) ($state['id'] ?? ''));
     $file = game_path($saveDirectory, $id);
+    $incomingTurnIndex = turn_index($state);
+
+    if (is_file($file)) {
+        $currentState = json_decode((string) file_get_contents($file), true);
+
+        if (!is_array($currentState)) {
+            send_json(['ok' => false, 'error' => 'Current saved game is not valid JSON.'], 500);
+        }
+
+        $currentTurnIndex = turn_index($currentState);
+
+        if ($incomingTurnIndex <= $currentTurnIndex) {
+            send_json([
+                'ok' => true,
+                'saved' => false,
+                'stale' => true,
+                'id' => $id,
+                'turnIndex' => $currentTurnIndex,
+                'error' => 'Save ignored because a newer turn is already stored.'
+            ]);
+        }
+    }
 
     $encodedState = json_encode($state, JSON_PRETTY_PRINT);
 
@@ -94,7 +133,7 @@ if ($action === 'save') {
         send_json(['ok' => false, 'error' => 'Could not save game.'], 500);
     }
 
-    send_json(['ok' => true, 'id' => $id]);
+    send_json(['ok' => true, 'saved' => true, 'id' => $id, 'turnIndex' => $incomingTurnIndex]);
 }
 
 send_json(['ok' => false, 'error' => 'Unknown action.'], 400);

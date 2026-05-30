@@ -14,6 +14,7 @@ class WordWefterGameState {
     this.dictionary = setup.dictionary || dictionaryWordSet;
     this.players = this.normalizePlayers(playerNames);
     this.currentPlayerIndex = 0;
+    this.turnIndex = Number.isInteger(Number(setup.turnIndex)) ? Number(setup.turnIndex) : 0;
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
@@ -94,6 +95,10 @@ class WordWefterGameState {
     }
   }
 
+  advanceTurnIndex() {
+    this.turnIndex += 1;
+  }
+
   drawTiles(tileCount = 7) {
     if (!Number.isInteger(tileCount) || tileCount < 0) {
       throw new Error("tileCount must be a non-negative integer.");
@@ -156,6 +161,7 @@ class WordWefterGameState {
       rack: []
     }));
     this.currentPlayerIndex = 0;
+    this.turnIndex = 0;
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
@@ -180,6 +186,7 @@ class WordWefterGameState {
       version: 1,
       id: this.id,
       startDate: this.startDate,
+      turnIndex: this.turnIndex,
       currentPlayerIndex: this.currentPlayerIndex,
       players: this.players.map((player) => ({
         name: player.name,
@@ -256,6 +263,7 @@ class WordWefterGameState {
 
     this.id = String(source.id || "").toUpperCase();
     this.startDate = String(source.startDate || "");
+    this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
     this.players = (source.players || []).map((player) => ({
       name: String(player.name || "Player"),
       score: Number(player.score || 0),
@@ -766,6 +774,7 @@ let pendingIdentityAction = null;
 let turnPollTimer = null;
 let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
+let loadingGameFromURL = false;
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
@@ -836,7 +845,7 @@ function renderBoard() {
         active: tile.active,
         flash: tile.active && gameState.flashActivePlacements,
         movable: tile.active && isMyTurn(),
-        remotePlayed: tile.remotePlayed || remotePlayedCellKeys.has(cellKey),
+        remotePlayed: remotePlayedCellKeys.has(cellKey),
         source: "board"
       }));
     }
@@ -876,6 +885,9 @@ function renderScore() {
   const currentTurnScoreElement = document.querySelector("#current-turn-score");
   const currentPlayerNameElement = document.querySelector("#current-player-name");
   const currentGameIdElement = document.querySelector("#current-game-id");
+  const currentTurnIndexElement = document.querySelector("#current-turn-index");
+  const playerScoreListElement = document.querySelector("#player-score-list");
+  const tilesRemainingElement = document.querySelector("#tiles-remaining");
 
   if (currentScoreElement) {
     currentScoreElement.textContent = gameState.currentScore;
@@ -893,6 +905,42 @@ function renderScore() {
 
   if (currentGameIdElement) {
     currentGameIdElement.textContent = gameState.id;
+  }
+
+  if (currentTurnIndexElement) {
+    currentTurnIndexElement.textContent = gameState.turnIndex;
+  }
+
+  if (tilesRemainingElement) {
+    tilesRemainingElement.textContent = gameState.tilesRemaining;
+  }
+
+  if (playerScoreListElement) {
+    playerScoreListElement.replaceChildren();
+
+    gameState.players.forEach((player, index) => {
+      const row = document.createElement("div");
+      const nameElement = document.createElement("div");
+      const scoreElement = document.createElement("div");
+
+      row.className = "player-score-row";
+      row.classList.toggle("current-turn", index === gameState.currentPlayerIndex);
+      nameElement.className = "player-score-name";
+      scoreElement.className = "player-score-points";
+      nameElement.textContent = player.name;
+
+      if (index === gameState.currentPlayerIndex) {
+        const badge = document.createElement("span");
+
+        badge.className = "turn-badge";
+        badge.textContent = isMyTurn() ? "Your turn" : "Turn";
+        nameElement.append(badge);
+      }
+
+      scoreElement.textContent = player.score;
+      row.append(nameElement, scoreElement);
+      playerScoreListElement.append(row);
+    });
   }
 }
 
@@ -916,7 +964,6 @@ function renderGame() {
   renderScore();
   renderGameStateJSON();
   initializeSortables();
-  updateTurnMessage();
   updateTurnPolling();
 }
 
@@ -926,6 +973,32 @@ function setGameMessage(message) {
   if (messageElement) {
     messageElement.textContent = message;
   }
+}
+
+function getGameIdFromURLHash() {
+  const hash = window.location.hash.replace(/^#/, "").trim().toUpperCase();
+
+  return /^[A-Z0-9]{5}$/.test(hash) ? hash : "";
+}
+
+function setGameURLGameId(gameId) {
+  const normalizedGameId = String(gameId || "").trim().toUpperCase();
+
+  if (!/^[A-Z0-9]{5}$/.test(normalizedGameId)) {
+    return;
+  }
+
+  if (window.location.hash !== `#${normalizedGameId}`) {
+    window.history.replaceState(null, "", `#${normalizedGameId}`);
+  }
+}
+
+function clearGameURLGameId() {
+  if (!window.location.hash) {
+    return;
+  }
+
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
 function normalizePlayerName(name) {
@@ -1154,6 +1227,10 @@ function validatePlayerNames(playerNames) {
 function setScreen(screenName) {
   document.body.classList.remove("screen-welcome", "screen-setup", "screen-list", "screen-play");
   document.body.classList.add(`screen-${screenName}`);
+  if (screenName !== "play") {
+    clearGameURLGameId();
+  }
+  closeIdentityMenu();
   updateTurnPolling();
 }
 
@@ -1202,6 +1279,7 @@ function saveIdentityFromInput() {
 function logoutPlayer() {
   deleteCookie(playerNameCookie);
   pendingIdentityAction = null;
+  closeIdentityMenu();
   setScreen("welcome");
   setGameMessage("");
   updateIdentityUI();
@@ -1228,31 +1306,19 @@ async function saveGameState() {
     body: JSON.stringify(gameState.toJSON())
   });
 
+  if (payload.stale) {
+    throw new Error(payload.error || "Save ignored because a newer turn is already stored.");
+  }
+
   return payload.id;
-}
-
-function updateTurnMessage() {
-  if (!document.body.classList.contains("screen-play")) {
-    return;
-  }
-
-  if (isMyTurn()) {
-    setGameMessage(`Your turn: ${gameState.currentPlayerName}`);
-    return;
-  }
-
-  setGameMessage(`Waiting for ${gameState.currentPlayerName}. This game will refresh automatically.`);
 }
 
 function clearRemotePlayedAnimationLater() {
   window.clearTimeout(remotePlayedClearTimer);
   remotePlayedClearTimer = window.setTimeout(() => {
     remotePlayedCellKeys.clear();
-    gameState.boardTiles.forEach((tile) => {
-      delete tile.remotePlayed;
-    });
     renderGame();
-  }, 15000);
+  }, 1700);
 }
 
 async function pollActiveGameState() {
@@ -1266,7 +1332,15 @@ async function pollActiveGameState() {
   }
 
   try {
-    const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(gameState.id)}`);
+    const payload = await fetchJSON(
+      `${serverURL}?action=load&id=${encodeURIComponent(gameState.id)}&turnIndex=${encodeURIComponent(gameState.turnIndex)}`
+    );
+
+    if (payload.changed === false) {
+      updateTurnPolling();
+      return;
+    }
+
     const nextStateJSON = JSON.stringify(payload.gameState);
     const currentStateJSON = JSON.stringify(gameState.toJSON());
 
@@ -1275,22 +1349,10 @@ async function pollActiveGameState() {
       return;
     }
 
-    let changedCellKeys = getChangedBoardCellKeys(payload.gameState);
-    const nextBoardTiles = payload.gameState.boardTiles || [];
-
-    if (changedCellKeys.length === 0 && nextBoardTiles.length > 0) {
-      changedCellKeys = nextBoardTiles.map((tile) => `${Number(tile.row)},${Number(tile.column)}`);
-    }
+    const changedCellKeys = getChangedBoardCellKeys(payload.gameState);
 
     remotePlayedCellKeys = new Set(changedCellKeys);
     gameState.loadFromJSON(payload.gameState);
-    changedCellKeys.forEach((cellKey) => {
-      const tile = gameState.boardTiles.get(cellKey);
-
-      if (tile) {
-        tile.remotePlayed = true;
-      }
-    });
     renderGame();
 
     if (changedCellKeys.length > 0) {
@@ -1364,7 +1426,7 @@ async function loadActiveGames() {
       resumeButton.type = "button";
       idElement.textContent = game.id;
       playersElement.textContent = (game.playerNames || []).join(", ");
-      turnElement.textContent = `Who's turn: ${game.currentPlayerName || "Player"}`;
+      turnElement.textContent = `Turn ${Number(game.turnIndex || 0)}: ${game.currentPlayerName || "Player"}`;
       resumeButton.textContent = "Resume";
       resumeButton.addEventListener("click", () => resumeGame(game.id));
 
@@ -1377,23 +1439,64 @@ async function loadActiveGames() {
   }
 }
 
+async function loadGameById(gameId) {
+  const normalizedGameId = String(gameId || "").trim().toUpperCase();
+
+  if (!/^[A-Z0-9]{5}$/.test(normalizedGameId)) {
+    throw new Error("Game ID must be a 5 character letter/number string.");
+  }
+
+  const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(normalizedGameId)}`);
+  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+  const canPlayGame = (payload.gameState.players || [])
+    .some((player) => normalizeNameKey(player.name) === storedPlayerKey);
+
+  if (!canPlayGame) {
+    throw new Error("This game does not include your player name.");
+  }
+
+  gameState.loadFromJSON(payload.gameState);
+  setScreen("play");
+  setGameURLGameId(gameState.id);
+  setGameMessage("");
+  renderGame();
+}
+
 async function resumeGame(gameId) {
   try {
-    const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(gameId)}`);
-    const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
-    const canPlayGame = (payload.gameState.players || [])
-      .some((player) => normalizeNameKey(player.name) === storedPlayerKey);
-
-    if (!canPlayGame) {
-      throw new Error("This game does not include your player name.");
-    }
-
-    gameState.loadFromJSON(payload.gameState);
-    setScreen("play");
-    setGameMessage("");
-    renderGame();
+    await loadGameById(gameId);
   } catch (error) {
     setGameMessage(`Could not load game: ${error.message}`);
+  }
+}
+
+async function loadGameFromURLHash() {
+  const rawHash = window.location.hash.replace(/^#/, "").trim();
+  const gameId = getGameIdFromURLHash();
+
+  if (!rawHash || loadingGameFromURL) {
+    return false;
+  }
+
+  if (!gameId) {
+    setScreen("welcome");
+    clearGameURLGameId();
+    setGameMessage("Could not load game: the URL game ID must be 5 letters or numbers.");
+    return false;
+  }
+
+  loadingGameFromURL = true;
+
+  try {
+    await loadGameById(gameId);
+    return true;
+  } catch (error) {
+    setScreen("welcome");
+    clearGameURLGameId();
+    setGameMessage(`Could not load game ${gameId}: ${error.message}`);
+    return false;
+  } finally {
+    loadingGameFromURL = false;
   }
 }
 
@@ -1419,6 +1522,7 @@ async function startNewGame() {
   });
   gameState.currentPlayerIndex = 0;
   setScreen("play");
+  setGameURLGameId(gameState.id);
   setGameMessage("");
   renderGame();
 
@@ -1437,7 +1541,6 @@ async function drawTileToRack() {
   }
 
   if (!isMyTurn()) {
-    updateTurnMessage();
     return;
   }
 
@@ -1447,7 +1550,6 @@ async function drawTileToRack() {
 
 async function finishPlacement() {
   if (!isMyTurn()) {
-    updateTurnMessage();
     return;
   }
 
@@ -1457,7 +1559,8 @@ async function finishPlacement() {
     setGameMessage(result.placementError || `Not in dictionary: ${result.invalidWords.join(", ")}`);
   } else if (result && result.isValid) {
     gameState.advanceTurn();
-    setGameMessage(`Next turn: ${gameState.currentPlayerName}`);
+    gameState.advanceTurnIndex();
+    setGameMessage("");
   }
 
   renderGame();
@@ -1474,7 +1577,6 @@ async function finishPlacement() {
 
 function resetPlacement() {
   if (!isMyTurn()) {
-    updateTurnMessage();
     return;
   }
 
@@ -1482,6 +1584,39 @@ function resetPlacement() {
   gameState.flashActivePlacements = false;
   setGameMessage("");
   renderGame();
+}
+
+function toggleDebugPanel() {
+  const isOpen = !document.body.classList.contains("debug-open");
+  const debugToggleButton = document.querySelector("#debug-toggle-button");
+
+  document.body.classList.toggle("debug-open", isOpen);
+
+  if (debugToggleButton) {
+    debugToggleButton.setAttribute("aria-expanded", String(isOpen));
+    debugToggleButton.textContent = isOpen ? "Hide Debug" : "Debug";
+  }
+}
+
+function closeIdentityMenu() {
+  const identityMenuButton = document.querySelector("#identity-menu-button");
+
+  document.body.classList.remove("menu-open");
+
+  if (identityMenuButton) {
+    identityMenuButton.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleIdentityMenu() {
+  const isOpen = !document.body.classList.contains("menu-open");
+  const identityMenuButton = document.querySelector("#identity-menu-button");
+
+  document.body.classList.toggle("menu-open", isOpen);
+
+  if (identityMenuButton) {
+    identityMenuButton.setAttribute("aria-expanded", String(isOpen));
+  }
 }
 
 function installGameStateFromInput() {
@@ -1604,18 +1739,17 @@ function initializeSortables() {
 function bindGameControls() {
   const saveIdentityButton = document.querySelector("#save-identity-button");
   const identityNameInput = document.querySelector("#identity-name-input");
+  const identityMenuButton = document.querySelector("#identity-menu-button");
   const logoutButton = document.querySelector("#logout-button");
   const showNewGameButton = document.querySelector("#show-new-game-button");
   const showGameListButton = document.querySelector("#show-game-list-button");
-  const setupGameListButton = document.querySelector("#setup-game-list-button");
-  const playNewGameButton = document.querySelector("#play-new-game-button");
-  const playGameListButton = document.querySelector("#play-game-list-button");
   const createGameButton = document.querySelector("#create-game-button");
   const addPlayerButton = document.querySelector("#add-player-button");
   const drawTileButton = document.querySelector("#draw-tile-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
   const installGameStateButton = document.querySelector("#install-game-state-button");
+  const debugToggleButton = document.querySelector("#debug-toggle-button");
 
   if (saveIdentityButton) {
     saveIdentityButton.addEventListener("click", saveIdentityFromInput);
@@ -1633,24 +1767,22 @@ function bindGameControls() {
     logoutButton.addEventListener("click", logoutPlayer);
   }
 
-  if (showNewGameButton) {
-    showNewGameButton.addEventListener("click", showNewGameSetup);
+  if (identityMenuButton) {
+    identityMenuButton.addEventListener("click", toggleIdentityMenu);
   }
 
-  if (playNewGameButton) {
-    playNewGameButton.addEventListener("click", showNewGameSetup);
+  if (showNewGameButton) {
+    showNewGameButton.addEventListener("click", () => {
+      closeIdentityMenu();
+      showNewGameSetup();
+    });
   }
 
   if (showGameListButton) {
-    showGameListButton.addEventListener("click", showGameList);
-  }
-
-  if (setupGameListButton) {
-    setupGameListButton.addEventListener("click", showGameList);
-  }
-
-  if (playGameListButton) {
-    playGameListButton.addEventListener("click", showGameList);
+    showGameListButton.addEventListener("click", () => {
+      closeIdentityMenu();
+      showGameList();
+    });
   }
 
   if (createGameButton) {
@@ -1677,17 +1809,25 @@ function bindGameControls() {
     resetPlacementButton.addEventListener("click", resetPlacement);
   }
 
+  if (debugToggleButton) {
+    debugToggleButton.addEventListener("click", toggleDebugPanel);
+  }
+
   if (installGameStateButton) {
     installGameStateButton.addEventListener("click", installGameStateFromInput);
   }
 }
 
-function initializeApp() {
+async function initializeApp() {
   updateIdentityUI();
   renderPlayerNameInputs(parsePlayerNames());
   bindGameControls();
   updatePlayerRemoveButtons();
-  loadActiveGames();
+  const loadedHashGame = await loadGameFromURLHash();
+
+  if (!loadedHashGame) {
+    loadActiveGames();
+  }
 }
 
 if (document.readyState === "loading") {
@@ -1695,6 +1835,14 @@ if (document.readyState === "loading") {
 } else {
   initializeApp();
 }
+
+window.addEventListener("hashchange", async () => {
+  if (!window.location.hash) {
+    return;
+  }
+
+  await loadGameFromURLHash();
+});
 
 window.startWordWefterGame = startNewGame;
 window.drawWordWefterTile = drawTileToRack;
