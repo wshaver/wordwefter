@@ -50,14 +50,18 @@
 
     .masthead {
       display: grid;
-      justify-items: center;
-      gap: 2.35rem;
+      width: 100%;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      justify-items: stretch;
+      gap: 1rem 1.25rem;
       transition: transform 220ms ease, padding 220ms ease;
     }
 
     .brand {
       position: relative;
-      display: inline-block;
+      display: block;
+      justify-self: start;
       margin: 0;
       font-size: clamp(3rem, 13vw, 8rem);
       line-height: 0.92;
@@ -94,7 +98,8 @@
 
     .game-controls {
       display: grid;
-      justify-items: center;
+      justify-self: end;
+      justify-items: end;
       gap: 0.75rem;
     }
 
@@ -114,13 +119,27 @@
     .identity-bar {
       position: relative;
       align-items: center;
+      flex-wrap: nowrap;
       color: var(--ink);
       font: 700 0.92rem/1.25 system-ui, sans-serif;
+    }
+
+    .identity-current {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+
+    .identity-current .material-symbols-outlined {
+      color: var(--accent);
+      flex: 0 0 auto;
     }
 
     .identity-name {
       color: var(--accent);
       font-weight: 800;
+      overflow-wrap: anywhere;
     }
 
     .menu-button {
@@ -245,6 +264,8 @@
     }
 
     .active-games {
+      grid-column: 1 / -1;
+      justify-self: center;
       width: min(92vw, 42rem);
       display: none;
       gap: 0.65rem;
@@ -456,15 +477,16 @@
 
     body.screen-play main {
       align-content: start;
-      padding-top: clamp(1.25rem, 3vw, 2rem);
+      gap: 0.75rem;
+      padding-top: clamp(0.85rem, 2vw, 1.35rem);
     }
 
     body.screen-play .masthead {
-      gap: 1.15rem;
+      gap: 0.45rem 1rem;
     }
 
     body.screen-play .brand {
-      font-size: clamp(1.85rem, 5vw, 3.35rem);
+      font-size: clamp(1.65rem, 4vw, 2.85rem);
     }
 
     .draw-tile-button {
@@ -492,10 +514,15 @@
     }
 
     .game-message {
+      grid-column: 1 / -1;
       min-height: 1.25rem;
       justify-self: center;
       color: var(--rose);
       font: 700 0.9rem/1.3 system-ui, sans-serif;
+    }
+
+    .game-message:empty {
+      display: none;
     }
 
     body.screen-play:not(.is-my-turn) .game-message {
@@ -634,8 +661,31 @@
         padding-inline: 0.75rem;
       }
 
+      .masthead {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+
+      .brand,
+      .game-controls {
+        justify-self: center;
+      }
+
       .brand {
         font-size: clamp(2.7rem, 17vw, 4.6rem);
+      }
+
+      body.screen-play .masthead {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      body.screen-play .brand {
+        justify-self: start;
+        font-size: clamp(1.45rem, 8vw, 2.2rem);
+      }
+
+      body.screen-play .game-controls {
+        justify-self: end;
       }
 
       .board {
@@ -663,7 +713,10 @@
           <button class="game-button" type="button" id="save-identity-button">Continue</button>
         </div>
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
-          <span>Playing as <span class="identity-name" id="identity-name-display"></span></span>
+          <span class="identity-current">
+            <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+            <span class="identity-name" id="identity-name-display"></span>
+          </span>
           <button class="game-button secondary menu-button" type="button" id="identity-menu-button" aria-label="Menu" aria-expanded="false">
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
           </button>
