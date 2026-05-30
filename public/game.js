@@ -985,6 +985,10 @@ function isGameListURLHash() {
   return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "gamelist";
 }
 
+function isNewGameURLHash() {
+  return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "newgame";
+}
+
 function setGameURLGameId(gameId) {
   const normalizedGameId = String(gameId || "").trim().toUpperCase();
 
@@ -1000,6 +1004,12 @@ function setGameURLGameId(gameId) {
 function setGameListURLHash() {
   if (window.location.hash !== "#gamelist") {
     window.history.replaceState(null, "", "#gamelist");
+  }
+}
+
+function setNewGameURLHash() {
+  if (window.location.hash !== "#newgame") {
+    window.history.replaceState(null, "", "#newgame");
   }
 }
 
@@ -1248,7 +1258,7 @@ function setScreen(screenName, options = {}) {
   updateTurnPolling();
 }
 
-function showNewGameSetup() {
+function showNewGameSetup(options = {}) {
   requirePlayerName(() => {
     const otherPlayerNames = gameState.players.slice(1).map((player) => player.name);
 
@@ -1257,7 +1267,11 @@ function showNewGameSetup() {
       ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Player 2"])
     ]);
     setGameMessage("");
-    setScreen("setup");
+    setScreen("setup", { clearGameURL: false });
+
+    if (options.updateURL !== false) {
+      setNewGameURLHash();
+    }
   });
 }
 
@@ -1509,6 +1523,19 @@ async function loadGameFromURLHash() {
     }
 
     await showGameList();
+    return true;
+  }
+
+  if (isNewGameURLHash()) {
+    if (!getStoredPlayerName()) {
+      requirePlayerName(() => {
+        showNewGameSetup();
+      }, { clearGameURL: false });
+      setGameMessage("Enter your name to start a new game.");
+      return true;
+    }
+
+    showNewGameSetup();
     return true;
   }
 

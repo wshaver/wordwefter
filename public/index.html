@@ -188,7 +188,7 @@
       padding: 0.55rem;
       border: 2px solid rgba(23, 32, 42, 0.28);
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.96);
+      background: #ffffff;
       box-shadow: 0.25rem 0.25rem 0 rgba(242, 177, 52, 0.7);
     }
 
@@ -274,6 +274,14 @@
       gap: 0.65rem;
       justify-items: stretch;
       font: 700 0.95rem/1.35 system-ui, sans-serif;
+    }
+
+    .section-title {
+      margin: 0;
+      color: var(--ink);
+      font: 800 clamp(1.35rem, 4vw, 2rem)/1 Georgia, "Times New Roman", serif;
+      letter-spacing: 0;
+      text-align: center;
     }
 
     .active-games-list {
@@ -508,6 +516,26 @@
       margin-bottom: 0;
     }
 
+    body.screen-setup.has-player main {
+      align-content: start;
+      padding-top: clamp(0.85rem, 2vw, 1.35rem);
+    }
+
+    body.screen-setup.has-player .game-controls {
+      display: contents;
+    }
+
+    body.screen-setup.has-player .identity-bar {
+      justify-self: end;
+    }
+
+    body.screen-setup.has-player .player-setup {
+      grid-column: 1 / -1;
+      justify-self: center;
+      justify-items: center;
+      margin-top: clamp(1.5rem, 3vw, 2.25rem);
+    }
+
     .draw-tile-button {
       display: none;
     }
@@ -707,6 +735,10 @@
         justify-self: end;
       }
 
+      body.screen-setup.has-player .identity-bar {
+        justify-self: end;
+      }
+
       .board {
         width: var(--play-width);
       }
@@ -746,6 +778,7 @@
           </div>
         </div>
         <div class="player-setup" id="player-setup" aria-label="Player setup">
+          <h2 class="section-title">New Game</h2>
           <div class="player-name-list" id="player-name-list">
             <div class="player-name-row">
               <label class="sr-only" for="player-name-input-1">Player 1 name</label>
@@ -765,6 +798,7 @@
         </div>
       </div>
       <section class="active-games" aria-label="Active games">
+        <h2 class="section-title">Game List</h2>
         <div id="active-games-list" class="active-games-list"></div>
       </section>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
@@ -813,6 +847,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=gamelist-hash"></script>
+  <script type="module" src="./game.js?v=route-titles"></script>
 </body>
 </html>
