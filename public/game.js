@@ -981,6 +981,10 @@ function getGameIdFromURLHash() {
   return /^[A-Z0-9]{5}$/.test(hash) ? hash : "";
 }
 
+function isGameListURLHash() {
+  return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "gamelist";
+}
+
 function setGameURLGameId(gameId) {
   const normalizedGameId = String(gameId || "").trim().toUpperCase();
 
@@ -990,6 +994,12 @@ function setGameURLGameId(gameId) {
 
   if (window.location.hash !== `#${normalizedGameId}`) {
     window.history.replaceState(null, "", `#${normalizedGameId}`);
+  }
+}
+
+function setGameListURLHash() {
+  if (window.location.hash !== "#gamelist") {
+    window.history.replaceState(null, "", "#gamelist");
   }
 }
 
@@ -1091,7 +1101,7 @@ function updateIdentityUI() {
   }
 }
 
-function requirePlayerName(action) {
+function requirePlayerName(action, options = {}) {
   const playerName = getStoredPlayerName();
 
   if (playerName) {
@@ -1101,7 +1111,7 @@ function requirePlayerName(action) {
 
   pendingIdentityAction = action;
   setGameMessage("");
-  setScreen("welcome");
+  setScreen("welcome", { clearGameURL: options.clearGameURL !== false });
   updateIdentityUI();
   document.querySelector("#identity-name-input")?.focus();
 }
@@ -1224,12 +1234,16 @@ function validatePlayerNames(playerNames) {
   return "";
 }
 
-function setScreen(screenName) {
+function setScreen(screenName, options = {}) {
+  const shouldClearGameURL = options.clearGameURL !== false;
+
   document.body.classList.remove("screen-welcome", "screen-setup", "screen-list", "screen-play");
   document.body.classList.add(`screen-${screenName}`);
-  if (screenName !== "play") {
+
+  if (screenName !== "play" && shouldClearGameURL) {
     clearGameURLGameId();
   }
+
   closeIdentityMenu();
   updateTurnPolling();
 }
@@ -1247,10 +1261,15 @@ function showNewGameSetup() {
   });
 }
 
-async function showGameList() {
+async function showGameList(options = {}) {
   requirePlayerName(async () => {
     setGameMessage("");
-    setScreen("list");
+    setScreen("list", { clearGameURL: false });
+
+    if (options.updateURL !== false) {
+      setGameListURLHash();
+    }
+
     await loadActiveGames();
   });
 }
@@ -1273,6 +1292,8 @@ function saveIdentityFromInput() {
 
   if (nextAction) {
     nextAction();
+  } else {
+    showGameList();
   }
 }
 
@@ -1478,11 +1499,32 @@ async function loadGameFromURLHash() {
     return false;
   }
 
+  if (isGameListURLHash()) {
+    if (!getStoredPlayerName()) {
+      requirePlayerName(() => {
+        showGameList();
+      }, { clearGameURL: false });
+      setGameMessage("Enter your name to view your game list.");
+      return true;
+    }
+
+    await showGameList();
+    return true;
+  }
+
   if (!gameId) {
     setScreen("welcome");
     clearGameURLGameId();
     setGameMessage("Could not load game: the URL game ID must be 5 letters or numbers.");
     return false;
+  }
+
+  if (!getStoredPlayerName()) {
+    requirePlayerName(() => {
+      loadGameFromURLHash();
+    }, { clearGameURL: false });
+    setGameMessage(`Enter your name to join game ${gameId}.`);
+    return true;
   }
 
   loadingGameFromURL = true;
