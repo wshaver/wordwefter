@@ -1,0 +1,90 @@
+{
+    "version": 1,
+    "id": "SO9FV",
+    "startDate": "2026-05-30T15:40:29.345Z",
+    "currentPlayerIndex": 0,
+    "players": [
+        {
+            "name": "Will",
+            "score": 0,
+            "rack": [
+                {
+                    "letter": "P"
+                },
+                {
+                    "letter": "H"
+                },
+                {
+                    "letter": "D"
+                },
+                {
+                    "letter": "E"
+                },
+                {
+                    "letter": "W"
+                },
+                {
+                    "letter": "D"
+                },
+                {
+                    "letter": "C"
+                }
+            ]
+        },
+        {
+            "name": "Stina",
+            "score": 0,
+            "rack": [
+                {
+                    "letter": "N"
+                },
+                {
+                    "letter": "A"
+                },
+                {
+                    "letter": "A"
+                },
+                {
+                    "letter": "R"
+                },
+                {
+                    "letter": "L"
+                },
+                {
+                    "letter": "H"
+                },
+                {
+                    "letter": "M"
+                }
+            ]
+        }
+    ],
+    "lettersAvailable": {
+        "A": 24,
+        "B": 9,
+        "C": 15,
+        "D": 12,
+        "E": 33,
+        "F": 8,
+        "G": 11,
+        "H": 15,
+        "I": 25,
+        "J": 1,
+        "K": 5,
+        "L": 17,
+        "M": 11,
+        "N": 23,
+        "O": 29,
+        "P": 10,
+        "Q": 1,
+        "R": 22,
+        "S": 28,
+        "T": 31,
+        "U": 14,
+        "V": 4,
+        "W": 6,
+        "X": 2,
+        "Y": 9,
+        "Z": 1
+    }
+}

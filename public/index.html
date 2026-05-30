@@ -90,22 +90,77 @@
     }
 
     .game-controls {
-      display: flex;
+      display: grid;
+      justify-items: center;
+      gap: 0.75rem;
+    }
+
+    .identity-panel,
+    .identity-bar,
+    .welcome-actions,
+    .play-menu {
+      display: none;
       flex-wrap: wrap;
       justify-content: center;
-      align-items: center;
       gap: 0.75rem;
+    }
+
+    .identity-panel {
+      justify-items: center;
+    }
+
+    .identity-bar {
+      align-items: center;
+      color: var(--ink);
+      font: 700 0.92rem/1.25 system-ui, sans-serif;
+    }
+
+    .identity-name {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .player-setup {
+      display: none;
+      justify-items: center;
+      gap: 0.65rem;
+    }
+
+    .player-name-list {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .player-name-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.45rem;
     }
 
     .player-name-input {
       min-height: 2.75rem;
-      width: min(74vw, 14rem);
+      width: min(82vw, 22rem);
       border: 2px solid var(--ink);
       border-radius: 8px;
       padding: 0.65rem 0.8rem;
       background: rgba(255, 255, 255, 0.72);
       color: var(--ink);
       font: 700 1rem/1 system-ui, sans-serif;
+    }
+
+    .player-name-remove {
+      min-width: 2.75rem;
+      padding-inline: 0.75rem;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      clip-path: inset(50%);
     }
 
     .game-button {
@@ -120,8 +175,58 @@
       box-shadow: 0.18rem 0.18rem 0 var(--warm);
     }
 
+    .game-button.secondary {
+      background: #ffffff;
+      color: var(--ink);
+    }
+
     .game-button:hover {
       background: #0b7375;
+    }
+
+    .game-button.secondary:hover {
+      background: #f4f1e7;
+    }
+
+    .active-games {
+      width: min(92vw, 42rem);
+      display: none;
+      gap: 0.65rem;
+      justify-items: stretch;
+      font: 700 0.95rem/1.35 system-ui, sans-serif;
+    }
+
+    .active-games-list {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .active-game-row {
+      display: grid;
+      grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.55rem 0.65rem;
+      border: 2px solid rgba(23, 32, 42, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+      text-align: left;
+    }
+
+    .active-game-id {
+      font: 800 1rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+    }
+
+    .active-game-players {
+      overflow-wrap: anywhere;
+    }
+
+    .active-game-turn {
+      display: block;
+      margin-top: 0.15rem;
+      color: var(--accent);
+      font: 800 0.82rem/1.25 system-ui, sans-serif;
     }
 
     .game-area {
@@ -129,6 +234,30 @@
       width: 100%;
       justify-items: center;
       gap: 1rem;
+    }
+
+    body.screen-welcome:not(.has-player) .identity-panel {
+      display: grid;
+    }
+
+    body.has-player .identity-bar {
+      display: flex;
+    }
+
+    body.screen-welcome.has-player .welcome-actions {
+      display: flex;
+    }
+
+    body.screen-setup .player-setup {
+      display: grid;
+    }
+
+    body.screen-list .active-games {
+      display: grid;
+    }
+
+    body.screen-play .game-area {
+      display: grid;
     }
 
     .board {
@@ -211,6 +340,10 @@
       animation: tile-flash 420ms ease-in-out 2;
     }
 
+    .tile-remote-play {
+      animation: remote-play-flash 1400ms ease-out 1;
+    }
+
     @keyframes tile-flash {
       0%,
       100% {
@@ -219,6 +352,26 @@
 
       50% {
         background: #ffd1dc;
+      }
+    }
+
+    @keyframes remote-play-flash {
+      0% {
+        transform: scale(0.82);
+        background: #ffffff;
+        box-shadow:
+          inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08),
+          0 0 0 0.35rem rgba(15, 139, 141, 0.55);
+      }
+
+      45% {
+        transform: scale(1.06);
+        background: #cceff0;
+      }
+
+      100% {
+        transform: scale(1);
+        background: var(--tile);
       }
     }
 
@@ -249,28 +402,28 @@
       font-size: clamp(0.48rem, 1.4vw, 0.68rem);
     }
 
-    body.game-started main {
+    body.screen-play main {
       align-content: start;
       padding-top: clamp(1.25rem, 3vw, 2rem);
     }
 
-    body.game-started .masthead {
+    body.screen-play .masthead {
       gap: 1.15rem;
     }
 
-    body.game-started .brand {
+    body.screen-play .brand {
       font-size: clamp(1.85rem, 5vw, 3.35rem);
     }
 
-    body.game-started .game-area {
-      display: grid;
+    body.screen-play .play-menu {
+      display: flex;
     }
 
     .draw-tile-button {
       display: none;
     }
 
-    body.game-started .draw-tile-button {
+    body.screen-play .draw-tile-button {
       display: inline-block;
     }
 
@@ -297,10 +450,29 @@
       font: 700 0.9rem/1.3 system-ui, sans-serif;
     }
 
+    body.screen-play:not(.is-my-turn) .game-message {
+      color: var(--accent);
+    }
+
+    body.screen-play:not(.is-my-turn) .rack,
+    body.screen-play:not(.is-my-turn) .board {
+      opacity: 0.82;
+    }
+
+    body.screen-play:not(.is-my-turn) .tile-movable {
+      cursor: not-allowed;
+    }
+
+    .game-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+      box-shadow: none;
+    }
+
     .score-panel {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0.5rem;
       padding: 0.7rem 0.85rem;
       border: 2px solid rgba(23, 32, 42, 0.28);
@@ -354,20 +526,62 @@
       .rack {
         min-height: 3.8rem;
       }
+
+      .score-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   </style>
 </head>
-<body>
+<body class="screen-welcome">
   <main aria-label="WordWefter home">
     <header class="masthead">
       <h1 class="brand">WordWefter</h1>
       <div class="game-controls" aria-label="Game controls">
-        <input class="player-name-input" id="player-name-input" type="text" value="Player 1" aria-label="Player name">
-        <button class="game-button" type="button" id="new-game-button">New Game</button>
+        <div class="identity-panel" id="identity-panel" aria-label="Player identity">
+          <label class="sr-only" for="identity-name-input">Your name</label>
+          <input class="player-name-input" id="identity-name-input" type="text" aria-label="Your name" placeholder="Your name">
+          <button class="game-button" type="button" id="save-identity-button">Continue</button>
+        </div>
+        <div class="identity-bar" id="identity-bar" aria-label="Current player">
+          <span>Playing as <span class="identity-name" id="identity-name-display"></span></span>
+          <button class="game-button secondary" type="button" id="logout-button">Logout</button>
+        </div>
+        <div class="welcome-actions" id="welcome-actions" aria-label="Welcome menu">
+          <button class="game-button" type="button" id="show-new-game-button">New Game</button>
+          <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
+        </div>
+        <div class="player-setup" id="player-setup" aria-label="Player setup">
+          <div class="player-name-list" id="player-name-list">
+            <div class="player-name-row">
+              <label class="sr-only" for="player-name-input-1">Player 1 name</label>
+              <input class="player-name-input" id="player-name-input-1" type="text" value="Player 1" aria-label="Player 1 name">
+              <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
+            </div>
+            <div class="player-name-row">
+              <label class="sr-only" for="player-name-input-2">Player 2 name</label>
+              <input class="player-name-input" id="player-name-input-2" type="text" value="Player 2" aria-label="Player 2 name">
+              <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
+            </div>
+          </div>
+          <div class="game-controls">
+            <button class="game-button secondary" type="button" id="add-player-button">Add Player</button>
+            <button class="game-button" type="button" id="create-game-button">Create Game</button>
+            <button class="game-button secondary" type="button" id="setup-game-list-button">Game List</button>
+          </div>
+        </div>
       </div>
+      <section class="active-games" aria-label="Active games">
+        <div id="active-games-list" class="active-games-list"></div>
+      </section>
+      <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
     </header>
 
     <section class="game-area" aria-label="Game board">
+      <div class="play-menu" aria-label="Game menu">
+        <button class="game-button secondary" type="button" id="play-new-game-button">New Game</button>
+        <button class="game-button secondary" type="button" id="play-game-list-button">Game List</button>
+      </div>
       <div class="board" id="board" aria-label="12 by 12 board"></div>
       <div class="rack-wrap">
         <div class="rack" id="rack" aria-label="Rack"></div>
@@ -377,6 +591,14 @@
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
         </div>
         <div class="score-panel" aria-label="Score">
+          <div class="score-row">
+            <span>Who's turn</span>
+            <span id="current-player-name">Player 1</span>
+          </div>
+          <div class="score-row">
+            <span>Game ID</span>
+            <span id="current-game-id">-----</span>
+          </div>
           <div class="score-row">
             <span>Current score</span>
             <span id="current-score">0</span>
@@ -390,7 +612,6 @@
           <textarea id="game-state-json" spellcheck="false" aria-label="Game state JSON"></textarea>
           <button class="game-button" type="button" id="install-game-state-button">Install</button>
         </div>
-        <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
       </div>
     </section>
   </main>
@@ -398,6 +619,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js"></script>
+  <script type="module" src="./game.js?v=turn-polling"></script>
 </body>
 </html>

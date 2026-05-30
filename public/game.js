@@ -3,21 +3,52 @@ import { letter_freq, letter_points, letters_available } from "./letter-setup.js
 
 class WordWefterGameState {
   constructor(setup = {}) {
+    const playerNames = setup.playerNames || [setup.playerName || "Player 1"];
+
+    this.id = setup.id || WordWefterGameState.createGameId();
+    this.startDate = setup.startDate || new Date().toISOString();
     this.letterFrequencies = { ...letter_freq, ...setup.letterFrequencies };
     this.letterPoints = { ...letter_points, ...setup.letterPoints };
     this.startingLettersAvailable = { ...letters_available, ...setup.lettersAvailable };
     this.lettersAvailable = { ...this.startingLettersAvailable };
     this.dictionary = setup.dictionary || dictionaryWordSet;
-    this.player = {
-      name: setup.playerName || "Player 1",
-      score: 0,
-      rack: []
-    };
+    this.players = this.normalizePlayers(playerNames);
+    this.currentPlayerIndex = 0;
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
     this.nextTileId = 1;
     this.flashActivePlacements = false;
+  }
+
+  static createGameId() {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    return Array.from({ length: 5 }, () => (
+      alphabet[Math.floor(Math.random() * alphabet.length)]
+    )).join("");
+  }
+
+  normalizePlayers(playerNames) {
+    const names = (Array.isArray(playerNames) ? playerNames : [playerNames])
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+    const uniqueNames = names.length > 0 ? names : ["Player 1"];
+
+    return uniqueNames.map((name) => ({
+      name,
+      score: 0,
+      rack: []
+    }));
+  }
+
+  get player() {
+    return this.players[this.currentPlayerIndex] || this.players[0];
+  }
+
+  set player(player) {
+    this.players = [player];
+    this.currentPlayerIndex = 0;
   }
 
   get tilesRemaining() {
@@ -40,10 +71,27 @@ class WordWefterGameState {
     this.player.score = score;
   }
 
+  get currentPlayerName() {
+    return this.player.name;
+  }
+
   setPlayerName(name) {
     const normalizedName = String(name || "").trim();
 
     this.player.name = normalizedName || "Player 1";
+  }
+
+  setPlayerNames(playerNames) {
+    this.players = this.normalizePlayers(playerNames);
+    this.currentPlayerIndex = 0;
+  }
+
+  advanceTurn() {
+    this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
+
+    if (this.currentRack.length === 0) {
+      this.drawSevenTiles();
+    }
   }
 
   drawTiles(tileCount = 7) {
@@ -100,11 +148,14 @@ class WordWefterGameState {
 
   reset() {
     this.lettersAvailable = { ...this.startingLettersAvailable };
-    this.player = {
-      name: this.player.name,
+    this.id = WordWefterGameState.createGameId();
+    this.startDate = new Date().toISOString();
+    this.players = this.players.map((player) => ({
+      name: player.name,
       score: 0,
       rack: []
-    };
+    }));
+    this.currentPlayerIndex = 0;
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
@@ -126,12 +177,15 @@ class WordWefterGameState {
 
   toJSON() {
     return {
-      version: 2,
-      player: {
-        name: this.player.name,
-        score: this.player.score,
-        rack: this.player.rack.map((tile) => this.serializeTile(tile))
-      },
+      version: 1,
+      id: this.id,
+      startDate: this.startDate,
+      currentPlayerIndex: this.currentPlayerIndex,
+      players: this.players.map((player) => ({
+        name: player.name,
+        score: player.score,
+        rack: player.rack.map((tile) => this.serializeTile(tile))
+      })),
       lettersAvailable: { ...this.lettersAvailable },
       ...(this.flashActivePlacements ? { flashActivePlacements: true } : {}),
       ...(this.discardedTiles.length > 0 ? {
@@ -155,9 +209,13 @@ class WordWefterGameState {
       throw new Error("Game state must be a JSON object.");
     }
 
-    this.letterFrequencies = { ...letter_freq, ...source.letterFrequencies };
-    this.letterPoints = { ...letter_points, ...source.letterPoints };
-    this.startingLettersAvailable = { ...letters_available, ...source.startingLettersAvailable };
+    if (source.version !== 1) {
+      throw new Error("Game state version must be 1.");
+    }
+
+    this.letterFrequencies = { ...letter_freq };
+    this.letterPoints = { ...letter_points };
+    this.startingLettersAvailable = { ...letters_available };
     this.lettersAvailable = { ...this.startingLettersAvailable, ...source.lettersAvailable };
     this.nextTileId = 1;
 
@@ -171,11 +229,10 @@ class WordWefterGameState {
       return {
         id: `tile-${this.nextTileId++}`,
         letter,
-        points: Number.isFinite(Number(tile.points)) ? Number(tile.points) : this.letterPoints[letter],
-        frequency: Number.isFinite(Number(tile.frequency)) ? Number(tile.frequency) : this.letterFrequencies[letter],
+        points: this.letterPoints[letter],
+        frequency: this.letterFrequencies[letter],
         ...(Number.isInteger(Number(tile.row)) ? { row: Number(tile.row) } : {}),
-        ...(Number.isInteger(Number(tile.column)) ? { column: Number(tile.column) } : {}),
-        ...(typeof tile.active === "boolean" ? { active: tile.active } : {})
+        ...(Number.isInteger(Number(tile.column)) ? { column: Number(tile.column) } : {})
       };
     };
     const hydrateTileMap = (tiles, active) => {
@@ -197,11 +254,30 @@ class WordWefterGameState {
       return tileMap;
     };
 
-    this.player = {
-      name: String(source.player?.name || source.playerName || "Player 1"),
-      score: Number(source.player?.score ?? source.currentScore ?? 0),
-      rack: (source.player?.rack || source.currentRack || []).map(hydrateTile)
-    };
+    this.id = String(source.id || "").toUpperCase();
+    this.startDate = String(source.startDate || "");
+    this.players = (source.players || []).map((player) => ({
+      name: String(player.name || "Player"),
+      score: Number(player.score || 0),
+      rack: (player.rack || []).map(hydrateTile)
+    }));
+
+    if (!/^[A-Z0-9]{5}$/.test(this.id)) {
+      throw new Error("Game state must include a 5 character ID.");
+    }
+
+    if (!this.startDate) {
+      throw new Error("Game state must include a start date.");
+    }
+
+    if (this.players.length === 0) {
+      throw new Error("Game state must include at least one player.");
+    }
+
+    const loadedPlayerIndex = Number(source.currentPlayerIndex);
+    this.currentPlayerIndex = Number.isInteger(loadedPlayerIndex)
+      ? Math.max(0, Math.min(loadedPlayerIndex, this.players.length - 1))
+      : 0;
     this.discardedTiles = (source.discardedTiles || []).map(hydrateTile);
     this.boardTiles = hydrateTileMap(source.boardTiles, false);
     this.activePlacements = hydrateTileMap(source.activePlacements, true);
@@ -681,8 +757,15 @@ class WordWefterGameState {
 
 const gameState = new WordWefterGameState();
 const boardSize = 12;
+const serverURL = "./server.php";
+const playerNameCookie = "wordwefterPlayerName";
+const turnPollMilliseconds = 3000;
 let rackSortable = null;
 let boardSortables = [];
+let pendingIdentityAction = null;
+let turnPollTimer = null;
+let remotePlayedCellKeys = new Set();
+let remotePlayedClearTimer = null;
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
@@ -721,6 +804,10 @@ function createTileElement(tile, options = {}) {
     tileElement.classList.add("tile-placement-error");
   }
 
+  if (options.remotePlayed) {
+    tileElement.classList.add("tile-remote-play");
+  }
+
   tileElement.append(letterElement, pointsElement);
   return tileElement;
 }
@@ -743,10 +830,13 @@ function renderBoard() {
     const tile = gameState.getTileAt(Number(cell.dataset.row), Number(cell.dataset.column));
 
     if (tile) {
+      const cellKey = gameState.getCellKey(Number(cell.dataset.row), Number(cell.dataset.column));
+
       cell.append(createTileElement(tile, {
         active: tile.active,
         flash: tile.active && gameState.flashActivePlacements,
-        movable: tile.active,
+        movable: tile.active && isMyTurn(),
+        remotePlayed: tile.remotePlayed || remotePlayedCellKeys.has(cellKey),
         source: "board"
       }));
     }
@@ -765,17 +855,27 @@ function renderRack() {
   rack.replaceChildren();
 
   gameState.currentRack.forEach((tile) => {
-    rack.append(createTileElement(tile, { movable: true, source: "rack" }));
+    rack.append(createTileElement(tile, { movable: isMyTurn(), source: "rack" }));
   });
 }
 
 function updatePlacementControls() {
-  document.body.classList.toggle("has-active-placement", gameState.hasActivePlacements());
+  const canPlay = isMyTurn();
+  const hasActivePlacements = gameState.hasActivePlacements();
+
+  document.body.classList.toggle("has-active-placement", canPlay && hasActivePlacements);
+  document.body.classList.toggle("is-my-turn", canPlay);
+  document.querySelectorAll("#draw-tile-button, #finish-placement-button, #reset-placement-button")
+    .forEach((button) => {
+      button.disabled = !canPlay;
+    });
 }
 
 function renderScore() {
   const currentScoreElement = document.querySelector("#current-score");
   const currentTurnScoreElement = document.querySelector("#current-turn-score");
+  const currentPlayerNameElement = document.querySelector("#current-player-name");
+  const currentGameIdElement = document.querySelector("#current-game-id");
 
   if (currentScoreElement) {
     currentScoreElement.textContent = gameState.currentScore;
@@ -784,15 +884,22 @@ function renderScore() {
   if (currentTurnScoreElement) {
     currentTurnScoreElement.textContent = gameState.getCurrentTurnScore();
   }
+
+  if (currentPlayerNameElement) {
+    currentPlayerNameElement.textContent = isMyTurn()
+      ? `${gameState.currentPlayerName} (you)`
+      : gameState.currentPlayerName;
+  }
+
+  if (currentGameIdElement) {
+    currentGameIdElement.textContent = gameState.id;
+  }
 }
 
 function renderGameStateJSON() {
   const gameStateElement = document.querySelector("#game-state-json");
-  const playerNameInput = document.querySelector("#player-name-input");
 
-  if (playerNameInput && document.activeElement !== playerNameInput) {
-    playerNameInput.value = gameState.player.name;
-  }
+  renderPlayerNameInputs(gameState.players.map((player) => player.name));
 
   if (!gameStateElement || document.activeElement === gameStateElement) {
     return;
@@ -809,6 +916,8 @@ function renderGame() {
   renderScore();
   renderGameStateJSON();
   initializeSortables();
+  updateTurnMessage();
+  updateTurnPolling();
 }
 
 function setGameMessage(message) {
@@ -819,23 +928,516 @@ function setGameMessage(message) {
   }
 }
 
-function startNewGame() {
-  const playerNameInput = document.querySelector("#player-name-input");
-
-  if (playerNameInput) {
-    gameState.setPlayerName(playerNameInput.value);
-  }
-
-  document.body.classList.add("game-started");
-  gameState.reset();
-  gameState.drawSevenTiles();
-  setGameMessage("");
-  renderGame();
+function normalizePlayerName(name) {
+  return String(name || "").trim();
 }
 
-function drawTileToRack() {
-  if (!document.body.classList.contains("game-started")) {
-    startNewGame();
+function normalizeNameKey(name) {
+  return normalizePlayerName(name).toLowerCase();
+}
+
+function isMyTurn() {
+  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+
+  return Boolean(storedPlayerKey) && normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey;
+}
+
+function getBoardTileSignatures(source) {
+  const signatures = new Map();
+  const boardTiles = source?.boardTiles || [];
+
+  boardTiles.forEach((tile) => {
+    if (Number.isInteger(Number(tile.row)) && Number.isInteger(Number(tile.column))) {
+      signatures.set(`${Number(tile.row)},${Number(tile.column)}`, String(tile.letter || ""));
+    }
+  });
+
+  return signatures;
+}
+
+function getChangedBoardCellKeys(nextGameState) {
+  const currentTiles = getBoardTileSignatures(gameState.toJSON());
+  const nextTiles = getBoardTileSignatures(nextGameState);
+  const changedKeys = [];
+
+  nextTiles.forEach((letter, cellKey) => {
+    if (currentTiles.get(cellKey) !== letter) {
+      changedKeys.push(cellKey);
+    }
+  });
+
+  return changedKeys;
+}
+
+function getCookie(name) {
+  const cookiePrefix = `${encodeURIComponent(name)}=`;
+  const cookie = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(cookiePrefix));
+
+  return cookie ? decodeURIComponent(cookie.slice(cookiePrefix.length)) : "";
+}
+
+function setCookie(name, value) {
+  const maxAge = 60 * 60 * 24 * 365;
+
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
+}
+
+function deleteCookie(name) {
+  document.cookie = `${encodeURIComponent(name)}=; max-age=0; path=/; samesite=lax`;
+}
+
+function getStoredPlayerName() {
+  return normalizePlayerName(getCookie(playerNameCookie));
+}
+
+function setStoredPlayerName(name) {
+  const normalizedName = normalizePlayerName(name);
+
+  if (normalizedName) {
+    setCookie(playerNameCookie, normalizedName);
+  }
+
+  return normalizedName;
+}
+
+function updateIdentityUI() {
+  const playerName = getStoredPlayerName();
+  const identityNameDisplay = document.querySelector("#identity-name-display");
+  const identityNameInput = document.querySelector("#identity-name-input");
+
+  document.body.classList.toggle("has-player", Boolean(playerName));
+
+  if (identityNameDisplay) {
+    identityNameDisplay.textContent = playerName;
+  }
+
+  if (identityNameInput && document.activeElement !== identityNameInput) {
+    identityNameInput.value = playerName;
+  }
+}
+
+function requirePlayerName(action) {
+  const playerName = getStoredPlayerName();
+
+  if (playerName) {
+    action();
+    return;
+  }
+
+  pendingIdentityAction = action;
+  setGameMessage("");
+  setScreen("welcome");
+  updateIdentityUI();
+  document.querySelector("#identity-name-input")?.focus();
+}
+
+function getPlayerNameInputs() {
+  return Array.from(document.querySelectorAll("#player-name-list .player-name-input"));
+}
+
+function updatePlayerRemoveButtons() {
+  const rows = Array.from(document.querySelectorAll("#player-name-list .player-name-row"));
+
+  rows.forEach((row, index) => {
+    const button = row.querySelector(".player-name-remove");
+
+    if (button) {
+      button.disabled = index === 0 || rows.length <= 1;
+    }
+  });
+}
+
+function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, options = {}) {
+  const row = document.createElement("div");
+  const label = document.createElement("label");
+  const input = document.createElement("input");
+  const removeButton = document.createElement("button");
+  const playerNumber = index + 1;
+  const inputId = `player-name-input-${playerNumber}`;
+
+  row.className = "player-name-row";
+  label.className = "sr-only";
+  label.htmlFor = inputId;
+  label.textContent = `Player ${playerNumber} name`;
+  input.className = "player-name-input";
+  input.id = inputId;
+  input.type = "text";
+  input.value = name;
+  input.placeholder = `Player ${playerNumber}`;
+  input.setAttribute("aria-label", `Player ${playerNumber} name`);
+  input.readOnly = Boolean(options.locked);
+  removeButton.className = "game-button secondary player-name-remove";
+  removeButton.type = "button";
+  removeButton.textContent = "-";
+  removeButton.setAttribute("aria-label", "Remove player");
+  removeButton.addEventListener("click", () => {
+    if (getPlayerNameInputs().length <= 1) {
+      return;
+    }
+
+    row.remove();
+    updatePlayerRemoveButtons();
+  });
+
+  row.append(label, input, removeButton);
+  return row;
+}
+
+function addPlayerNameInput(name = "") {
+  const playerNameList = document.querySelector("#player-name-list");
+
+  if (!playerNameList) {
+    return null;
+  }
+
+  const row = createPlayerNameRow(name, getPlayerNameInputs().length);
+
+  playerNameList.append(row);
+  updatePlayerRemoveButtons();
+
+  return row.querySelector(".player-name-input");
+}
+
+function renderPlayerNameInputs(playerNames) {
+  const playerNameList = document.querySelector("#player-name-list");
+  const storedPlayerName = getStoredPlayerName();
+  const names = [
+    storedPlayerName || playerNames[0] || "Player 1",
+    ...playerNames.slice(1)
+  ];
+
+  if (!playerNameList || playerNameList.contains(document.activeElement)) {
+    return;
+  }
+
+  playerNameList.replaceChildren();
+  (names.length > 0 ? names : ["Player 1"]).forEach((name, index) => {
+    playerNameList.append(createPlayerNameRow(name, index, { locked: index === 0 }));
+  });
+  updatePlayerRemoveButtons();
+}
+
+function parsePlayerNames() {
+  const storedPlayerName = getStoredPlayerName();
+  const playerNames = [
+    storedPlayerName,
+    ...getPlayerNameInputs().slice(1).map((input) => input.value)
+  ]
+    .map(normalizePlayerName)
+    .filter(Boolean);
+
+  return playerNames.length > 0 ? playerNames : ["Player 1"];
+}
+
+function validatePlayerNames(playerNames) {
+  const seenNames = new Set();
+  const duplicateName = playerNames.find((name) => {
+    const nameKey = normalizeNameKey(name);
+
+    if (seenNames.has(nameKey)) {
+      return true;
+    }
+
+    seenNames.add(nameKey);
+    return false;
+  });
+
+  if (duplicateName) {
+    return `Each player needs a different name. "${duplicateName}" is already in this game.`;
+  }
+
+  return "";
+}
+
+function setScreen(screenName) {
+  document.body.classList.remove("screen-welcome", "screen-setup", "screen-list", "screen-play");
+  document.body.classList.add(`screen-${screenName}`);
+  updateTurnPolling();
+}
+
+function showNewGameSetup() {
+  requirePlayerName(() => {
+    const otherPlayerNames = gameState.players.slice(1).map((player) => player.name);
+
+    renderPlayerNameInputs([
+      getStoredPlayerName(),
+      ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Player 2"])
+    ]);
+    setGameMessage("");
+    setScreen("setup");
+  });
+}
+
+async function showGameList() {
+  requirePlayerName(async () => {
+    setGameMessage("");
+    setScreen("list");
+    await loadActiveGames();
+  });
+}
+
+function saveIdentityFromInput() {
+  const identityNameInput = document.querySelector("#identity-name-input");
+  const playerName = setStoredPlayerName(identityNameInput?.value);
+
+  if (!playerName) {
+    setGameMessage("Enter your name first.");
+    identityNameInput?.focus();
+    return;
+  }
+
+  updateIdentityUI();
+  setGameMessage("");
+
+  const nextAction = pendingIdentityAction;
+  pendingIdentityAction = null;
+
+  if (nextAction) {
+    nextAction();
+  }
+}
+
+function logoutPlayer() {
+  deleteCookie(playerNameCookie);
+  pendingIdentityAction = null;
+  setScreen("welcome");
+  setGameMessage("");
+  updateIdentityUI();
+  loadActiveGames();
+}
+
+async function fetchJSON(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json();
+
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || "Server request failed.");
+  }
+
+  return payload;
+}
+
+async function saveGameState() {
+  const payload = await fetchJSON(`${serverURL}?action=save`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(gameState.toJSON())
+  });
+
+  return payload.id;
+}
+
+function updateTurnMessage() {
+  if (!document.body.classList.contains("screen-play")) {
+    return;
+  }
+
+  if (isMyTurn()) {
+    setGameMessage(`Your turn: ${gameState.currentPlayerName}`);
+    return;
+  }
+
+  setGameMessage(`Waiting for ${gameState.currentPlayerName}. This game will refresh automatically.`);
+}
+
+function clearRemotePlayedAnimationLater() {
+  window.clearTimeout(remotePlayedClearTimer);
+  remotePlayedClearTimer = window.setTimeout(() => {
+    remotePlayedCellKeys.clear();
+    gameState.boardTiles.forEach((tile) => {
+      delete tile.remotePlayed;
+    });
+    renderGame();
+  }, 15000);
+}
+
+async function pollActiveGameState() {
+  if (
+    !document.body.classList.contains("screen-play") ||
+    isMyTurn() ||
+    !/^[A-Z0-9]{5}$/.test(gameState.id)
+  ) {
+    updateTurnPolling();
+    return;
+  }
+
+  try {
+    const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(gameState.id)}`);
+    const nextStateJSON = JSON.stringify(payload.gameState);
+    const currentStateJSON = JSON.stringify(gameState.toJSON());
+
+    if (nextStateJSON === currentStateJSON) {
+      updateTurnPolling();
+      return;
+    }
+
+    let changedCellKeys = getChangedBoardCellKeys(payload.gameState);
+    const nextBoardTiles = payload.gameState.boardTiles || [];
+
+    if (changedCellKeys.length === 0 && nextBoardTiles.length > 0) {
+      changedCellKeys = nextBoardTiles.map((tile) => `${Number(tile.row)},${Number(tile.column)}`);
+    }
+
+    remotePlayedCellKeys = new Set(changedCellKeys);
+    gameState.loadFromJSON(payload.gameState);
+    changedCellKeys.forEach((cellKey) => {
+      const tile = gameState.boardTiles.get(cellKey);
+
+      if (tile) {
+        tile.remotePlayed = true;
+      }
+    });
+    renderGame();
+
+    if (changedCellKeys.length > 0) {
+      clearRemotePlayedAnimationLater();
+    }
+  } catch (error) {
+    setGameMessage(`Could not refresh game: ${error.message}`);
+  } finally {
+    updateTurnPolling();
+  }
+}
+
+function updateTurnPolling() {
+  const shouldPoll = document.body.classList.contains("screen-play") && !isMyTurn();
+
+  if (!shouldPoll) {
+    window.clearInterval(turnPollTimer);
+    turnPollTimer = null;
+    return;
+  }
+
+  if (!turnPollTimer) {
+    turnPollTimer = window.setInterval(pollActiveGameState, turnPollMilliseconds);
+  }
+}
+
+async function loadActiveGames() {
+  const activeGamesList = document.querySelector("#active-games-list");
+  const storedPlayerName = getStoredPlayerName();
+  const storedPlayerKey = normalizeNameKey(storedPlayerName);
+
+  if (!activeGamesList) {
+    return;
+  }
+
+  if (!storedPlayerName) {
+    activeGamesList.textContent = "";
+    return;
+  }
+
+  try {
+    const payload = await fetchJSON(`${serverURL}?action=list`);
+    const matchingGames = (payload.games || []).filter((game) => (
+      (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey)
+    ));
+
+    activeGamesList.replaceChildren();
+
+    if (matchingGames.length === 0) {
+      const emptyElement = document.createElement("div");
+      emptyElement.className = "active-game-row";
+      emptyElement.textContent = `No saved games for ${storedPlayerName}`;
+      activeGamesList.append(emptyElement);
+      return;
+    }
+
+    matchingGames.forEach((game) => {
+      const row = document.createElement("div");
+      const idElement = document.createElement("span");
+      const detailsElement = document.createElement("div");
+      const playersElement = document.createElement("span");
+      const turnElement = document.createElement("span");
+      const resumeButton = document.createElement("button");
+
+      row.className = "active-game-row";
+      row.dataset.gameId = game.id;
+      idElement.className = "active-game-id";
+      detailsElement.className = "active-game-players";
+      turnElement.className = "active-game-turn";
+      resumeButton.className = "game-button secondary";
+      resumeButton.type = "button";
+      idElement.textContent = game.id;
+      playersElement.textContent = (game.playerNames || []).join(", ");
+      turnElement.textContent = `Who's turn: ${game.currentPlayerName || "Player"}`;
+      resumeButton.textContent = "Resume";
+      resumeButton.addEventListener("click", () => resumeGame(game.id));
+
+      detailsElement.append(playersElement, turnElement);
+      row.append(idElement, detailsElement, resumeButton);
+      activeGamesList.append(row);
+    });
+  } catch (error) {
+    activeGamesList.textContent = `Could not load active games: ${error.message}`;
+  }
+}
+
+async function resumeGame(gameId) {
+  try {
+    const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(gameId)}`);
+    const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+    const canPlayGame = (payload.gameState.players || [])
+      .some((player) => normalizeNameKey(player.name) === storedPlayerKey);
+
+    if (!canPlayGame) {
+      throw new Error("This game does not include your player name.");
+    }
+
+    gameState.loadFromJSON(payload.gameState);
+    setScreen("play");
+    setGameMessage("");
+    renderGame();
+  } catch (error) {
+    setGameMessage(`Could not load game: ${error.message}`);
+  }
+}
+
+async function startNewGame() {
+  const playerNames = parsePlayerNames();
+  const validationMessage = validatePlayerNames(playerNames);
+
+  if (!getStoredPlayerName()) {
+    showNewGameSetup();
+    return;
+  }
+
+  if (validationMessage) {
+    setGameMessage(validationMessage);
+    return;
+  }
+
+  gameState.setPlayerNames(playerNames);
+  gameState.reset();
+  gameState.players.forEach((_, index) => {
+    gameState.currentPlayerIndex = index;
+    gameState.drawSevenTiles();
+  });
+  gameState.currentPlayerIndex = 0;
+  setScreen("play");
+  setGameMessage("");
+  renderGame();
+
+  try {
+    await saveGameState();
+    await loadActiveGames();
+  } catch (error) {
+    setGameMessage(`Game started, but could not save: ${error.message}`);
+  }
+}
+
+async function drawTileToRack() {
+  if (!document.body.classList.contains("screen-play")) {
+    showNewGameSetup();
+    return;
+  }
+
+  if (!isMyTurn()) {
+    updateTurnMessage();
     return;
   }
 
@@ -843,19 +1445,39 @@ function drawTileToRack() {
   renderGame();
 }
 
-function finishPlacement() {
+async function finishPlacement() {
+  if (!isMyTurn()) {
+    updateTurnMessage();
+    return;
+  }
+
   const result = gameState.finishActivePlacements();
 
   if (result && !result.isValid) {
     setGameMessage(result.placementError || `Not in dictionary: ${result.invalidWords.join(", ")}`);
-  } else {
-    setGameMessage("");
+  } else if (result && result.isValid) {
+    gameState.advanceTurn();
+    setGameMessage(`Next turn: ${gameState.currentPlayerName}`);
   }
 
   renderGame();
+
+  if (result && result.isValid) {
+    try {
+      await saveGameState();
+      await loadActiveGames();
+    } catch (error) {
+      setGameMessage(`Turn finished, but could not save: ${error.message}`);
+    }
+  }
 }
 
 function resetPlacement() {
+  if (!isMyTurn()) {
+    updateTurnMessage();
+    return;
+  }
+
   gameState.resetActivePlacements();
   gameState.flashActivePlacements = false;
   setGameMessage("");
@@ -871,13 +1493,7 @@ function installGameStateFromInput() {
 
   try {
     gameState.loadFromJSON(gameStateElement.value);
-    const playerNameInput = document.querySelector("#player-name-input");
-
-    if (playerNameInput) {
-      playerNameInput.value = gameState.player.name;
-    }
-
-    document.body.classList.add("game-started");
+    setScreen("play");
     setGameMessage("");
     gameStateElement.blur();
     renderGame();
@@ -903,7 +1519,7 @@ function getSortableSource(event) {
 function initializeRackSortable() {
   const rack = document.querySelector("#rack");
 
-  if (!rack || !window.Sortable) {
+  if (!rack || !window.Sortable || !isMyTurn()) {
     return;
   }
 
@@ -935,7 +1551,7 @@ function initializeRackSortable() {
 }
 
 function initializeBoardSortables() {
-  if (!window.Sortable) {
+  if (!window.Sortable || !isMyTurn()) {
     return;
   }
 
@@ -986,14 +1602,67 @@ function initializeSortables() {
 }
 
 function bindGameControls() {
-  const newGameButton = document.querySelector("#new-game-button");
+  const saveIdentityButton = document.querySelector("#save-identity-button");
+  const identityNameInput = document.querySelector("#identity-name-input");
+  const logoutButton = document.querySelector("#logout-button");
+  const showNewGameButton = document.querySelector("#show-new-game-button");
+  const showGameListButton = document.querySelector("#show-game-list-button");
+  const setupGameListButton = document.querySelector("#setup-game-list-button");
+  const playNewGameButton = document.querySelector("#play-new-game-button");
+  const playGameListButton = document.querySelector("#play-game-list-button");
+  const createGameButton = document.querySelector("#create-game-button");
+  const addPlayerButton = document.querySelector("#add-player-button");
   const drawTileButton = document.querySelector("#draw-tile-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
   const installGameStateButton = document.querySelector("#install-game-state-button");
 
-  if (newGameButton) {
-    newGameButton.addEventListener("click", startNewGame);
+  if (saveIdentityButton) {
+    saveIdentityButton.addEventListener("click", saveIdentityFromInput);
+  }
+
+  if (identityNameInput) {
+    identityNameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        saveIdentityFromInput();
+      }
+    });
+  }
+
+  if (logoutButton) {
+    logoutButton.addEventListener("click", logoutPlayer);
+  }
+
+  if (showNewGameButton) {
+    showNewGameButton.addEventListener("click", showNewGameSetup);
+  }
+
+  if (playNewGameButton) {
+    playNewGameButton.addEventListener("click", showNewGameSetup);
+  }
+
+  if (showGameListButton) {
+    showGameListButton.addEventListener("click", showGameList);
+  }
+
+  if (setupGameListButton) {
+    setupGameListButton.addEventListener("click", showGameList);
+  }
+
+  if (playGameListButton) {
+    playGameListButton.addEventListener("click", showGameList);
+  }
+
+  if (createGameButton) {
+    createGameButton.addEventListener("click", startNewGame);
+  }
+
+  if (addPlayerButton) {
+    addPlayerButton.addEventListener("click", () => {
+      const input = addPlayerNameInput(`Player ${getPlayerNameInputs().length + 1}`);
+
+      input?.focus();
+    });
   }
 
   if (drawTileButton) {
@@ -1013,10 +1682,18 @@ function bindGameControls() {
   }
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", bindGameControls);
-} else {
+function initializeApp() {
+  updateIdentityUI();
+  renderPlayerNameInputs(parsePlayerNames());
   bindGameControls();
+  updatePlayerRemoveButtons();
+  loadActiveGames();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeApp);
+} else {
+  initializeApp();
 }
 
 window.startWordWefterGame = startNewGame;
