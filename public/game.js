@@ -8,17 +8,42 @@ class WordWefterGameState {
     this.startingLettersAvailable = { ...letters_available, ...setup.lettersAvailable };
     this.lettersAvailable = { ...this.startingLettersAvailable };
     this.dictionary = setup.dictionary || dictionaryWordSet;
-    this.currentRack = [];
+    this.player = {
+      name: setup.playerName || "Player 1",
+      score: 0,
+      rack: []
+    };
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
     this.nextTileId = 1;
     this.flashActivePlacements = false;
-    this.currentScore = 0;
   }
 
   get tilesRemaining() {
     return Object.values(this.lettersAvailable).reduce((total, count) => total + count, 0);
+  }
+
+  get currentRack() {
+    return this.player.rack;
+  }
+
+  set currentRack(rack) {
+    this.player.rack = rack;
+  }
+
+  get currentScore() {
+    return this.player.score;
+  }
+
+  set currentScore(score) {
+    this.player.score = score;
+  }
+
+  setPlayerName(name) {
+    const normalizedName = String(name || "").trim();
+
+    this.player.name = normalizedName || "Player 1";
   }
 
   drawTiles(tileCount = 7) {
@@ -75,13 +100,114 @@ class WordWefterGameState {
 
   reset() {
     this.lettersAvailable = { ...this.startingLettersAvailable };
-    this.currentRack = [];
+    this.player = {
+      name: this.player.name,
+      score: 0,
+      rack: []
+    };
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.activePlacements = new Map();
     this.nextTileId = 1;
     this.flashActivePlacements = false;
-    this.currentScore = 0;
+  }
+
+  mapToTileArray(tileMap) {
+    return Array.from(tileMap.values()).map((tile) => ({ ...tile }));
+  }
+
+  serializeTile(tile) {
+    return {
+      letter: tile.letter,
+      ...(Number.isInteger(tile.row) ? { row: tile.row } : {}),
+      ...(Number.isInteger(tile.column) ? { column: tile.column } : {})
+    };
+  }
+
+  toJSON() {
+    return {
+      version: 2,
+      player: {
+        name: this.player.name,
+        score: this.player.score,
+        rack: this.player.rack.map((tile) => this.serializeTile(tile))
+      },
+      lettersAvailable: { ...this.lettersAvailable },
+      ...(this.flashActivePlacements ? { flashActivePlacements: true } : {}),
+      ...(this.discardedTiles.length > 0 ? {
+        discardedTiles: this.discardedTiles.map((tile) => this.serializeTile(tile))
+      } : {}),
+      ...(this.boardTiles.size > 0 ? {
+        boardTiles: this.mapToTileArray(this.boardTiles).map((tile) => this.serializeTile(tile))
+      } : {}),
+      ...(this.activePlacements.size > 0 ? {
+        activePlacements: this.mapToTileArray(this.activePlacements).map((tile) => this.serializeTile(tile))
+      } : {})
+    };
+  }
+
+  loadFromJSON(gameStateJSON) {
+    const source = typeof gameStateJSON === "string"
+      ? JSON.parse(gameStateJSON)
+      : gameStateJSON;
+
+    if (!source || typeof source !== "object") {
+      throw new Error("Game state must be a JSON object.");
+    }
+
+    this.letterFrequencies = { ...letter_freq, ...source.letterFrequencies };
+    this.letterPoints = { ...letter_points, ...source.letterPoints };
+    this.startingLettersAvailable = { ...letters_available, ...source.startingLettersAvailable };
+    this.lettersAvailable = { ...this.startingLettersAvailable, ...source.lettersAvailable };
+    this.nextTileId = 1;
+
+    const hydrateTile = (tile) => {
+      const letter = String(tile.letter || "").toUpperCase();
+
+      if (!letter) {
+        throw new Error("Tiles must include a letter.");
+      }
+
+      return {
+        id: `tile-${this.nextTileId++}`,
+        letter,
+        points: Number.isFinite(Number(tile.points)) ? Number(tile.points) : this.letterPoints[letter],
+        frequency: Number.isFinite(Number(tile.frequency)) ? Number(tile.frequency) : this.letterFrequencies[letter],
+        ...(Number.isInteger(Number(tile.row)) ? { row: Number(tile.row) } : {}),
+        ...(Number.isInteger(Number(tile.column)) ? { column: Number(tile.column) } : {}),
+        ...(typeof tile.active === "boolean" ? { active: tile.active } : {})
+      };
+    };
+    const hydrateTileMap = (tiles, active) => {
+      const tileMap = new Map();
+
+      (tiles || []).forEach((tile) => {
+        const hydratedTile = {
+          ...hydrateTile(tile),
+          active
+        };
+
+        if (!Number.isInteger(hydratedTile.row) || !Number.isInteger(hydratedTile.column)) {
+          throw new Error("Board tiles must include integer row and column values.");
+        }
+
+        tileMap.set(this.getCellKey(hydratedTile.row, hydratedTile.column), hydratedTile);
+      });
+
+      return tileMap;
+    };
+
+    this.player = {
+      name: String(source.player?.name || source.playerName || "Player 1"),
+      score: Number(source.player?.score ?? source.currentScore ?? 0),
+      rack: (source.player?.rack || source.currentRack || []).map(hydrateTile)
+    };
+    this.discardedTiles = (source.discardedTiles || []).map(hydrateTile);
+    this.boardTiles = hydrateTileMap(source.boardTiles, false);
+    this.activePlacements = hydrateTileMap(source.activePlacements, true);
+    this.flashActivePlacements = Boolean(source.flashActivePlacements);
+
+    return this;
   }
 
   normalizeWord(word) {
@@ -660,12 +786,28 @@ function renderScore() {
   }
 }
 
+function renderGameStateJSON() {
+  const gameStateElement = document.querySelector("#game-state-json");
+  const playerNameInput = document.querySelector("#player-name-input");
+
+  if (playerNameInput && document.activeElement !== playerNameInput) {
+    playerNameInput.value = gameState.player.name;
+  }
+
+  if (!gameStateElement || document.activeElement === gameStateElement) {
+    return;
+  }
+
+  gameStateElement.value = JSON.stringify(gameState.toJSON(), null, 2);
+}
+
 function renderGame() {
   destroySortables();
   renderBoard();
   renderRack();
   updatePlacementControls();
   renderScore();
+  renderGameStateJSON();
   initializeSortables();
 }
 
@@ -678,6 +820,12 @@ function setGameMessage(message) {
 }
 
 function startNewGame() {
+  const playerNameInput = document.querySelector("#player-name-input");
+
+  if (playerNameInput) {
+    gameState.setPlayerName(playerNameInput.value);
+  }
+
   document.body.classList.add("game-started");
   gameState.reset();
   gameState.drawSevenTiles();
@@ -712,6 +860,30 @@ function resetPlacement() {
   gameState.flashActivePlacements = false;
   setGameMessage("");
   renderGame();
+}
+
+function installGameStateFromInput() {
+  const gameStateElement = document.querySelector("#game-state-json");
+
+  if (!gameStateElement) {
+    return;
+  }
+
+  try {
+    gameState.loadFromJSON(gameStateElement.value);
+    const playerNameInput = document.querySelector("#player-name-input");
+
+    if (playerNameInput) {
+      playerNameInput.value = gameState.player.name;
+    }
+
+    document.body.classList.add("game-started");
+    setGameMessage("");
+    gameStateElement.blur();
+    renderGame();
+  } catch (error) {
+    setGameMessage(`Could not install game state: ${error.message}`);
+  }
 }
 
 function destroySortables() {
@@ -818,6 +990,7 @@ function bindGameControls() {
   const drawTileButton = document.querySelector("#draw-tile-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
+  const installGameStateButton = document.querySelector("#install-game-state-button");
 
   if (newGameButton) {
     newGameButton.addEventListener("click", startNewGame);
@@ -834,6 +1007,10 @@ function bindGameControls() {
   if (resetPlacementButton) {
     resetPlacementButton.addEventListener("click", resetPlacement);
   }
+
+  if (installGameStateButton) {
+    installGameStateButton.addEventListener("click", installGameStateFromInput);
+  }
 }
 
 if (document.readyState === "loading") {
@@ -846,5 +1023,6 @@ window.startWordWefterGame = startNewGame;
 window.drawWordWefterTile = drawTileToRack;
 window.finishWordWefterPlacement = finishPlacement;
 window.resetWordWefterPlacement = resetPlacement;
+window.installWordWefterGameState = installGameStateFromInput;
 
 export { WordWefterGameState, gameState };
