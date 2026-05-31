@@ -80,6 +80,9 @@ web_modules/
 .env.local
 deploy.config.ps1
 
+# Local saved games
+public/saved-games/*.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
