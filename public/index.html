@@ -224,6 +224,31 @@
       display: grid;
     }
 
+    .identity-menu-checkbox {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.55rem;
+      text-align: left;
+      user-select: none;
+    }
+
+    .identity-menu-checkbox[hidden] {
+      display: none;
+    }
+
+    .identity-menu-checkbox input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+      flex: 0 0 auto;
+    }
+
+    .identity-menu-checkbox[aria-disabled="true"] {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
     .player-setup {
       display: none;
       justify-items: center;
@@ -650,11 +675,20 @@
       position: absolute;
       inset: 0.2rem;
       display: grid;
+      align-content: center;
       place-items: center;
-      font: 800 clamp(0.5rem, 1.6vw, 0.68rem)/1 system-ui, sans-serif;
+      gap: 0.08rem;
+      font: 800 clamp(0.44rem, 1.15vw, 0.58rem)/1 system-ui, sans-serif;
       color: currentColor;
+      text-align: center;
+      text-transform: lowercase;
       pointer-events: none;
       user-select: none;
+    }
+
+    .board-bonus-multiplier,
+    .board-bonus-scope {
+      display: block;
     }
 
     .board-cell-bonus.drop-ready {
@@ -669,13 +703,14 @@
     }
 
     .rack {
+      position: relative;
       width: 100%;
       min-height: 4.75rem;
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
       grid-auto-rows: minmax(0, 1fr);
       gap: clamp(0.35rem, 1.8vw, 0.75rem);
-      padding: clamp(0.45rem, 1.8vw, 0.75rem);
+      padding: calc(clamp(0.45rem, 1.8vw, 0.75rem) + 0.42rem) clamp(0.45rem, 1.8vw, 0.75rem) clamp(0.45rem, 1.8vw, 0.75rem);
       border: 3px solid var(--ink);
       border-radius: 8px;
       background: rgba(23, 32, 42, 0.08);
@@ -688,25 +723,45 @@
       justify-items: start;
     }
 
-    .marketplace-title {
-      margin: 0;
-      font: 800 0.78rem/1 system-ui, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: rgba(23, 32, 42, 0.74);
-    }
-
     .marketplace {
+      position: relative;
       width: 100%;
       min-height: 4.75rem;
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
       grid-auto-rows: minmax(0, 1fr);
       gap: clamp(0.35rem, 1.8vw, 0.75rem);
-      padding: clamp(0.45rem, 1.8vw, 0.75rem);
+      padding: calc(clamp(0.45rem, 1.8vw, 0.75rem) + 0.42rem) clamp(0.45rem, 1.8vw, 0.75rem) clamp(0.45rem, 1.8vw, 0.75rem);
       border: 2px solid rgba(23, 32, 42, 0.55);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.42);
+    }
+
+    .rack::before,
+    .marketplace::before {
+      position: absolute;
+      top: -0.58rem;
+      left: 0.7rem;
+      z-index: 2;
+      color: rgba(23, 32, 42, 0.74);
+      border-radius: 5px;
+      padding: 0.12rem 0.38rem;
+      font: 800 0.72rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .rack::before {
+      content: "Your Tiles";
+      border: 3px solid var(--ink);
+      background: #ebe9df;
+    }
+
+    .marketplace::before {
+      content: "Marketplace";
+      border: 2px solid rgba(23, 32, 42, 0.55);
+      background: #fbfaf6;
     }
 
     .tile {
@@ -1177,7 +1232,10 @@
             <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
             <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
             <button class="game-button secondary" type="button" id="show-rules-button">Rules</button>
-            <button class="game-button secondary" type="button" id="notification-toggle-button" hidden>Enable Alerts</button>
+            <label class="game-button secondary identity-menu-checkbox" id="notification-toggle-item" hidden>
+              <input type="checkbox" id="notification-toggle-checkbox">
+              <span>Alerts</span>
+            </label>
             <button class="game-button secondary" type="button" id="logout-button">Logout</button>
           </div>
         </div>
@@ -1304,7 +1362,6 @@
 
     <section class="game-area" aria-label="Game board">
       <div class="marketplace-wrap" aria-label="Tile marketplace">
-        <h2 class="marketplace-title">Marketplace</h2>
         <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
       </div>
       <div class="board" id="board" aria-label="10 by 10 board"></div>
@@ -1358,6 +1415,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=game-list-empty"></script>
+  <script type="module" src="./game.js?v=word-bonus-lines"></script>
 </body>
 </html>

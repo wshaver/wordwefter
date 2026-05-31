@@ -406,6 +406,13 @@ class WordWefterGameState {
           roll -= bonusType.probability;
 
           if (roll < 0) {
+            if (
+              bonusType.scope === "word" &&
+              this.hasWordBonusInLine(boardBonuses, row, column)
+            ) {
+              break;
+            }
+
             boardBonuses.set(this.getCellKey(row, column), { type });
             break;
           }
@@ -413,7 +420,76 @@ class WordWefterGameState {
       }
     }
 
+    this.ensureMinimumBoardBonuses(boardBonuses, "tripleWord", 2);
+    this.ensureMinimumBoardBonuses(boardBonuses, "doubleWord", 3);
+
     return boardBonuses;
+  }
+
+  countBoardBonuses(boardBonuses, type) {
+    return Array.from(boardBonuses.values())
+      .filter((bonus) => bonus.type === type)
+      .length;
+  }
+
+  hasWordBonusInLine(boardBonuses, row, column) {
+    return Array.from(boardBonuses.entries()).some(([cellKey, bonus]) => {
+      const bonusType = bonusTypes[bonus.type];
+
+      if (bonusType?.scope !== "word") {
+        return false;
+      }
+
+      const [bonusRow, bonusColumn] = cellKey.split(",").map(Number);
+
+      return bonusRow === row || bonusColumn === column;
+    });
+  }
+
+  ensureMinimumBoardBonuses(boardBonuses, type, minimumCount) {
+    while (this.countBoardBonuses(boardBonuses, type) < minimumCount) {
+      const cellKey = this.findBonusCellKey(boardBonuses, {
+        avoidOrthogonal: true,
+        avoidWordBonusLine: bonusTypes[type]?.scope === "word"
+      }) || this.findBonusCellKey(boardBonuses, {
+        avoidOrthogonal: false,
+        avoidWordBonusLine: bonusTypes[type]?.scope === "word"
+      });
+
+      if (!cellKey) {
+        return;
+      }
+
+      boardBonuses.set(cellKey, { type });
+    }
+  }
+
+  findBonusCellKey(boardBonuses, options = {}) {
+    const candidates = [];
+
+    for (let row = 0; row < boardSize; row += 1) {
+      for (let column = 0; column < boardSize; column += 1) {
+        const cellKey = this.getCellKey(row, column);
+
+        if (boardBonuses.has(cellKey)) {
+          continue;
+        }
+
+        if (options.avoidOrthogonal && this.hasOrthogonalBonus(boardBonuses, row, column)) {
+          continue;
+        }
+
+        if (options.avoidWordBonusLine && this.hasWordBonusInLine(boardBonuses, row, column)) {
+          continue;
+        }
+
+        candidates.push(cellKey);
+      }
+    }
+
+    return candidates.length > 0
+      ? candidates[Math.floor(Math.random() * candidates.length)]
+      : null;
   }
 
   hasOrthogonalBonus(boardBonuses, row, column) {
@@ -1599,11 +1675,17 @@ function renderBoard() {
     if (bonus && bonusTypes[bonus.type] && !boardTile) {
       const bonusType = bonusTypes[bonus.type];
       const bonusElement = document.createElement("span");
+      const multiplierElement = document.createElement("span");
+      const scopeElement = document.createElement("span");
 
       cell.classList.add("board-cell-bonus", `board-cell-bonus-${bonus.type}`);
       bonusElement.className = "board-bonus-label";
-      bonusElement.textContent = bonusType.label;
+      multiplierElement.className = "board-bonus-multiplier";
+      multiplierElement.textContent = `${bonusType.multiplier}x`;
+      scopeElement.className = "board-bonus-scope";
+      scopeElement.textContent = bonusType.scope;
       bonusElement.title = `${bonusType.multiplier}x ${bonusType.scope}`;
+      bonusElement.append(multiplierElement, scopeElement);
       cell.append(bonusElement);
     }
 
@@ -1971,22 +2053,24 @@ function canUseNotifications() {
 }
 
 function updateNotificationUI() {
-  const notificationToggleButton = document.querySelector("#notification-toggle-button");
+  const notificationToggleItem = document.querySelector("#notification-toggle-item");
+  const notificationToggleCheckbox = document.querySelector("#notification-toggle-checkbox");
 
-  if (!notificationToggleButton) {
+  if (!notificationToggleItem || !notificationToggleCheckbox) {
     return;
   }
 
   if (!canUseNotifications()) {
-    notificationToggleButton.hidden = true;
+    notificationToggleItem.hidden = true;
     return;
   }
 
-  notificationToggleButton.hidden = false;
-  notificationToggleButton.disabled = Notification.permission === "denied";
-  notificationToggleButton.textContent = getTurnNotificationsEnabled() && Notification.permission === "granted"
-    ? "Turn Alerts On"
-    : "Enable Alerts";
+  const notificationsBlocked = Notification.permission === "denied";
+
+  notificationToggleItem.hidden = false;
+  notificationToggleItem.setAttribute("aria-disabled", notificationsBlocked ? "true" : "false");
+  notificationToggleCheckbox.disabled = notificationsBlocked;
+  notificationToggleCheckbox.checked = getTurnNotificationsEnabled() && Notification.permission === "granted";
 }
 
 async function toggleTurnNotifications() {
@@ -2968,7 +3052,7 @@ function bindGameControls() {
   const showNewGameButton = document.querySelector("#show-new-game-button");
   const showGameListButton = document.querySelector("#show-game-list-button");
   const showRulesButton = document.querySelector("#show-rules-button");
-  const notificationToggleButton = document.querySelector("#notification-toggle-button");
+  const notificationToggleCheckbox = document.querySelector("#notification-toggle-checkbox");
   const createGameButton = document.querySelector("#create-game-button");
   const addPlayerButton = document.querySelector("#add-player-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
@@ -3018,8 +3102,8 @@ function bindGameControls() {
     });
   }
 
-  if (notificationToggleButton) {
-    notificationToggleButton.addEventListener("click", toggleTurnNotifications);
+  if (notificationToggleCheckbox) {
+    notificationToggleCheckbox.addEventListener("change", toggleTurnNotifications);
   }
 
   if (createGameButton) {
