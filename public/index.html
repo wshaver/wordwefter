@@ -37,6 +37,34 @@
       font-family: Georgia, "Times New Roman", serif;
     }
 
+    body.screen-play {
+      background: #dfe3df;
+    }
+
+    body.screen-play.is-my-turn {
+      background:
+        linear-gradient(135deg, rgba(15, 139, 141, 0.34), transparent 36%),
+        linear-gradient(315deg, rgba(107, 176, 92, 0.28), transparent 42%),
+        linear-gradient(45deg, rgba(231, 242, 223, 0.72), transparent 55%),
+        var(--paper);
+      background-size: 180% 180%, 180% 180%, 160% 160%, auto;
+      animation: turn-background-scroll 14s ease-in-out infinite;
+    }
+
+    @keyframes turn-background-scroll {
+      0% {
+        background-position: 0% 50%, 100% 50%, 50% 0%, 0 0;
+      }
+
+      50% {
+        background-position: 100% 50%, 0% 50%, 50% 100%, 0 0;
+      }
+
+      100% {
+        background-position: 0% 50%, 100% 50%, 50% 0%, 0 0;
+      }
+    }
+
     main {
       min-height: 100vh;
       width: min(94vw, 1080px);
@@ -200,7 +228,8 @@
       display: none;
       justify-items: center;
       gap: 0.65rem;
-      width: min(92vw, 42rem);
+      width: 100%;
+      max-width: 42rem;
     }
 
     .player-name-list {
@@ -295,7 +324,8 @@
       grid-column: 1 / -1;
       clear: both;
       justify-self: center;
-      width: min(92vw, 42rem);
+      width: 100%;
+      max-width: 42rem;
       display: none;
       margin-top: clamp(1.5rem, 3vw, 2.25rem);
       gap: 0.65rem;
@@ -428,6 +458,26 @@
       background: #f7d7d2;
     }
 
+    .rules-mini-tile .material-symbols-outlined {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-size: 1.25rem;
+      line-height: 1;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 600,
+        "GRAD" 0,
+        "opsz" 24;
+    }
+
+    .rules-example-bottom {
+      margin-top: auto;
+    }
+
     .rules-mini-stack {
       position: relative;
       margin-left: 0.18rem;
@@ -460,7 +510,8 @@
     .rules-page {
       display: none;
       grid-column: 1 / -1;
-      width: min(92vw, 54rem);
+      width: 100%;
+      max-width: 54rem;
       gap: 1rem;
       text-align: left;
       font: 700 0.98rem/1.45 system-ui, sans-serif;
@@ -587,7 +638,7 @@
     }
 
     .marketplace-wrap {
-      width: 100%;
+      width: var(--play-width);
       display: grid;
       gap: 0.35rem;
       justify-items: start;
@@ -650,6 +701,11 @@
       pointer-events: none;
     }
 
+    .tile-wild-symbol {
+      font-size: clamp(1.2rem, 5vw, 2rem);
+      line-height: 1;
+    }
+
     .marketplace-item {
       display: grid;
       gap: 0.22rem;
@@ -661,15 +717,15 @@
       cursor: pointer;
     }
 
-    .marketplace-item:not(.tile-movable) .tile {
-      opacity: 0.48;
-    }
-
     .marketplace-price {
       display: block;
       color: var(--ink);
       font: 800 clamp(0.58rem, 1.8vw, 0.78rem)/1 system-ui, sans-serif;
       text-align: center;
+    }
+
+    .marketplace-price-expensive {
+      color: var(--rose);
     }
 
     .tile:active {
@@ -841,11 +897,12 @@
     }
 
     .game-message {
-      grid-column: 1 / -1;
       min-height: 1.25rem;
+      width: var(--play-width);
       justify-self: center;
       color: var(--rose);
       font: 700 0.9rem/1.3 system-ui, sans-serif;
+      text-align: center;
     }
 
     .game-message:empty {
@@ -929,13 +986,30 @@
     }
 
     .turn-badge {
-      display: inline-block;
+      display: inline-grid;
+      place-items: center;
       margin-left: 0.35rem;
       padding: 0.12rem 0.35rem;
       border-radius: 8px;
       background: var(--accent);
       color: #ffffff;
       font: 800 0.72rem/1.2 system-ui, sans-serif;
+      vertical-align: middle;
+    }
+
+    .turn-badge.material-symbols-outlined {
+      width: 1.45rem;
+      height: 1.35rem;
+      padding: 0;
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-size: 1rem;
+      line-height: 1;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 600,
+        "GRAD" 0,
+        "opsz" 24;
     }
 
     .player-score-points {
@@ -1104,7 +1178,6 @@
         </div>
         <div id="active-games-list" class="active-games-list"></div>
       </section>
-      <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
     </header>
 
     <section class="rules-page" aria-label="WordWefter rules">
@@ -1116,7 +1189,7 @@
         <article class="rules-card">
           <h3>Making Words</h3>
           <p>Place tiles in one connected row or column. Every horizontal and vertical word on the board must be a real word when the turn ends.</p>
-          <div class="rules-example" aria-hidden="true">
+          <div class="rules-example rules-example-bottom" aria-hidden="true">
             <span class="rules-mini-tile">C</span>
             <span class="rules-mini-tile">H</span>
             <span class="rules-mini-tile">E</span>
@@ -1143,12 +1216,21 @@
           <h3>Buying Tiles</h3>
           <p>The marketplace is shared by all players. Buy a tile by dragging it to your rack or directly to the board.</p>
           <ul>
-            <li>Price is 100 minus the tile point value.</li>
-            <li>Wildcards cost 100, score zero, and resolve to a real letter when played.</li>
+            <li>Price is 50 minus the tile point value.</li>
             <li>You can only spend finalized score.</li>
             <li>You cannot buy below zero.</li>
           </ul>
-          <p class="rules-equation">Z34 costs 66. E1 costs 99.</p>
+          <p class="rules-equation">Z34 costs 16. E1 costs 49.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Wild Tiles</h3>
+          <p>Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
+          <p>When a wild tile is placed on top of an existing tile, it must change that square's letter. A wild tile covering the A in SAT may make SIT, but not SAT again.</p>
+          <div class="rules-example" aria-hidden="true">
+            <span class="rules-mini-tile">
+              <span class="material-symbols-outlined">asterisk</span>
+            </span>
+          </div>
         </article>
         <article class="rules-card">
           <h3>Ending the Game</h3>
@@ -1173,13 +1255,14 @@
     </section>
 
     <section class="game-area" aria-label="Game board">
+      <div class="marketplace-wrap" aria-label="Tile marketplace">
+        <h2 class="marketplace-title">Marketplace</h2>
+        <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
+      </div>
       <div class="board" id="board" aria-label="10 by 10 board"></div>
+      <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
       <div class="rack-wrap">
         <div class="rack" id="rack" aria-label="Rack"></div>
-        <div class="marketplace-wrap" aria-label="Tile marketplace">
-          <h2 class="marketplace-title">Marketplace</h2>
-          <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
-        </div>
         <div class="rack-controls" aria-label="Rack controls">
           <button class="game-button redraw-tiles-button" type="button" id="redraw-tiles-button">Redraw Tiles</button>
           <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
@@ -1196,8 +1279,8 @@
               <span class="game-state-value" id="current-turn-index">0</span>
             </div>
             <div>
-              <span class="game-state-kicker">Playing now</span>
-              <span class="game-state-value" id="current-player-name">Player 1</span>
+              <span class="game-state-kicker">Potential Points</span>
+              <span class="game-state-value" id="potential-points">0</span>
             </div>
             <div>
               <span class="game-state-kicker">Pool</span>
@@ -1227,6 +1310,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=route-titles"></script>
+  <script type="module" src="./game.js?v=wild-tile-symbol"></script>
 </body>
 </html>

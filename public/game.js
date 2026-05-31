@@ -303,7 +303,7 @@ class WordWefterGameState {
   }
 
   getTilePrice(tile) {
-    return Math.max(0, 100 - Number(tile?.points || 0));
+    return Math.max(0, 50 - Number(tile?.points || 0));
   }
 
   buyMarketplaceTile(tileId) {
@@ -1098,6 +1098,19 @@ class WordWefterGameState {
     return this.dictionaryWordsByLength.get(length) || [];
   }
 
+  canAssignWildcardLetter(tile, letter) {
+    const assignedLetter = String(letter || "").toUpperCase();
+
+    if (!this.isUnresolvedWildcard(tile) || !playableLetters.includes(assignedLetter)) {
+      return false;
+    }
+
+    const boardTile = this.boardTiles.get(this.getCellKey(tile.row, tile.column));
+    const coveredTile = this.getTopStackTile(boardTile);
+
+    return !coveredTile || coveredTile.letter !== assignedLetter;
+  }
+
   getWildcardResolution() {
     const wildcardTiles = Array.from(this.activePlacements.values())
       .filter((tile) => this.isUnresolvedWildcard(tile));
@@ -1115,7 +1128,9 @@ class WordWefterGameState {
       .map((tiles) => {
         const candidates = this.getDictionaryWordsByLength(tiles.length)
           .filter((word) => tiles.every((tile, index) => (
-            this.isUnresolvedWildcard(tile) || tile.letter === word[index]
+            this.isUnresolvedWildcard(tile)
+              ? this.canAssignWildcardLetter(tile, word[index])
+              : tile.letter === word[index]
           )));
 
         return {
@@ -1152,6 +1167,11 @@ class WordWefterGameState {
           const assignedLetter = nextAssignments.get(tile.id);
           const candidateLetter = candidate[index];
 
+          if (!this.canAssignWildcardLetter(tile, candidateLetter)) {
+            canUseCandidate = false;
+            return;
+          }
+
           if (assignedLetter && assignedLetter !== candidateLetter) {
             canUseCandidate = false;
             return;
@@ -1179,7 +1199,11 @@ class WordWefterGameState {
     if (assignments) {
       wildcardTiles.forEach((tile) => {
         if (!assignments.has(tile.id)) {
-          assignments.set(tile.id, playableLetters[0]);
+          const defaultLetter = playableLetters.find((letter) => this.canAssignWildcardLetter(tile, letter));
+
+          if (defaultLetter) {
+            assignments.set(tile.id, defaultLetter);
+          }
         }
       });
     }
@@ -1202,7 +1226,7 @@ class WordWefterGameState {
     });
   }
 
-  getWordAt(row, column, direction) {
+  getWordAt(row, column, direction, assignments = new Map()) {
     const rowStep = direction === "column" ? 1 : 0;
     const columnStep = direction === "row" ? 1 : 0;
     let startRow = row;
@@ -1234,8 +1258,9 @@ class WordWefterGameState {
     return {
       direction,
       key: `${direction}:${startRow},${startColumn}`,
+      tiles,
       score: this.scoreWordTiles(tiles),
-      word: tiles.map((tile) => tile.letter).join("")
+      word: tiles.map((tile) => assignments.get(tile.id) || tile.letter).join("")
     };
   }
 
@@ -1267,12 +1292,12 @@ class WordWefterGameState {
     return letterScore * wordMultiplier;
   }
 
-  getChangedWords() {
+  getChangedWords(assignments = new Map(), options = {}) {
     const changedWords = new Map();
 
     this.activePlacements.forEach((tile) => {
       ["row", "column"].forEach((direction) => {
-        const word = this.getWordAt(tile.row, tile.column, direction);
+        const word = this.getWordAt(tile.row, tile.column, direction, assignments);
 
         if (word.word.length > 1) {
           changedWords.set(word.key, word);
@@ -1280,11 +1305,24 @@ class WordWefterGameState {
       });
     });
 
+    if (options.includeSingleFallback && changedWords.size === 0 && this.activePlacements.size === 1) {
+      const [tile] = Array.from(this.activePlacements.values());
+
+      changedWords.set(`single:${tile.row},${tile.column}`, {
+        direction: "single",
+        key: `single:${tile.row},${tile.column}`,
+        tiles: [tile],
+        score: this.scoreWordTiles([tile]),
+        word: assignments.get(tile.id) || tile.letter
+      });
+    }
+
     return Array.from(changedWords.values());
   }
 
   getCurrentTurnScore() {
-    return this.getChangedWords().reduce((total, word) => total + word.score, 0);
+    return this.getChangedWords(new Map(), { includeSingleFallback: true })
+      .reduce((total, word) => total + word.score, 0);
   }
 
   validateBoardWords() {
@@ -1308,6 +1346,19 @@ class WordWefterGameState {
       isValid: invalidWords.length === 0,
       words,
       invalidWords
+    };
+  }
+
+  validateChangedWordsWithWildcardAssignments(assignments) {
+    const words = this.getChangedWords(assignments, { includeSingleFallback: true })
+      .map((word) => word.word);
+    const invalidWords = words.filter((word) => !this.isRealWord(word));
+
+    return {
+      isValid: words.length > 0 && invalidWords.length === 0,
+      words,
+      invalidWords,
+      placementError: words.length > 0 ? "" : "Placed tiles must make a real word."
     };
   }
 
@@ -1357,8 +1408,15 @@ class WordWefterGameState {
         isValid: false,
         words: this.getBoardWords(),
         invalidWords: this.getBoardWords().filter((word) => word.includes(wildcardLetter)),
-        placementError: "Wildcard tiles could not make valid words."
+        placementError: "Wild tiles could not make valid words."
       };
+    }
+
+    const turnValidation = this.validateChangedWordsWithWildcardAssignments(wildcardResolution.assignments);
+
+    if (!turnValidation.isValid) {
+      this.flashActivePlacements = true;
+      return turnValidation;
     }
 
     const validation = this.validateBoardWordsWithWildcardAssignments(wildcardResolution.assignments);
@@ -1370,7 +1428,7 @@ class WordWefterGameState {
 
     this.resolveActiveWildcards(wildcardResolution.assignments);
 
-    const turnWords = this.getChangedWords();
+    const turnWords = this.getChangedWords(new Map(), { includeSingleFallback: true });
     const turnScore = this.getCurrentTurnScore();
 
     this.activePlacements.forEach((tile, cellKey) => {
@@ -1445,15 +1503,20 @@ function createTileElement(tile, options = {}) {
   tileElement.className = "tile";
   tileElement.dataset.tileId = tile.id;
   tileElement.dataset.tileSource = options.source || "rack";
-  letterElement.textContent = tile.letter === wildcardLetter ? "" : tile.letter;
+  if (tile.letter === wildcardLetter) {
+    letterElement.className = "material-symbols-outlined tile-wild-symbol";
+    letterElement.textContent = "asterisk";
+  } else {
+    letterElement.textContent = tile.letter;
+  }
   pointsElement.className = "tile-points";
   pointsElement.textContent = tile.points;
 
   if (tile.wildcard) {
     tileElement.classList.add("tile-wildcard");
     tileElement.title = tile.letter === wildcardLetter
-      ? "Wildcard tile"
-      : `Wildcard tile resolved as ${tile.letter}`;
+      ? "Wild tile"
+      : `Wild tile resolved as ${tile.letter}`;
   }
 
   if (options.movable) {
@@ -1533,7 +1596,7 @@ function renderBoard() {
     const tile = activeTile || topBoardTile;
     const bonus = gameState.getBonusAt(row, column);
 
-    if (bonus && bonusTypes[bonus.type]) {
+    if (bonus && bonusTypes[bonus.type] && !boardTile) {
       const bonusType = bonusTypes[bonus.type];
       const bonusElement = document.createElement("span");
 
@@ -1593,6 +1656,8 @@ function renderRack() {
 
 function renderMarketplace() {
   const marketplace = document.querySelector("#marketplace");
+  const loggedInPlayer = getLoggedInPlayer();
+  const loggedInPlayerScore = Number(loggedInPlayer?.score || 0);
 
   if (!marketplace) {
     return;
@@ -1603,6 +1668,8 @@ function renderMarketplace() {
   gameState.marketplaceTiles.forEach((tile) => {
     const itemElement = document.createElement("div");
     const priceElement = document.createElement("span");
+    const tilePrice = gameState.getTilePrice(tile);
+    const isTooExpensive = Boolean(loggedInPlayer) && tilePrice > loggedInPlayerScore;
     const canBuy = isMyTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
 
     itemElement.className = "marketplace-item";
@@ -1610,7 +1677,8 @@ function renderMarketplace() {
     itemElement.dataset.tileSource = "marketplace";
     itemElement.classList.toggle("tile-movable", canBuy);
     priceElement.className = "marketplace-price";
-    priceElement.textContent = gameState.getTilePrice(tile);
+    priceElement.classList.toggle("marketplace-price-expensive", isTooExpensive);
+    priceElement.textContent = tilePrice;
     itemElement.append(createTileElement(tile, {
       movable: canBuy,
       source: "marketplace"
@@ -1634,7 +1702,7 @@ function updatePlacementControls() {
 function renderScore() {
   const currentScoreElement = document.querySelector("#current-score");
   const currentTurnScoreElement = document.querySelector("#current-turn-score");
-  const currentPlayerNameElement = document.querySelector("#current-player-name");
+  const potentialPointsElement = document.querySelector("#potential-points");
   const currentGameIdElement = document.querySelector("#current-game-id");
   const currentTurnIndexElement = document.querySelector("#current-turn-index");
   const playerScoreListElement = document.querySelector("#player-score-list");
@@ -1651,12 +1719,10 @@ function renderScore() {
     currentTurnScoreElement.textContent = gameState.getCurrentTurnScore();
   }
 
-  if (currentPlayerNameElement) {
-    currentPlayerNameElement.textContent = gameState.gameOver
-      ? "Game over"
-      : isMyTurn()
-      ? `${gameState.currentPlayerName} (you)`
-      : gameState.currentPlayerName;
+  if (potentialPointsElement) {
+    potentialPointsElement.textContent = gameState.gameOver
+      ? "--"
+      : gameState.getCurrentTurnScore();
   }
 
   if (currentGameIdElement) {
@@ -1711,9 +1777,15 @@ function renderScore() {
         const badge = document.createElement("span");
 
         badge.className = "turn-badge";
-        badge.textContent = gameState.isFinalTurn
-          ? "Last turn"
-          : isMyTurn() ? "Your turn" : "Turn";
+        badge.title = gameState.isFinalTurn ? "Final turn" : "Current turn";
+
+        if (gameState.isFinalTurn) {
+          badge.textContent = "Last turn";
+        } else {
+          badge.classList.add("material-symbols-outlined");
+          badge.textContent = "line_start_arrow_notch";
+        }
+
         nameElement.append(badge);
       }
 
@@ -1824,6 +1896,16 @@ function isMyTurn() {
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
 
   return Boolean(storedPlayerKey) && normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey;
+}
+
+function getLoggedInPlayer() {
+  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+
+  if (!storedPlayerKey) {
+    return null;
+  }
+
+  return gameState.players.find((player) => normalizeNameKey(player.name) === storedPlayerKey) || null;
 }
 
 function getBoardTileSignatures(source) {
