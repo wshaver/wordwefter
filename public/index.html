@@ -805,6 +805,31 @@
       z-index: 1;
     }
 
+    .tile-rainbow {
+      background: linear-gradient(
+        120deg,
+        #ff6b6b,
+        #f2b134,
+        #7fc96f,
+        #42b8c7,
+        #7b61ff,
+        #d94f70,
+        #ff6b6b
+      );
+      background-clip: padding-box;
+      background-origin: border-box;
+      background-repeat: no-repeat;
+      background-size: 400% 400%;
+      animation: rainbow-tile-flow 7200ms ease-in-out infinite;
+      color: #17202a;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+
+    .tile-rainbow .tile-points {
+      color: #17202a;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
     .marketplace-item {
       display: grid;
       gap: 0.22rem;
@@ -905,6 +930,20 @@
       100% {
         transform: scale(1);
         background: var(--tile);
+      }
+    }
+
+    @keyframes rainbow-tile-flow {
+      0% {
+        background-position: 0% 50%;
+      }
+
+      50% {
+        background-position: 100% 50%;
+      }
+
+      100% {
+        background-position: 0% 50%;
       }
     }
 
@@ -1326,12 +1365,21 @@
         </article>
         <article class="rules-card">
           <h3>Wild Tiles</h3>
-          <p>Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
+          <p>Each tile drawn into a rack has a 1-in-14 chance to become wild. Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
           <p>When a wild tile is placed on top of an existing tile, it must change that square's letter. A wild tile covering the A in SAT may make SIT, but not SAT again.</p>
           <div class="rules-example rules-example-bottom" aria-hidden="true">
             <span class="rules-mini-tile rules-mini-tile-wild">
               <span class="material-symbols-outlined">asterisk</span>
             </span>
+          </div>
+        </article>
+        <article class="rules-card">
+          <h3>Rainbow Tiles</h3>
+          <p>Every opening rack includes one rainbow tile, randomly chosen from that rack's non-wild tiles. Wild tiles cannot be rainbow, and marketplace tiles are never rainbow.</p>
+          <p>A rainbow tile doubles every changed word that contains it, including future changes while it remains the top tile. If another tile covers it, the rainbow bonus stops applying.</p>
+          <div class="rules-example rules-example-bottom" aria-hidden="true">
+            <span class="rules-mini-tile tile-rainbow">R</span>
+            <span class="rules-equation">word x2</span>
           </div>
         </article>
         <article class="rules-card">
@@ -1411,6 +1459,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=word-bonus-lines"></script>
+  <script type="module" src="./game.js?v=rainbow-tiles"></script>
 </body>
 </html>
