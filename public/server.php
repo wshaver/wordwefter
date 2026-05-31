@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 $saveDirectory = realpath(__DIR__ . '/saved-games');
 
@@ -32,7 +34,41 @@ function turn_index(array $state): int
     return max(0, (int) ($state['turnIndex'] ?? 0));
 }
 
-$action = $_GET['action'] ?? 'list';
+function state_timestamp(array $state, string $file): int
+{
+    $rawDate = (string) ($state['lastPlayDate'] ?? $state['startDate'] ?? '');
+    $timestamp = $rawDate !== '' ? strtotime($rawDate) : false;
+
+    return $timestamp === false ? (int) filemtime($file) : $timestamp;
+}
+
+function cleanup_saved_games(string $saveDirectory): int
+{
+    $now = time();
+    $completedMaxAge = 31 * 24 * 60 * 60;
+    $incompleteMaxAge = 62 * 24 * 60 * 60;
+    $deletedCount = 0;
+
+    foreach (glob($saveDirectory . DIRECTORY_SEPARATOR . '*.json') ?: [] as $file) {
+        $state = json_decode((string) file_get_contents($file), true);
+
+        if (!is_array($state)) {
+            continue;
+        }
+
+        $age = $now - state_timestamp($state, $file);
+        $maxAge = !empty($state['gameOver']) ? $completedMaxAge : $incompleteMaxAge;
+
+        if ($age > $maxAge && is_file($file) && unlink($file)) {
+            $deletedCount += 1;
+        }
+    }
+
+    return $deletedCount;
+}
+
+$requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$action = $_GET['action'] ?? $_POST['action'] ?? ($requestMethod === 'POST' ? 'save' : 'list');
 
 if ($action === 'list') {
     $games = [];
@@ -53,6 +89,8 @@ if ($action === 'list') {
         $games[] = [
             'id' => (string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)),
             'startDate' => (string) ($state['startDate'] ?? ''),
+            'lastPlayDate' => (string) ($state['lastPlayDate'] ?? ''),
+            'gameOver' => !empty($state['gameOver']),
             'turnIndex' => turn_index($state),
             'playerNames' => $players,
             'currentPlayerName' => $players[$currentPlayerIndex] ?? ($players[0] ?? '')
@@ -79,7 +117,7 @@ if ($action === 'load') {
     $requestedTurnIndex = isset($_GET['turnIndex']) ? (int) $_GET['turnIndex'] : null;
     $savedTurnIndex = turn_index($state);
 
-    if ($requestedTurnIndex !== null && $savedTurnIndex <= $requestedTurnIndex) {
+    if ($requestedTurnIndex !== null && $savedTurnIndex < $requestedTurnIndex) {
         send_json([
             'ok' => true,
             'changed' => false,
@@ -91,6 +129,10 @@ if ($action === 'load') {
 }
 
 if ($action === 'save') {
+    if ($requestMethod !== 'POST') {
+        send_json(['ok' => false, 'error' => 'Save requests must use POST.'], 405);
+    }
+
     $rawBody = (string) file_get_contents('php://input');
     $state = json_decode($rawBody, true);
 
@@ -105,8 +147,13 @@ if ($action === 'save') {
     $id = strtoupper((string) ($state['id'] ?? ''));
     $file = game_path($saveDirectory, $id);
     $incomingTurnIndex = turn_index($state);
+    $isNewGame = !is_file($file);
 
-    if (is_file($file)) {
+    if ($isNewGame) {
+        cleanup_saved_games($saveDirectory);
+    }
+
+    if (!$isNewGame) {
         $currentState = json_decode((string) file_get_contents($file), true);
 
         if (!is_array($currentState)) {
@@ -115,7 +162,7 @@ if ($action === 'save') {
 
         $currentTurnIndex = turn_index($currentState);
 
-        if ($incomingTurnIndex <= $currentTurnIndex) {
+        if ($incomingTurnIndex < $currentTurnIndex) {
             send_json([
                 'ok' => true,
                 'saved' => false,
@@ -127,13 +174,20 @@ if ($action === 'save') {
         }
     }
 
+    $state['lastPlayDate'] = gmdate('c');
     $encodedState = json_encode($state, JSON_PRETTY_PRINT);
 
     if ($encodedState === false || file_put_contents($file, $encodedState) === false) {
         send_json(['ok' => false, 'error' => 'Could not save game.'], 500);
     }
 
-    send_json(['ok' => true, 'saved' => true, 'id' => $id, 'turnIndex' => $incomingTurnIndex]);
+    send_json([
+        'ok' => true,
+        'saved' => true,
+        'id' => $id,
+        'turnIndex' => $incomingTurnIndex,
+        'lastPlayDate' => $state['lastPlayDate']
+    ]);
 }
 
 send_json(['ok' => false, 'error' => 'Unknown action.'], 400);

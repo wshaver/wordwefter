@@ -1,4 +1,5 @@
 export const letter_freq = {
+  "?": 10,
   "A": 52,
   "B": 18,
   "C": 32,
@@ -28,6 +29,7 @@ export const letter_freq = {
 };
 
 export const letter_points = {
+  "?": 0,
   "A": 1,
   "B": 4,
   "C": 2,
@@ -57,6 +59,7 @@ export const letter_points = {
 };
 
 export const letters_available = {
+  "?": 10,
   "A": 26,
   "B": 9,
   "C": 16,

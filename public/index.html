@@ -18,7 +18,7 @@
       --board-line: #9ca79c;
       --tile: #fbdfa3;
       --tile-edge: #c69238;
-      --play-width: min(78vh, 92vw, 640px);
+      --play-width: min(72vh, 90vw, 560px);
     }
 
     * {
@@ -200,6 +200,7 @@
       display: none;
       justify-items: center;
       gap: 0.65rem;
+      width: min(92vw, 42rem);
     }
 
     .player-name-list {
@@ -211,6 +212,32 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.45rem;
+    }
+
+    .game-length-control {
+      display: grid;
+      gap: 0.45rem;
+      justify-items: center;
+      font: 800 0.86rem/1 system-ui, sans-serif;
+    }
+
+    .game-length-options {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem;
+    }
+
+    .game-length-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.32rem;
+      min-height: 2.35rem;
+      padding: 0.45rem 0.7rem;
+      border: 2px solid rgba(23, 32, 42, 0.28);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
     }
 
     .player-name-input {
@@ -317,11 +344,126 @@
       font: 800 0.82rem/1.25 system-ui, sans-serif;
     }
 
+    .page-hero,
+    .rules-hero {
+      display: grid;
+      gap: 0.55rem;
+      width: 100%;
+      padding-bottom: 0.45rem;
+      border-bottom: 3px solid rgba(23, 32, 42, 0.18);
+    }
+
+    .page-hero .section-title,
+    .rules-hero .section-title {
+      text-align: left;
+    }
+
+    .rules-kicker {
+      margin: 0;
+      color: var(--accent);
+      font: 900 0.78rem/1 system-ui, sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+      gap: 0.85rem;
+    }
+
+    .rules-card {
+      display: grid;
+      gap: 0.55rem;
+      align-content: start;
+      padding: 0.85rem;
+      border: 2px solid rgba(23, 32, 42, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.55);
+      box-shadow: 0.18rem 0.18rem 0 rgba(242, 177, 52, 0.48);
+    }
+
+    .rules-card h3 {
+      margin: 0;
+      font: 900 1.08rem/1.1 Georgia, "Times New Roman", serif;
+    }
+
+    .rules-card p,
+    .rules-card ul {
+      margin: 0;
+    }
+
+    .rules-card ul {
+      padding-left: 1.1rem;
+    }
+
+    .rules-example {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .rules-mini-tile,
+    .rules-mini-bonus {
+      width: 2.55rem;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--tile-edge);
+      border-radius: 6px;
+      background: var(--tile);
+      color: var(--ink);
+      font: 900 1.15rem/1 Georgia, "Times New Roman", serif;
+      box-shadow: inset 0 -0.14rem 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .rules-mini-bonus {
+      border-color: rgba(23, 32, 42, 0.28);
+      background: #cceff0;
+      font: 900 0.82rem/1 system-ui, sans-serif;
+    }
+
+    .rules-mini-bonus.word {
+      background: #f7d7d2;
+    }
+
+    .rules-mini-stack {
+      position: relative;
+      margin-left: 0.18rem;
+    }
+
+    .rules-mini-stack::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border: 2px solid var(--tile-edge);
+      border-radius: 6px;
+      background: var(--tile);
+      transform: translate(-0.22rem, 0.22rem);
+      opacity: 0.62;
+    }
+
+    .rules-equation {
+      color: var(--rose);
+      font: 900 0.92rem/1.2 system-ui, sans-serif;
+    }
+
     .game-area {
       display: none;
       width: 100%;
       justify-items: center;
       gap: 1rem;
+    }
+
+    .rules-page {
+      display: none;
+      grid-column: 1 / -1;
+      width: min(92vw, 54rem);
+      gap: 1rem;
+      text-align: left;
+      font: 700 0.98rem/1.45 system-ui, sans-serif;
     }
 
     body.screen-welcome:not(.has-player) .identity-panel {
@@ -354,14 +496,18 @@
       display: grid;
     }
 
+    body.screen-rules .rules-page {
+      display: grid;
+    }
+
     body.screen-play .game-area {
       display: grid;
     }
 
     .board {
       display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      grid-template-rows: repeat(12, minmax(0, 1fr));
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(10, minmax(0, 1fr));
       width: var(--play-width);
       aspect-ratio: 1;
       border: 3px solid var(--ink);
@@ -381,6 +527,42 @@
     }
 
     .board-cell.drop-ready {
+      background: rgba(15, 139, 141, 0.24);
+    }
+
+    .board-cell-bonus-singleLetter {
+      background: #e7f2df;
+    }
+
+    .board-cell-bonus-doubleLetter {
+      background: #cceff0;
+    }
+
+    .board-cell-bonus-tripleLetter {
+      background: #8bc6d7;
+    }
+
+    .board-cell-bonus-doubleWord {
+      background: #f7d7d2;
+    }
+
+    .board-cell-bonus-tripleWord {
+      background: #d94f70;
+      color: #ffffff;
+    }
+
+    .board-bonus-label {
+      position: absolute;
+      inset: 0.2rem;
+      display: grid;
+      place-items: center;
+      font: 800 clamp(0.5rem, 1.6vw, 0.68rem)/1 system-ui, sans-serif;
+      color: currentColor;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .board-cell-bonus.drop-ready {
       background: rgba(15, 139, 141, 0.24);
     }
 
@@ -404,6 +586,34 @@
       background: rgba(23, 32, 42, 0.08);
     }
 
+    .marketplace-wrap {
+      width: 100%;
+      display: grid;
+      gap: 0.35rem;
+      justify-items: start;
+    }
+
+    .marketplace-title {
+      margin: 0;
+      font: 800 0.78rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(23, 32, 42, 0.74);
+    }
+
+    .marketplace {
+      width: 100%;
+      min-height: 4.75rem;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-rows: minmax(0, 1fr);
+      gap: clamp(0.35rem, 1.8vw, 0.75rem);
+      padding: clamp(0.45rem, 1.8vw, 0.75rem);
+      border: 2px solid rgba(23, 32, 42, 0.55);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.42);
+    }
+
     .tile {
       position: relative;
       display: grid;
@@ -420,6 +630,46 @@
 
     .tile-movable {
       cursor: pointer;
+    }
+
+    .tile-wildcard {
+      background: #f7f3ea;
+      border-color: #62727b;
+      color: #23313a;
+      box-shadow:
+        inset 0 0 0 0.18rem rgba(255, 255, 255, 0.58),
+        inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .tile-wildcard::before {
+      content: "";
+      position: absolute;
+      inset: 0.32rem;
+      border: 1px dashed rgba(35, 49, 58, 0.42);
+      border-radius: 5px;
+      pointer-events: none;
+    }
+
+    .marketplace-item {
+      display: grid;
+      gap: 0.22rem;
+      align-content: start;
+      min-width: 0;
+    }
+
+    .marketplace-item.tile-movable {
+      cursor: pointer;
+    }
+
+    .marketplace-item:not(.tile-movable) .tile {
+      opacity: 0.48;
+    }
+
+    .marketplace-price {
+      display: block;
+      color: var(--ink);
+      font: 800 clamp(0.58rem, 1.8vw, 0.78rem)/1 system-ui, sans-serif;
+      text-align: center;
     }
 
     .tile:active {
@@ -440,6 +690,36 @@
 
     .tile-remote-play {
       animation: remote-play-flash 1400ms ease-out 1;
+    }
+
+    .tile-covered-underlay {
+      position: absolute;
+      z-index: 1;
+      opacity: 0.58;
+      transform: translate(-0.18rem, 0.18rem) scale(0.9);
+      filter: saturate(0.7);
+    }
+
+    .tile-covering-placement {
+      position: absolute;
+      z-index: 2;
+      transform: translate(0.18rem, -0.18rem) scale(0.92);
+      box-shadow:
+        inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08),
+        -0.2rem 0.2rem 0 rgba(23, 32, 42, 0.28);
+    }
+
+    .tile-stack-badge {
+      position: absolute;
+      top: 0.12rem;
+      left: 0.12rem;
+      min-width: 1.05rem;
+      padding: 0.08rem 0.12rem;
+      border-radius: 4px;
+      background: var(--ink);
+      color: #ffffff;
+      font: 800 clamp(0.44rem, 1.15vw, 0.58rem)/1 system-ui, sans-serif;
+      text-align: center;
     }
 
     @keyframes tile-flash {
@@ -481,11 +761,11 @@
     }
 
     .board .tile {
-      width: calc(100% - 8px);
+      width: calc(100% - 6px);
       max-width: 100%;
       border-width: 2px;
       border-radius: 6px;
-      font-size: clamp(1rem, 3.4vw, 1.9rem);
+      font-size: clamp(0.95rem, 3vw, 1.55rem);
       box-shadow: inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08);
       cursor: default;
     }
@@ -495,9 +775,9 @@
     }
 
     .board .tile-points {
-      right: 0.2rem;
-      bottom: 0.18rem;
-      font-size: clamp(0.48rem, 1.4vw, 0.68rem);
+      right: 0.14rem;
+      bottom: 0.12rem;
+      font-size: clamp(0.42rem, 1.05vw, 0.56rem);
     }
 
     body.has-player main {
@@ -536,11 +816,11 @@
       margin-top: clamp(1.5rem, 3vw, 2.25rem);
     }
 
-    .draw-tile-button {
+    .redraw-tiles-button {
       display: none;
     }
 
-    body.screen-play .draw-tile-button {
+    body.screen-play .redraw-tiles-button {
       display: inline-block;
     }
 
@@ -774,11 +1054,15 @@
           <div class="identity-menu" id="identity-menu" aria-label="Player menu">
             <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
             <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
+            <button class="game-button secondary" type="button" id="show-rules-button">Rules</button>
+            <button class="game-button secondary" type="button" id="notification-toggle-button" hidden>Enable Alerts</button>
             <button class="game-button secondary" type="button" id="logout-button">Logout</button>
           </div>
         </div>
         <div class="player-setup" id="player-setup" aria-label="Player setup">
-          <h2 class="section-title">New Game</h2>
+          <div class="page-hero">
+            <h2 class="section-title">New Game</h2>
+          </div>
           <div class="player-name-list" id="player-name-list">
             <div class="player-name-row">
               <label class="sr-only" for="player-name-input-1">Player 1 name</label>
@@ -791,6 +1075,23 @@
               <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
             </div>
           </div>
+          <fieldset class="game-length-control">
+            <legend>Game length</legend>
+            <div class="game-length-options">
+              <label class="game-length-option">
+                <input type="radio" name="game-length" value="short">
+                Short
+              </label>
+              <label class="game-length-option">
+                <input type="radio" name="game-length" value="medium" checked>
+                Medium
+              </label>
+              <label class="game-length-option">
+                <input type="radio" name="game-length" value="long">
+                Long
+              </label>
+            </div>
+          </fieldset>
           <div class="game-controls">
             <button class="game-button secondary" type="button" id="add-player-button">Add Player</button>
             <button class="game-button" type="button" id="create-game-button">Create Game</button>
@@ -798,18 +1099,89 @@
         </div>
       </div>
       <section class="active-games" aria-label="Active games">
-        <h2 class="section-title">Game List</h2>
+        <div class="page-hero">
+          <h2 class="section-title">Game List</h2>
+        </div>
         <div id="active-games-list" class="active-games-list"></div>
       </section>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
     </header>
 
+    <section class="rules-page" aria-label="WordWefter rules">
+      <div class="rules-hero">
+        <p class="rules-kicker">Scoring guide</p>
+        <h2 class="section-title">Rules</h2>
+      </div>
+      <div class="rules-grid">
+        <article class="rules-card">
+          <h3>Making Words</h3>
+          <p>Place tiles in one connected row or column. Every horizontal and vertical word on the board must be a real word when the turn ends.</p>
+          <div class="rules-example" aria-hidden="true">
+            <span class="rules-mini-tile">C</span>
+            <span class="rules-mini-tile">H</span>
+            <span class="rules-mini-tile">E</span>
+            <span class="rules-mini-tile">W</span>
+          </div>
+        </article>
+        <article class="rules-card">
+          <h3>Turn Score</h3>
+          <p>You score every word that is new or changed by your placed tiles. Existing words that your move does not affect are not rescored.</p>
+          <p class="rules-equation">Example: changing CHOW to CHEWS scores CHEWS.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Bonus Squares</h3>
+          <p>Letter bonuses multiply only the new tile placed on that square. Word bonuses multiply the full changed word.</p>
+          <div class="rules-example" aria-hidden="true">
+            <span class="rules-mini-bonus">DL</span>
+            <span class="rules-mini-bonus">TL</span>
+            <span class="rules-mini-bonus word">DW</span>
+            <span class="rules-mini-bonus word">TW</span>
+          </div>
+          <p class="rules-equation">A 4-point tile on TL scores 12 before word bonuses.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Buying Tiles</h3>
+          <p>The marketplace is shared by all players. Buy a tile by dragging it to your rack or directly to the board.</p>
+          <ul>
+            <li>Price is 100 minus the tile point value.</li>
+            <li>Wildcards cost 100, score zero, and resolve to a real letter when played.</li>
+            <li>You can only spend finalized score.</li>
+            <li>You cannot buy below zero.</li>
+          </ul>
+          <p class="rules-equation">Z34 costs 66. E1 costs 99.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Ending the Game</h3>
+          <p>Game length controls when the final round begins. Short games start it after one third of the tile pool has been drawn, and medium games start it after two thirds.</p>
+          <p>Long games keep going until a rack refill cannot draw enough tiles. Once the final round starts, each player gets one last turn, then final scores stand.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Stacking Tiles</h3>
+          <p>You may place a tile on top of an existing tile, but each turn must also place at least one tile on an empty square.</p>
+          <div class="rules-example" aria-hidden="true">
+            <span class="rules-mini-stack rules-mini-tile">E</span>
+            <span class="rules-equation">2x</span>
+          </div>
+          <p>Stacks keep growing. The top tile is the active letter for words.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Stack Scoring</h3>
+          <p>The first tile in a square has no stack multiplier. A second tile scores 2x, a third tile scores 3x, and so on.</p>
+          <p class="rules-equation">If E is stacked second, E1 scores 2 points before any word multiplier.</p>
+        </article>
+      </div>
+    </section>
+
     <section class="game-area" aria-label="Game board">
-      <div class="board" id="board" aria-label="12 by 12 board"></div>
+      <div class="board" id="board" aria-label="10 by 10 board"></div>
       <div class="rack-wrap">
         <div class="rack" id="rack" aria-label="Rack"></div>
+        <div class="marketplace-wrap" aria-label="Tile marketplace">
+          <h2 class="marketplace-title">Marketplace</h2>
+          <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
+        </div>
         <div class="rack-controls" aria-label="Rack controls">
-          <button class="game-button draw-tile-button" type="button" id="draw-tile-button">Draw Tile</button>
+          <button class="game-button redraw-tiles-button" type="button" id="redraw-tiles-button">Redraw Tiles</button>
           <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
         </div>
@@ -827,6 +1199,14 @@
               <span class="game-state-kicker">Playing now</span>
               <span class="game-state-value" id="current-player-name">Player 1</span>
             </div>
+            <div>
+              <span class="game-state-kicker">Pool</span>
+              <span class="game-state-value"><span id="tiles-remaining">0</span>/<span id="total-tile-pool">0</span></span>
+            </div>
+            <div>
+              <span class="game-state-kicker">End trigger</span>
+              <span class="game-state-value" id="tiles-until-game-end">--</span>
+            </div>
           </div>
           <div class="player-score-list" id="player-score-list"></div>
         </div>
@@ -835,7 +1215,7 @@
           <div class="debug-summary">
             <div>Current score: <span id="current-score">0</span></div>
             <div>Current turn score: <span id="current-turn-score">0</span></div>
-            <div>Tiles left: <span id="tiles-remaining">0</span></div>
+            <div>Tiles left: <span id="debug-tiles-remaining">0</span></div>
           </div>
           <textarea id="game-state-json" spellcheck="false" aria-label="Game state JSON"></textarea>
           <button class="game-button" type="button" id="install-game-state-button">Install</button>
