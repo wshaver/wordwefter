@@ -2,23 +2,17 @@ import { dictionaryWordSet } from "./dictionary.js";
 import { letter_freq, letter_points, letters_available } from "./letter-setup.js";
 
 const bonusTypes = {
-  singleLetter: {
-    label: "SL",
-    scope: "letter",
-    multiplier: 1,
-    probability: 0.11
-  },
   doubleLetter: {
     label: "DL",
     scope: "letter",
     multiplier: 2,
-    probability: 0.08
+    probability: 0.14
   },
   tripleLetter: {
     label: "TL",
     scope: "letter",
     multiplier: 3,
-    probability: 0.035
+    probability: 0.055
   },
   doubleWord: {
     label: "DW",
@@ -717,7 +711,9 @@ class WordWefterGameState {
     (source.boardBonuses || []).forEach((bonus) => {
       const row = Number(bonus.row);
       const column = Number(bonus.column);
-      const type = String(bonus.type || "");
+      const type = String(bonus.type || "") === "singleLetter"
+        ? "doubleLetter"
+        : String(bonus.type || "");
 
       if (
         Number.isInteger(row) &&
