@@ -358,6 +358,30 @@
       text-align: left;
     }
 
+    .active-games-empty {
+      display: grid;
+      justify-items: start;
+      gap: 0.3rem;
+      padding: 1rem;
+      border: 2px solid rgba(23, 32, 42, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+      text-align: left;
+      box-shadow: 0.18rem 0.18rem 0 rgba(242, 177, 52, 0.35);
+    }
+
+    .active-games-empty-title {
+      margin: 0;
+      color: var(--ink);
+      font: 900 1.05rem/1.15 Georgia, "Times New Roman", serif;
+    }
+
+    .active-games-empty-copy {
+      margin: 0;
+      color: rgba(23, 32, 42, 0.72);
+      font: 700 0.9rem/1.35 system-ui, sans-serif;
+    }
+
     .active-game-id {
       font: 800 1rem/1 system-ui, sans-serif;
       letter-spacing: 0.08em;
@@ -459,6 +483,8 @@
     }
 
     .rules-mini-tile .material-symbols-outlined {
+      position: relative;
+      z-index: 1;
       width: 100%;
       height: 100%;
       display: grid;
@@ -472,6 +498,24 @@
         "wght" 600,
         "GRAD" 0,
         "opsz" 24;
+    }
+
+    .rules-mini-tile-wild {
+      position: relative;
+      background: #f7f3ea;
+      color: #23313a;
+      box-shadow:
+        inset 0 0 0 0.14rem rgba(255, 255, 255, 0.58),
+        inset 0 -0.14rem 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .rules-mini-tile-wild::before {
+      content: "";
+      position: absolute;
+      inset: 0.28rem;
+      border: 1px dashed rgba(35, 49, 58, 0.42);
+      border-radius: 4px;
+      pointer-events: none;
     }
 
     .rules-example-bottom {
@@ -685,7 +729,6 @@
 
     .tile-wildcard {
       background: #f7f3ea;
-      border-color: #62727b;
       color: #23313a;
       box-shadow:
         inset 0 0 0 0.18rem rgba(255, 255, 255, 0.58),
@@ -702,8 +745,13 @@
     }
 
     .tile-wild-symbol {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
       font-size: clamp(1.2rem, 5vw, 2rem);
       line-height: 1;
+      z-index: 1;
     }
 
     .marketplace-item {
@@ -1189,7 +1237,7 @@
         <article class="rules-card">
           <h3>Making Words</h3>
           <p>Place tiles in one connected row or column. Every horizontal and vertical word on the board must be a real word when the turn ends.</p>
-          <div class="rules-example rules-example-bottom" aria-hidden="true">
+          <div class="rules-example" aria-hidden="true">
             <span class="rules-mini-tile">C</span>
             <span class="rules-mini-tile">H</span>
             <span class="rules-mini-tile">E</span>
@@ -1226,8 +1274,8 @@
           <h3>Wild Tiles</h3>
           <p>Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
           <p>When a wild tile is placed on top of an existing tile, it must change that square's letter. A wild tile covering the A in SAT may make SIT, but not SAT again.</p>
-          <div class="rules-example" aria-hidden="true">
-            <span class="rules-mini-tile">
+          <div class="rules-example rules-example-bottom" aria-hidden="true">
+            <span class="rules-mini-tile rules-mini-tile-wild">
               <span class="material-symbols-outlined">asterisk</span>
             </span>
           </div>
@@ -1310,6 +1358,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=wild-tile-symbol"></script>
+  <script type="module" src="./game.js?v=game-list-empty"></script>
 </body>
 </html>

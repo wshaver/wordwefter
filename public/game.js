@@ -2475,8 +2475,15 @@ async function loadActiveGames() {
 
     if (matchingGames.length === 0) {
       const emptyElement = document.createElement("div");
-      emptyElement.className = "active-game-row";
-      emptyElement.textContent = `No saved games for ${storedPlayerName}`;
+      const emptyTitle = document.createElement("p");
+      const emptyCopy = document.createElement("p");
+
+      emptyElement.className = "active-games-empty";
+      emptyTitle.className = "active-games-empty-title";
+      emptyTitle.textContent = "No saved games";
+      emptyCopy.className = "active-games-empty-copy";
+      emptyCopy.textContent = `Games for ${storedPlayerName} will appear here.`;
+      emptyElement.append(emptyTitle, emptyCopy);
       activeGamesList.append(emptyElement);
       return;
     }
