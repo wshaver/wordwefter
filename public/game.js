@@ -208,6 +208,10 @@ class WordWefterGameState {
   }
 
   advanceTurn() {
+    const result = {
+      drawnTiles: []
+    };
+
     this.completeTurn();
 
     if (this.pendingFinalRound && !this.gameOver) {
@@ -215,7 +219,7 @@ class WordWefterGameState {
     }
 
     if (this.gameOver) {
-      return;
+      return result;
     }
 
     this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
@@ -223,10 +227,14 @@ class WordWefterGameState {
     if (this.currentRack.length === 0) {
       const drawnTiles = this.drawSevenTiles();
 
+      result.drawnTiles = drawnTiles;
+
       if (this.gameLength === "long" && drawnTiles.length < 7) {
         this.startFinalRound();
       }
     }
+
+    return result;
   }
 
   advanceTurnIndex() {
@@ -2038,6 +2046,54 @@ function animateRackShuffle(previousRects) {
   });
 }
 
+function animateRackRedrawExit() {
+  const exitMilliseconds = 1380;
+
+  document.querySelectorAll("#rack .tile").forEach((tileElement, index) => {
+    const tileRect = tileElement.getBoundingClientRect();
+    const tileClone = tileElement.cloneNode(true);
+    const fallX = index % 2 === 0
+      ? -Math.max(90, tileRect.width * 1.4)
+      : Math.max(90, tileRect.width * 1.4);
+
+    tileClone.classList.remove("tile-movable");
+    tileClone.classList.add(`tile-redraw-exit-${(index % 4) + 1}`);
+    tileClone.style.setProperty("--redraw-fall-x", `${fallX}px`);
+    tileClone.style.setProperty("--redraw-delay", `${Math.min(index * 24, 140)}ms`);
+    tileClone.style.left = `${tileRect.left}px`;
+    tileClone.style.top = `${tileRect.top}px`;
+    tileClone.style.width = `${tileRect.width}px`;
+    tileClone.style.height = `${tileRect.height}px`;
+    document.body.append(tileClone);
+    tileElement.style.visibility = "hidden";
+
+    window.setTimeout(() => {
+      tileClone.remove();
+    }, exitMilliseconds);
+  });
+
+  return exitMilliseconds;
+}
+
+function animateRackRedrawEnter() {
+  document.querySelectorAll("#rack .tile").forEach((tileElement, index) => {
+    tileElement.style.setProperty("--redraw-enter-x", `${index % 2 === 0 ? "115%" : "-115%"}`);
+    tileElement.style.setProperty("--redraw-delay", `${Math.min(index * 150, 900)}ms`);
+    tileElement.classList.add(`tile-redraw-enter-${(index % 4) + 1}`);
+    window.setTimeout(() => {
+      tileElement.classList.remove("tile-redraw-enter-1", "tile-redraw-enter-2", "tile-redraw-enter-3", "tile-redraw-enter-4");
+      tileElement.style.removeProperty("--redraw-enter-x");
+      tileElement.style.removeProperty("--redraw-delay");
+    }, 1530);
+  });
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
 function renderRack(options = {}) {
   const rack = document.querySelector("#rack");
 
@@ -2052,6 +2108,10 @@ function renderRack(options = {}) {
   });
 
   animateRackShuffle(options.shuffleRects);
+
+  if (options.redrawEnter) {
+    animateRackRedrawEnter();
+  }
 }
 
 function renderMarketplace() {
@@ -2093,6 +2153,9 @@ function updatePlacementControls() {
 
   document.body.classList.toggle("has-active-placement", canPlay && hasActivePlacements);
   document.body.classList.toggle("is-my-turn", canPlay);
+  if (!canPlay) {
+    setRedrawConfirmationVisible(false);
+  }
   document.querySelectorAll("#redraw-tiles-button, #finish-placement-button, #reset-placement-button")
     .forEach((button) => {
       button.disabled = !canPlay;
@@ -2217,7 +2280,10 @@ function renderGameStateJSON() {
 function renderGame(options = {}) {
   destroySortables();
   renderBoard();
-  renderRack({ shuffleRects: options.rackShuffleRects });
+  renderRack({
+    redrawEnter: options.rackRedrawEnter,
+    shuffleRects: options.rackShuffleRects
+  });
   renderMarketplace();
   updatePlacementControls();
   renderScore();
@@ -2232,6 +2298,10 @@ function setGameMessage(message) {
   if (messageElement) {
     messageElement.textContent = message;
   }
+}
+
+function setRedrawConfirmationVisible(isVisible) {
+  document.body.classList.toggle("confirm-redraw", Boolean(isVisible));
 }
 
 function getGameIdFromURLHash() {
@@ -3054,7 +3124,7 @@ async function startNewGame() {
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage("");
-  renderGame();
+  renderGame({ rackRedrawEnter: true });
 
   try {
     await saveGameState();
@@ -3079,12 +3149,32 @@ async function redrawTilesAndSkipTurn() {
     return;
   }
 
-  if (!window.confirm("Redraw all your rack tiles and skip your current turn?")) {
+  setGameMessage("");
+  setRedrawConfirmationVisible(true);
+}
+
+async function confirmRedrawTilesAndSkipTurn() {
+  if (!document.body.classList.contains("screen-play")) {
+    showNewGameSetup();
     return;
   }
 
+  if (!isMyTurn() || gameState.gameOver) {
+    setRedrawConfirmationVisible(false);
+    return;
+  }
+
+  if (gameState.hasActivePlacements()) {
+    setRedrawConfirmationVisible(false);
+    setGameMessage("Reset placed tiles before redrawing.");
+    return;
+  }
+
+  setRedrawConfirmationVisible(false);
+
   const shouldStartLongFinalRound = gameState.gameLength === "long" && gameState.tilesRemaining < 7;
 
+  const redrawExitMilliseconds = animateRackRedrawExit();
   gameState.redrawCurrentRack({ availableOnly: shouldStartLongFinalRound });
 
   if (shouldStartLongFinalRound) {
@@ -3096,7 +3186,8 @@ async function redrawTilesAndSkipTurn() {
   setGameMessage(gameState.gameOver
     ? "Game over."
     : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
-  renderGame();
+  await wait(redrawExitMilliseconds);
+  renderGame({ rackRedrawEnter: true });
 
   try {
     await saveGameState();
@@ -3104,6 +3195,10 @@ async function redrawTilesAndSkipTurn() {
   } catch (error) {
     setGameMessage(`Tiles redrawn, but could not save: ${error.message}`);
   }
+}
+
+function cancelRedrawTiles() {
+  setRedrawConfirmationVisible(false);
 }
 
 async function shuffleRackTiles() {
@@ -3134,15 +3229,18 @@ async function finishPlacement() {
 
   if (result && !result.isValid) {
     setGameMessage(result.placementError || `Not in dictionary: ${result.invalidWords.join(", ")}`);
+    renderGame();
   } else if (result && result.isValid) {
-    gameState.advanceTurn();
+    const advanceResult = gameState.advanceTurn();
+
     gameState.advanceTurnIndex();
     setGameMessage(gameState.gameOver
       ? "Game over."
       : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
+    renderGame({ rackRedrawEnter: advanceResult.drawnTiles.length > 0 });
+  } else {
+    renderGame();
   }
-
-  renderGame();
 
   if (result && result.isValid) {
     try {
@@ -3408,6 +3506,8 @@ function bindGameControls() {
   const addPlayerButton = document.querySelector("#add-player-button");
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
+  const confirmRedrawButton = document.querySelector("#confirm-redraw-button");
+  const cancelRedrawButton = document.querySelector("#cancel-redraw-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
   const installGameStateButton = document.querySelector("#install-game-state-button");
@@ -3479,6 +3579,14 @@ function bindGameControls() {
 
   if (redrawTilesButton) {
     redrawTilesButton.addEventListener("click", redrawTilesAndSkipTurn);
+  }
+
+  if (confirmRedrawButton) {
+    confirmRedrawButton.addEventListener("click", confirmRedrawTilesAndSkipTurn);
+  }
+
+  if (cancelRedrawButton) {
+    cancelRedrawButton.addEventListener("click", cancelRedrawTiles);
   }
 
   if (shuffleRackButton) {
