@@ -371,6 +371,13 @@
       gap: 0.45rem;
     }
 
+    .active-games-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.65rem;
+    }
+
     .active-game-row {
       display: grid;
       grid-template-columns: 5.5rem minmax(0, 1fr) auto;
@@ -476,6 +483,11 @@
       padding-left: 1.1rem;
     }
 
+    .rules-example,
+    .rules-board-example {
+      --rules-board-cell-size: calc((var(--play-width) - 10px) / 9);
+    }
+
     .rules-example {
       display: flex;
       flex-wrap: wrap;
@@ -483,85 +495,34 @@
       gap: 0.35rem;
     }
 
-    .rules-mini-tile,
-    .rules-mini-bonus {
-      width: 2.55rem;
+    .rules-example .board-cell {
+      width: var(--rules-board-cell-size);
+      flex: 0 0 var(--rules-board-cell-size);
       aspect-ratio: 1;
+    }
+
+    .rules-board-example {
       display: grid;
-      place-items: center;
-      border: 2px solid var(--tile-edge);
-      border-radius: 6px;
-      background: var(--tile);
-      color: var(--ink);
-      font: 900 1.15rem/1 Georgia, "Times New Roman", serif;
-      box-shadow: inset 0 -0.14rem 0 rgba(0, 0, 0, 0.08);
+      grid-template-columns: repeat(4, var(--rules-board-cell-size));
+      grid-auto-rows: var(--rules-board-cell-size);
+      gap: 1px;
+      width: max-content;
+      max-width: 100%;
+      padding: 1px;
+      background: var(--board-line);
     }
 
-    .rules-mini-bonus {
-      border-color: rgba(23, 32, 42, 0.28);
-      background: #cceff0;
-      font: 900 0.82rem/1 system-ui, sans-serif;
+    .rules-board-example .board-cell {
+      width: auto;
+      flex: initial;
     }
 
-    .rules-mini-bonus.word {
-      background: #f7d7d2;
-    }
-
-    .rules-mini-tile .material-symbols-outlined {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      height: 100%;
-      display: grid;
-      place-items: center;
-      font-family: "Material Symbols Outlined";
-      font-weight: normal;
-      font-size: 1.25rem;
-      line-height: 1;
-      font-variation-settings:
-        "FILL" 0,
-        "wght" 600,
-        "GRAD" 0,
-        "opsz" 24;
-    }
-
-    .rules-mini-tile-wild {
-      position: relative;
-      background: #f7f3ea;
-      color: #23313a;
-      box-shadow:
-        inset 0 0 0 0.14rem rgba(255, 255, 255, 0.58),
-        inset 0 -0.14rem 0 rgba(0, 0, 0, 0.08);
-    }
-
-    .rules-mini-tile-wild::before {
-      content: "";
-      position: absolute;
-      inset: 0.28rem;
-      border: 1px dashed rgba(35, 49, 58, 0.42);
-      border-radius: 4px;
-      pointer-events: none;
+    .rules-board-example-stack {
+      grid-template-columns: repeat(3, var(--rules-board-cell-size));
     }
 
     .rules-example-bottom {
       margin-top: auto;
-    }
-
-    .rules-mini-stack {
-      position: relative;
-      margin-left: 0.18rem;
-    }
-
-    .rules-mini-stack::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      z-index: -1;
-      border: 2px solid var(--tile-edge);
-      border-radius: 6px;
-      background: var(--tile);
-      transform: translate(-0.22rem, 0.22rem);
-      opacity: 0.62;
     }
 
     .rules-equation {
@@ -626,8 +587,8 @@
 
     .board {
       display: grid;
-      grid-template-columns: repeat(10, 1fr);
-      grid-template-rows: repeat(10, minmax(0, 1fr));
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, minmax(0, 1fr));
       width: var(--play-width);
       aspect-ratio: 1;
       border: 3px solid var(--ink);
@@ -667,6 +628,11 @@
       color: #ffffff;
     }
 
+    .board-cell-start {
+      background: #f2b134;
+      color: var(--ink);
+    }
+
     .board-bonus-label {
       position: absolute;
       inset: 0.2rem;
@@ -687,11 +653,28 @@
       display: block;
     }
 
+    .board-start-label {
+      position: absolute;
+      inset: 0.2rem;
+      display: grid;
+      place-items: center;
+      border: 2px solid rgba(23, 32, 42, 0.32);
+      border-radius: 6px;
+      color: var(--ink);
+      font: 900 clamp(0.5rem, 1.35vw, 0.68rem)/1 system-ui, sans-serif;
+      letter-spacing: 0.02em;
+      text-align: center;
+      text-transform: uppercase;
+      pointer-events: none;
+      user-select: none;
+    }
+
     .board-cell-bonus.drop-ready {
       background: rgba(15, 139, 141, 0.24);
     }
 
     .rack-wrap {
+      position: relative;
       width: var(--play-width);
       display: grid;
       gap: 0.75rem;
@@ -872,6 +855,32 @@
       animation: remote-play-flash 1400ms ease-out 1;
     }
 
+    .tile-shuffle-1,
+    .tile-shuffle-2,
+    .tile-shuffle-3,
+    .tile-shuffle-4 {
+      position: relative;
+      z-index: 5;
+      will-change: transform;
+      animation-delay: var(--shuffle-delay, 0ms);
+    }
+
+    .tile-shuffle-1 {
+      animation: tile-shuffle-swing-left 520ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
+    }
+
+    .tile-shuffle-2 {
+      animation: tile-shuffle-swing-right 560ms cubic-bezier(0.2, 0.78, 0.32, 1) both;
+    }
+
+    .tile-shuffle-3 {
+      animation: tile-shuffle-hop 540ms cubic-bezier(0.2, 0.82, 0.34, 1) both;
+    }
+
+    .tile-shuffle-4 {
+      animation: tile-shuffle-slide 500ms cubic-bezier(0.18, 0.86, 0.34, 1) both;
+    }
+
     .tile-covered-underlay {
       position: absolute;
       z-index: 1;
@@ -933,6 +942,62 @@
       }
     }
 
+    @keyframes tile-shuffle-swing-left {
+      0% {
+        transform: translate(var(--shuffle-x), var(--shuffle-y)) rotate(-10deg);
+      }
+
+      52% {
+        transform: translate(calc(var(--shuffle-x) * -0.16), calc(var(--shuffle-y) * -0.08)) rotate(7deg);
+      }
+
+      100% {
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes tile-shuffle-swing-right {
+      0% {
+        transform: translate(var(--shuffle-x), var(--shuffle-y)) rotate(11deg);
+      }
+
+      48% {
+        transform: translate(calc(var(--shuffle-x) * -0.14), calc(var(--shuffle-y) * 0.1)) rotate(-8deg);
+      }
+
+      100% {
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes tile-shuffle-hop {
+      0% {
+        transform: translate(var(--shuffle-x), var(--shuffle-y)) rotate(-6deg);
+      }
+
+      45% {
+        transform: translate(calc(var(--shuffle-x) * 0.35), calc(var(--shuffle-y) - 0.55rem)) rotate(8deg);
+      }
+
+      100% {
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes tile-shuffle-slide {
+      0% {
+        transform: translate(var(--shuffle-x), var(--shuffle-y)) rotate(5deg);
+      }
+
+      58% {
+        transform: translate(calc(var(--shuffle-x) * -0.1), calc(var(--shuffle-y) * -0.12)) rotate(-5deg);
+      }
+
+      100% {
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
     @keyframes rainbow-tile-flow {
       0% {
         background-position: 0% 50%;
@@ -954,7 +1019,9 @@
       font: 700 clamp(0.58rem, 2.2vw, 0.78rem)/1 system-ui, sans-serif;
     }
 
-    .board .tile {
+    .board .tile,
+    .rules-example .tile,
+    .rules-board-example .tile {
       width: calc(100% - 6px);
       max-width: 100%;
       border-width: 2px;
@@ -968,7 +1035,9 @@
       cursor: pointer;
     }
 
-    .board .tile-points {
+    .board .tile-points,
+    .rules-example .tile-points,
+    .rules-board-example .tile-points {
       right: 0.14rem;
       bottom: 0.12rem;
       font-size: clamp(0.42rem, 1.05vw, 0.56rem);
@@ -1018,6 +1087,32 @@
       display: inline-block;
     }
 
+    .rack-shuffle-button {
+      display: none;
+      position: absolute;
+      top: -0.58rem;
+      right: 0.7rem;
+      z-index: 4;
+      width: 2.1rem;
+      min-width: 2.1rem;
+      height: 2.1rem;
+      min-height: 2.1rem;
+      padding: 0;
+      place-items: center;
+      border-width: 3px;
+      border-radius: 8px;
+      background: #ebe9df;
+      box-shadow: 0.12rem 0.12rem 0 var(--warm);
+    }
+
+    body.screen-play .rack-shuffle-button {
+      display: grid;
+    }
+
+    .rack-shuffle-button .material-symbols-outlined {
+      font-size: 1.25rem;
+    }
+
     .rack-controls {
       display: flex;
       flex-wrap: wrap;
@@ -1051,13 +1146,16 @@
       color: var(--accent);
     }
 
-    body.screen-play:not(.is-my-turn) .rack,
     body.screen-play:not(.is-my-turn) .board {
       opacity: 0.82;
     }
 
     body.screen-play:not(.is-my-turn) .tile-movable {
       cursor: not-allowed;
+    }
+
+    body.screen-play:not(.is-my-turn) #rack .tile-movable {
+      cursor: pointer;
     }
 
     .game-button:disabled {
@@ -1317,6 +1415,9 @@
         <div class="page-hero">
           <h2 class="section-title">Game List</h2>
         </div>
+        <div class="active-games-actions">
+          <button class="game-button" type="button" id="create-game-from-list-button">Create Game</button>
+        </div>
         <div id="active-games-list" class="active-games-list"></div>
       </section>
     </header>
@@ -1329,29 +1430,92 @@
       <div class="rules-grid">
         <article class="rules-card">
           <h3>Making Words</h3>
-          <p>Place tiles in one connected row or column. Every horizontal and vertical word on the board must be a real word when the turn ends.</p>
+          <p>Every horizontal and vertical word changed by your move must be a real dictionary word when the turn ends.</p>
+          <p>Single-tile words do not count. A valid play must make or change at least one word with two or more letters.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Placing Tiles</h3>
+          <p>Place tiles in one connected row or column. The first turn must make a word of at least two letters through the center START square.</p>
+          <p>After the first turn, every play must connect to existing tiles already on the board.</p>
           <div class="rules-example" aria-hidden="true">
-            <span class="rules-mini-tile">C</span>
-            <span class="rules-mini-tile">H</span>
-            <span class="rules-mini-tile">E</span>
-            <span class="rules-mini-tile">W</span>
+            <div class="board-cell board-cell-start">
+              <span class="board-start-label">start</span>
+            </div>
           </div>
         </article>
         <article class="rules-card">
           <h3>Turn Score</h3>
           <p>You score every word that is new or changed by your placed tiles. Existing words that your move does not affect are not rescored.</p>
-          <p class="rules-equation">Example: changing CHOW to CHEWS scores CHEWS.</p>
+          <p>The player plays JUMP across the existing vertical word SUM, crossing at U.</p>
+          <div class="rules-board-example" aria-hidden="true">
+            <div class="board-cell"></div>
+            <div class="board-cell">
+              <div class="tile">S<span class="tile-points">1</span></div>
+            </div>
+            <div class="board-cell"></div>
+            <div class="board-cell"></div>
+            <div class="board-cell">
+              <div class="tile tile-active-placement">J<span class="tile-points">8</span></div>
+            </div>
+            <div class="board-cell">
+              <div class="tile tile-active-placement">U<span class="tile-points">1</span></div>
+            </div>
+            <div class="board-cell">
+              <div class="tile tile-active-placement">M<span class="tile-points">3</span></div>
+            </div>
+            <div class="board-cell">
+              <div class="tile tile-active-placement">P<span class="tile-points">3</span></div>
+            </div>
+            <div class="board-cell"></div>
+            <div class="board-cell">
+              <div class="tile">M<span class="tile-points">3</span></div>
+            </div>
+            <div class="board-cell"></div>
+            <div class="board-cell"></div>
+          </div>
+          <p class="rules-equation">JUMP: J8 + U1 + M3 + P3 = 15.</p>
+          <p class="rules-equation">SUM: S1 + U1 + M3 = 5, but it was already on the board and is not rescored.</p>
+          <p class="rules-equation">Turn score: 15.</p>
         </article>
         <article class="rules-card">
           <h3>Bonus Squares</h3>
           <p>Letter bonuses multiply only the new tile placed on that square. Word bonuses multiply the full changed word.</p>
           <div class="rules-example" aria-hidden="true">
-            <span class="rules-mini-bonus">DL</span>
-            <span class="rules-mini-bonus">TL</span>
-            <span class="rules-mini-bonus word">DW</span>
-            <span class="rules-mini-bonus word">TW</span>
+            <div class="board-cell board-cell-bonus board-cell-bonus-doubleLetter">
+              <span class="board-bonus-label"><span class="board-bonus-multiplier">2x</span><span class="board-bonus-scope">letter</span></span>
+            </div>
+            <div class="board-cell board-cell-bonus board-cell-bonus-tripleLetter">
+              <span class="board-bonus-label"><span class="board-bonus-multiplier">3x</span><span class="board-bonus-scope">letter</span></span>
+            </div>
+            <div class="board-cell board-cell-bonus board-cell-bonus-doubleWord">
+              <span class="board-bonus-label"><span class="board-bonus-multiplier">2x</span><span class="board-bonus-scope">word</span></span>
+            </div>
+            <div class="board-cell board-cell-bonus board-cell-bonus-tripleWord">
+              <span class="board-bonus-label"><span class="board-bonus-multiplier">3x</span><span class="board-bonus-scope">word</span></span>
+            </div>
           </div>
           <p class="rules-equation">A 4-point tile on TL scores 12 before word bonuses.</p>
+        </article>
+        <article class="rules-card">
+          <h3>Stacking Tiles</h3>
+          <p>You may place a tile on top of an existing tile, but each turn must also place at least one tile on an empty square.</p>
+          <p>Stacks keep growing. The top tile is the active letter for words.</p>
+          <p>The first tile has no stack multiplier. The second tile scores 2x, the third scores 3x, and so on.</p>
+          <div class="rules-board-example rules-board-example-stack" aria-hidden="true">
+            <div class="board-cell">
+              <div class="tile tile-covered-underlay">A<span class="tile-points">1</span></div>
+              <div class="tile tile-covering-placement tile-stacked">M<span class="tile-stack-badge">3x</span><span class="tile-points">3</span></div>
+            </div>
+            <div class="board-cell">
+              <div class="tile">E<span class="tile-points">1</span></div>
+            </div>
+            <div class="board-cell">
+              <div class="tile tile-covered-underlay">T<span class="tile-points">1</span></div>
+              <div class="tile tile-covering-placement tile-stacked">N<span class="tile-stack-badge">2x</span><span class="tile-points">1</span></div>
+            </div>
+          </div>
+          <p class="rules-equation">MEN: M3 x3 + E1 + N1 x2 = 12.</p>
+          <p class="rules-equation">M is stacked third, so it scores 3x. N is stacked second, so it scores 2x.</p>
         </article>
         <article class="rules-card">
           <h3>Buying Tiles</h3>
@@ -1368,9 +1532,12 @@
           <p>Each tile drawn into a rack has a 1-in-14 chance to become wild. Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
           <p>When a wild tile is placed on top of an existing tile, it must change that square's letter. A wild tile covering the A in SAT may make SIT, but not SAT again.</p>
           <div class="rules-example rules-example-bottom" aria-hidden="true">
-            <span class="rules-mini-tile rules-mini-tile-wild">
-              <span class="material-symbols-outlined">asterisk</span>
-            </span>
+            <div class="board-cell">
+              <div class="tile tile-wildcard">
+                <span class="material-symbols-outlined tile-wild-symbol">asterisk</span>
+                <span class="tile-points">0</span>
+              </div>
+            </div>
           </div>
         </article>
         <article class="rules-card">
@@ -1378,7 +1545,9 @@
           <p>Every opening rack includes one rainbow tile, randomly chosen from that rack's non-wild tiles. Wild tiles cannot be rainbow, and marketplace tiles are never rainbow.</p>
           <p>A rainbow tile doubles every changed word that contains it, including future changes while it remains the top tile. If another tile covers it, the rainbow bonus stops applying.</p>
           <div class="rules-example rules-example-bottom" aria-hidden="true">
-            <span class="rules-mini-tile tile-rainbow">R</span>
+            <div class="board-cell">
+              <div class="tile tile-rainbow">R<span class="tile-points">1</span></div>
+            </div>
             <span class="rules-equation">word x2</span>
           </div>
         </article>
@@ -1387,20 +1556,6 @@
           <p>Game length controls when the final round begins. Short games start it after one third of the tile pool has been drawn, and medium games start it after two thirds.</p>
           <p>Long games keep going until a rack refill cannot draw enough tiles. Once the final round starts, each player gets one last turn, then final scores stand.</p>
         </article>
-        <article class="rules-card">
-          <h3>Stacking Tiles</h3>
-          <p>You may place a tile on top of an existing tile, but each turn must also place at least one tile on an empty square.</p>
-          <div class="rules-example" aria-hidden="true">
-            <span class="rules-mini-stack rules-mini-tile">E</span>
-            <span class="rules-equation">2x</span>
-          </div>
-          <p>Stacks keep growing. The top tile is the active letter for words.</p>
-        </article>
-        <article class="rules-card">
-          <h3>Stack Scoring</h3>
-          <p>The first tile in a square has no stack multiplier. A second tile scores 2x, a third tile scores 3x, and so on.</p>
-          <p class="rules-equation">If E is stacked second, E1 scores 2 points before any word multiplier.</p>
-        </article>
       </div>
     </section>
 
@@ -1408,9 +1563,12 @@
       <div class="marketplace-wrap" aria-label="Tile marketplace">
         <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
       </div>
-      <div class="board" id="board" aria-label="10 by 10 board"></div>
+      <div class="board" id="board" aria-label="9 by 9 board"></div>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
       <div class="rack-wrap">
+        <button class="game-button secondary rack-shuffle-button" type="button" id="shuffle-rack-button" aria-label="Shuffle rack" title="Shuffle rack">
+          <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
+        </button>
         <div class="rack" id="rack" aria-label="Rack"></div>
         <div class="rack-controls" aria-label="Rack controls">
           <button class="game-button redraw-tiles-button" type="button" id="redraw-tiles-button">Redraw Tiles</button>
@@ -1459,6 +1617,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=rainbow-tiles"></script>
+  <script type="module" src="./game.js?v=game-list-default"></script>
 </body>
 </html>

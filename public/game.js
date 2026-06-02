@@ -430,6 +430,10 @@ class WordWefterGameState {
 
     for (let row = 0; row < boardSize; row += 1) {
       for (let column = 0; column < boardSize; column += 1) {
+        if (this.isStartCell(row, column)) {
+          continue;
+        }
+
         if (this.hasOrthogonalBonus(boardBonuses, row, column)) {
           continue;
         }
@@ -555,6 +559,10 @@ class WordWefterGameState {
     return this.boardBonuses.get(this.getCellKey(row, column)) || null;
   }
 
+  isStartCell(row, column) {
+    return Number(row) === startCell.row && Number(column) === startCell.column;
+  }
+
   mapToTileArray(tileMap) {
     return Array.from(tileMap.values()).map((tile) => ({ ...tile }));
   }
@@ -634,6 +642,76 @@ class WordWefterGameState {
     };
   }
 
+  getRackLetterCounts(rack) {
+    return (rack || []).reduce((counts, tile) => {
+      const letter = String(tile?.letter || "").toUpperCase();
+
+      if (!letter) {
+        return counts;
+      }
+
+      counts.set(letter, (counts.get(letter) || 0) + 1);
+      return counts;
+    }, new Map());
+  }
+
+  rackLettersMatch(firstRack, secondRack) {
+    const firstCounts = this.getRackLetterCounts(firstRack);
+    const secondCounts = this.getRackLetterCounts(secondRack);
+
+    if (firstCounts.size !== secondCounts.size) {
+      return false;
+    }
+
+    return Array.from(firstCounts.entries())
+      .every(([letter, count]) => secondCounts.get(letter) === count);
+  }
+
+  getRackTileSignature(tile) {
+    return [
+      String(tile?.letter || "").toUpperCase(),
+      tile?.wildcard ? "wild" : "letter",
+      tile?.rainbow && !tile?.wildcard ? "rainbow" : "plain",
+      String(tile?.sourceLetter || "").toUpperCase()
+    ].join("|");
+  }
+
+  takeMatchingRackTile(availableTiles, preferredTile) {
+    const preferredSignature = this.getRackTileSignature(preferredTile);
+    let matchIndex = availableTiles.findIndex((tile) => (
+      this.getRackTileSignature(tile) === preferredSignature
+    ));
+
+    if (matchIndex === -1) {
+      const preferredLetter = String(preferredTile?.letter || "").toUpperCase();
+
+      matchIndex = availableTiles.findIndex((tile) => (
+        String(tile?.letter || "").toUpperCase() === preferredLetter
+      ));
+    }
+
+    if (matchIndex === -1) {
+      return null;
+    }
+
+    return availableTiles.splice(matchIndex, 1)[0];
+  }
+
+  preserveRackOrderIfLettersMatch(serverRack, previousRack) {
+    if (!this.rackLettersMatch(serverRack, previousRack)) {
+      return serverRack;
+    }
+
+    const availableTiles = [...serverRack];
+    const orderedRack = previousRack
+      .map((tile) => this.takeMatchingRackTile(availableTiles, tile))
+      .filter(Boolean);
+
+    return orderedRack.length === serverRack.length
+      ? orderedRack
+      : serverRack;
+  }
+
   loadFromJSON(gameStateJSON) {
     const source = typeof gameStateJSON === "string"
       ? JSON.parse(gameStateJSON)
@@ -646,6 +724,11 @@ class WordWefterGameState {
     if (source.version !== 1) {
       throw new Error("Game state version must be 1.");
     }
+
+    const previousRackByPlayerName = new Map((this.players || []).map((player) => [
+      normalizeNameKey(player.name),
+      player.rack || []
+    ]));
 
     this.letterFrequencies = { ...letter_freq };
     this.letterPoints = { ...letter_points };
@@ -735,11 +818,19 @@ class WordWefterGameState {
     this.pendingFinalRound = Boolean(source.pendingFinalRound);
     this.gameOver = Boolean(source.gameOver);
     this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
-    this.players = (source.players || []).map((player) => ({
-      name: String(player.name || "Player"),
-      score: Number(player.score || 0),
-      rack: (player.rack || []).map(hydrateTile)
-    }));
+    this.players = (source.players || []).map((player) => {
+      const name = String(player.name || "Player");
+      const hydratedRack = (player.rack || []).map(hydrateTile);
+      const previousRack = previousRackByPlayerName.get(normalizeNameKey(name));
+
+      return {
+        name,
+        score: Number(player.score || 0),
+        rack: previousRack
+          ? this.preserveRackOrderIfLettersMatch(hydratedRack, previousRack)
+          : hydratedRack
+      };
+    });
 
     if (!/^[A-Z0-9]{5}$/.test(this.id)) {
       throw new Error("Game state must include a 5 character ID.");
@@ -837,6 +928,31 @@ class WordWefterGameState {
 
   isCellOccupied(row, column) {
     return Boolean(this.getTileAt(row, column));
+  }
+
+  hasBoardTiles() {
+    return this.boardTiles.size > 0;
+  }
+
+  hasActivePlacementOnStartCell() {
+    return Array.from(this.activePlacements.values()).some((tile) => (
+      this.isStartCell(tile.row, tile.column)
+    ));
+  }
+
+  hasActivePlacementConnectedToBoard() {
+    return Array.from(this.activePlacements.values()).some((tile) => {
+      if (this.boardTiles.has(this.getCellKey(tile.row, tile.column))) {
+        return true;
+      }
+
+      return [
+        [tile.row - 1, tile.column],
+        [tile.row + 1, tile.column],
+        [tile.row, tile.column - 1],
+        [tile.row, tile.column + 1]
+      ].some(([row, column]) => this.boardTiles.has(this.getCellKey(row, column)));
+    });
   }
 
   getActivePlacementLine(candidateRow = null, candidateColumn = null) {
@@ -1135,6 +1251,32 @@ class WordWefterGameState {
     const normalizedTargetIndex = Math.max(0, Math.min(Number(adjustedTargetIndex), this.currentRack.length));
 
     this.currentRack.splice(normalizedTargetIndex, 0, tile);
+    return true;
+  }
+
+  shuffleCurrentRack() {
+    if (this.currentRack.length < 2) {
+      return false;
+    }
+
+    const originalTileIds = this.currentRack.map((tile) => tile.id);
+    const lodashShuffle = globalThis._?.shuffle;
+    let shuffledRack = this.currentRack;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      shuffledRack = typeof lodashShuffle === "function"
+        ? lodashShuffle(this.currentRack)
+        : this.currentRack
+          .map((tile) => ({ tile, sort: Math.random() }))
+          .sort((first, second) => first.sort - second.sort)
+          .map(({ tile }) => tile);
+
+      if (shuffledRack.some((tile, index) => tile.id !== originalTileIds[index])) {
+        break;
+      }
+    }
+
+    this.currentRack = shuffledRack;
     return true;
   }
 
@@ -1507,6 +1649,44 @@ class WordWefterGameState {
     };
   }
 
+  validateStartAndConnectionRules(assignments) {
+    const changedWords = this.getChangedWords(assignments);
+
+    if (!this.hasBoardTiles()) {
+      if (!this.hasActivePlacementOnStartCell()) {
+        return {
+          isValid: false,
+          placementError: "The first word must cover the START square."
+        };
+      }
+
+      if (!changedWords.some((word) => (
+        word.word.length >= 2 &&
+        word.tiles.some((tile) => this.isStartCell(tile.row, tile.column))
+      ))) {
+        return {
+          isValid: false,
+          placementError: "The first play must make a word of at least two letters through START."
+        };
+      }
+
+      return {
+        isValid: true
+      };
+    }
+
+    if (!this.hasActivePlacementConnectedToBoard()) {
+      return {
+        isValid: false,
+        placementError: "Every play after the first must connect to existing tiles."
+      };
+    }
+
+    return {
+      isValid: true
+    };
+  }
+
   validateActivePlacementLine() {
     if (
       this.activePlacements.size > 0 &&
@@ -1554,6 +1734,17 @@ class WordWefterGameState {
         words: this.getBoardWords(),
         invalidWords: this.getBoardWords().filter((word) => word.includes(wildcardLetter)),
         placementError: "Wild tiles could not make valid words."
+      };
+    }
+
+    const startConnectionValidation = this.validateStartAndConnectionRules(wildcardResolution.assignments);
+
+    if (!startConnectionValidation.isValid) {
+      this.flashActivePlacements = true;
+      return {
+        ...startConnectionValidation,
+        words: [],
+        invalidWords: []
       };
     }
 
@@ -1620,7 +1811,11 @@ class WordWefterGameState {
 }
 
 const gameState = new WordWefterGameState();
-const boardSize = 10;
+const boardSize = 9;
+const startCell = {
+  row: Math.floor(boardSize / 2),
+  column: Math.floor(boardSize / 2)
+};
 const serverURL = "./server.php";
 const playerNameCookie = "wordwefterPlayerName";
 const turnNotificationsKey = "wordwefterTurnNotifications";
@@ -1748,7 +1943,14 @@ function renderBoard() {
     const tile = activeTile || topBoardTile;
     const bonus = gameState.getBonusAt(row, column);
 
-    if (bonus && bonusTypes[bonus.type] && !boardTile) {
+    if (gameState.isStartCell(row, column) && !boardTile && !activeTile) {
+      const startElement = document.createElement("span");
+
+      cell.classList.add("board-cell-start");
+      startElement.className = "board-start-label";
+      startElement.textContent = "start";
+      cell.append(startElement);
+    } else if (bonus && bonusTypes[bonus.type] && !boardTile) {
       const bonusType = bonusTypes[bonus.type];
       const bonusElement = document.createElement("span");
       const multiplierElement = document.createElement("span");
@@ -1798,7 +2000,45 @@ function renderBoard() {
   }
 }
 
-function renderRack() {
+function getRackTileRects() {
+  return new Map(Array.from(document.querySelectorAll("#rack .tile"))
+    .map((tileElement) => [tileElement.dataset.tileId, tileElement.getBoundingClientRect()]));
+}
+
+function animateRackShuffle(previousRects) {
+  if (!previousRects) {
+    return;
+  }
+
+  document.querySelectorAll("#rack .tile").forEach((tileElement, index) => {
+    const previousRect = previousRects.get(tileElement.dataset.tileId);
+
+    if (!previousRect) {
+      return;
+    }
+
+    const nextRect = tileElement.getBoundingClientRect();
+    const shiftX = previousRect.left - nextRect.left;
+    const shiftY = previousRect.top - nextRect.top;
+
+    if (Math.abs(shiftX) < 1 && Math.abs(shiftY) < 1) {
+      return;
+    }
+
+    tileElement.style.setProperty("--shuffle-x", `${shiftX}px`);
+    tileElement.style.setProperty("--shuffle-y", `${shiftY}px`);
+    tileElement.style.setProperty("--shuffle-delay", `${Math.min(index * 22, 120)}ms`);
+    tileElement.classList.add(`tile-shuffle-${(index % 4) + 1}`);
+    window.setTimeout(() => {
+      tileElement.classList.remove("tile-shuffle-1", "tile-shuffle-2", "tile-shuffle-3", "tile-shuffle-4");
+      tileElement.style.removeProperty("--shuffle-x");
+      tileElement.style.removeProperty("--shuffle-y");
+      tileElement.style.removeProperty("--shuffle-delay");
+    }, 620);
+  });
+}
+
+function renderRack(options = {}) {
   const rack = document.querySelector("#rack");
 
   if (!rack) {
@@ -1808,8 +2048,10 @@ function renderRack() {
   rack.replaceChildren();
 
   gameState.currentRack.forEach((tile) => {
-    rack.append(createTileElement(tile, { movable: isMyTurn() && !gameState.gameOver, source: "rack" }));
+    rack.append(createTileElement(tile, { movable: !gameState.gameOver, source: "rack" }));
   });
+
+  animateRackShuffle(options.shuffleRects);
 }
 
 function renderMarketplace() {
@@ -1855,6 +2097,12 @@ function updatePlacementControls() {
     .forEach((button) => {
       button.disabled = !canPlay;
     });
+
+  const shuffleRackButton = document.querySelector("#shuffle-rack-button");
+
+  if (shuffleRackButton) {
+    shuffleRackButton.disabled = gameState.gameOver || gameState.currentRack.length < 2;
+  }
 }
 
 function renderScore() {
@@ -1966,10 +2214,10 @@ function renderGameStateJSON() {
   gameStateElement.value = JSON.stringify(gameState.toJSON(), null, 2);
 }
 
-function renderGame() {
+function renderGame(options = {}) {
   destroySortables();
   renderBoard();
-  renderRack();
+  renderRack({ shuffleRects: options.rackShuffleRects });
   renderMarketplace();
   updatePlacementControls();
   renderScore();
@@ -2858,6 +3106,25 @@ async function redrawTilesAndSkipTurn() {
   }
 }
 
+async function shuffleRackTiles() {
+  if (!document.body.classList.contains("screen-play")) {
+    showNewGameSetup();
+    return;
+  }
+
+  if (gameState.gameOver) {
+    return;
+  }
+
+  const rackTileRects = getRackTileRects();
+
+  if (!gameState.shuffleCurrentRack()) {
+    return;
+  }
+
+  renderGame({ rackShuffleRects: rackTileRects });
+}
+
 async function finishPlacement() {
   if (!isMyTurn() || gameState.gameOver) {
     return;
@@ -2985,19 +3252,26 @@ function getSortableSource(event) {
 function initializeRackSortable() {
   const rack = document.querySelector("#rack");
 
-  if (!rack || !window.Sortable || !isMyTurn() || gameState.gameOver) {
+  if (!rack || !window.Sortable || gameState.gameOver) {
     return;
   }
+
+  const canPlay = isMyTurn() && !gameState.gameOver;
 
   rackSortable = Sortable.create(rack, {
     animation: 120,
     draggable: ".tile-movable",
     group: {
       name: "wordwefter-tiles",
-      pull: true,
-      put: true
+      pull: canPlay,
+      put: canPlay
     },
     onAdd(event) {
+      if (!canPlay) {
+        renderGame();
+        return;
+      }
+
       const tileSource = getSortableSource(event);
 
       if (tileSource === "marketplace") {
@@ -3129,8 +3403,10 @@ function bindGameControls() {
   const showGameListButton = document.querySelector("#show-game-list-button");
   const showRulesButton = document.querySelector("#show-rules-button");
   const notificationToggleCheckbox = document.querySelector("#notification-toggle-checkbox");
+  const createGameFromListButton = document.querySelector("#create-game-from-list-button");
   const createGameButton = document.querySelector("#create-game-button");
   const addPlayerButton = document.querySelector("#add-player-button");
+  const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
@@ -3178,6 +3454,13 @@ function bindGameControls() {
     });
   }
 
+  if (createGameFromListButton) {
+    createGameFromListButton.addEventListener("click", () => {
+      closeIdentityMenu();
+      showNewGameSetup();
+    });
+  }
+
   if (notificationToggleCheckbox) {
     notificationToggleCheckbox.addEventListener("change", toggleTurnNotifications);
   }
@@ -3196,6 +3479,10 @@ function bindGameControls() {
 
   if (redrawTilesButton) {
     redrawTilesButton.addEventListener("click", redrawTilesAndSkipTurn);
+  }
+
+  if (shuffleRackButton) {
+    shuffleRackButton.addEventListener("click", shuffleRackTiles);
   }
 
   if (finishPlacementButton) {
@@ -3223,7 +3510,11 @@ async function initializeApp() {
   const loadedHashGame = await loadGameFromURLHash();
 
   if (!loadedHashGame) {
-    loadActiveGames();
+    if (getStoredPlayerName()) {
+      await showGameList();
+    } else {
+      loadActiveGames();
+    }
   }
 }
 
@@ -3246,6 +3537,7 @@ window.addEventListener("hashchange", async () => {
 });
 
 window.startWordWefterGame = startNewGame;
+window.shuffleWordWefterRack = shuffleRackTiles;
 window.redrawWordWefterTiles = redrawTilesAndSkipTurn;
 window.finishWordWefterPlacement = finishPlacement;
 window.resetWordWefterPlacement = resetPlacement;
