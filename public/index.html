@@ -25,10 +25,15 @@
       box-sizing: border-box;
     }
 
+    html {
+      scrollbar-gutter: stable;
+    }
+
     body {
       min-height: 100vh;
       margin: 0;
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       background:
         linear-gradient(135deg, rgba(15, 139, 141, 0.16), transparent 34%),
         linear-gradient(315deg, rgba(217, 79, 112, 0.14), transparent 40%),
@@ -67,9 +72,9 @@
 
     main {
       min-height: 100vh;
-      width: min(94vw, 1080px);
+      width: min(100vw, 1080px);
       margin: 0 auto;
-      padding: clamp(2rem, 7vw, 5rem) clamp(1rem, 4vw, 2rem);
+      padding: clamp(2rem, 7vw, 5rem) clamp(0.5rem, 2vw, 1.25rem);
       display: grid;
       place-items: center;
       gap: 1.25rem;
@@ -97,7 +102,6 @@
       text-transform: none;
       text-wrap: balance;
       color: var(--ink);
-      transition: font-size 220ms ease, text-shadow 220ms ease;
       text-shadow:
         0.04em 0.04em 0 var(--warm),
         -0.03em 0.07em 0 rgba(15, 139, 141, 0.7);
@@ -390,6 +394,12 @@
       text-align: left;
     }
 
+    .active-game-row.waiting-player {
+      border-color: rgba(15, 139, 141, 0.55);
+      background: rgba(15, 139, 141, 0.14);
+      box-shadow: 0.18rem 0.18rem 0 rgba(242, 177, 52, 0.42);
+    }
+
     .active-games-empty {
       display: grid;
       justify-items: start;
@@ -442,14 +452,6 @@
     .page-hero .section-title,
     .rules-hero .section-title {
       text-align: left;
-    }
-
-    .rules-kicker {
-      margin: 0;
-      color: var(--accent);
-      font: 900 0.78rem/1 system-ui, sans-serif;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
     }
 
     .rules-grid {
@@ -535,6 +537,10 @@
       width: 100%;
       justify-items: center;
       gap: 1rem;
+    }
+
+    body.screen-play .masthead {
+      margin-bottom: 0.75rem;
     }
 
     .rules-page {
@@ -716,6 +722,32 @@
       background: rgba(255, 255, 255, 0.42);
     }
 
+    .marketplace-wrap {
+      position: relative;
+    }
+
+    .marketplace-cost-badge {
+      display: none;
+      position: absolute;
+      top: -0.58rem;
+      right: 0.7rem;
+      z-index: 4;
+      padding: 0.12rem 0.38rem;
+      border: 2px solid rgba(23, 32, 42, 0.55);
+      border-radius: 5px;
+      background: #fbfaf6;
+      color: rgba(23, 32, 42, 0.74);
+      font: 800 0.72rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    body.screen-play .marketplace-cost-badge {
+      display: block;
+    }
+
     .rack::before,
     .marketplace::before {
       position: absolute;
@@ -824,15 +856,94 @@
       cursor: pointer;
     }
 
-    .marketplace-price {
-      display: block;
-      color: var(--ink);
-      font: 800 clamp(0.58rem, 1.8vw, 0.78rem)/1 system-ui, sans-serif;
-      text-align: center;
+    .marketplace-item-empty {
+      min-height: 100%;
+      border-radius: 7px;
     }
 
-    .marketplace-price-expensive {
-      color: var(--rose);
+    .marketplace-item-source-empty .tile {
+      visibility: hidden;
+    }
+
+    .marketplace > .tile {
+      width: 100%;
+      max-width: 100%;
+      align-self: stretch;
+      justify-self: stretch;
+    }
+
+    .board-cell .marketplace-item {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      gap: 0;
+    }
+
+    .board-cell .marketplace-item .tile {
+      width: calc(100% - 6px);
+      max-width: 100%;
+      border-width: 2px;
+      border-radius: 6px;
+      font-size: clamp(0.95rem, 3vw, 1.55rem);
+      box-shadow: inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .board-cell .marketplace-item .tile-points {
+      right: 0.14rem;
+      bottom: 0.12rem;
+      font-size: clamp(0.42rem, 1.05vw, 0.56rem);
+    }
+
+    .marketplace-item.sortable-drag,
+    .marketplace-item.sortable-ghost {
+      width: calc((var(--play-width) - 10px) / 9);
+      height: calc((var(--play-width) - 10px) / 9);
+      display: grid;
+      place-items: center;
+      gap: 0;
+      align-content: center;
+    }
+
+    .marketplace-item.sortable-drag .tile,
+    .marketplace-item.sortable-ghost .tile {
+      width: calc(100% - 6px);
+      max-width: 100%;
+      border-width: 2px;
+      border-radius: 6px;
+      font-size: clamp(0.95rem, 3vw, 1.55rem);
+      box-shadow: inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .marketplace-item.sortable-drag .tile-points,
+    .marketplace-item.sortable-ghost .tile-points {
+      right: 0.14rem;
+      bottom: 0.12rem;
+      font-size: clamp(0.42rem, 1.05vw, 0.56rem);
+    }
+
+    .marketplace-enter-1,
+    .marketplace-enter-2,
+    .marketplace-enter-3,
+    .marketplace-enter-4 {
+      will-change: transform, opacity;
+      animation-delay: var(--marketplace-delay, 0ms);
+    }
+
+    .marketplace-enter-1 {
+      animation: marketplace-slide-in-low 620ms cubic-bezier(0.18, 0.84, 0.34, 1) both;
+    }
+
+    .marketplace-enter-2 {
+      animation: marketplace-slide-in-high 660ms cubic-bezier(0.2, 0.82, 0.32, 1) both;
+    }
+
+    .marketplace-enter-3 {
+      animation: marketplace-slide-in-tilt-left 640ms cubic-bezier(0.18, 0.84, 0.34, 1) both;
+    }
+
+    .marketplace-enter-4 {
+      animation: marketplace-slide-in-tilt-right 680ms cubic-bezier(0.2, 0.82, 0.32, 1) both;
     }
 
     .tile:active {
@@ -1169,6 +1280,62 @@
       }
     }
 
+    @keyframes marketplace-slide-in-low {
+      0% {
+        opacity: 0;
+        transform: translate(var(--marketplace-enter-x), 0.45rem) rotate(-7deg);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes marketplace-slide-in-high {
+      0% {
+        opacity: 0;
+        transform: translate(var(--marketplace-enter-x), -0.4rem) rotate(8deg);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes marketplace-slide-in-tilt-left {
+      0% {
+        opacity: 0;
+        transform: translate(var(--marketplace-enter-x), 0) rotate(-13deg);
+      }
+
+      58% {
+        transform: translate(-0.15rem, 0) rotate(4deg);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
+    @keyframes marketplace-slide-in-tilt-right {
+      0% {
+        opacity: 0;
+        transform: translate(var(--marketplace-enter-x), 0) rotate(13deg);
+      }
+
+      58% {
+        transform: translate(0.15rem, 0) rotate(-4deg);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg);
+      }
+    }
+
     @keyframes rainbow-tile-flow {
       0% {
         background-position: 0% 50%;
@@ -1214,19 +1381,23 @@
       font-size: clamp(0.42rem, 1.05vw, 0.56rem);
     }
 
+    html.has-stored-player body main,
     body.has-player main {
       align-content: start;
       gap: 0.75rem;
       padding-top: clamp(0.85rem, 2vw, 1.35rem);
     }
 
+    html.has-stored-player body .masthead,
     body.has-player .masthead {
+      width: var(--play-width);
       row-gap: 0;
       column-gap: 1rem;
     }
 
+    html.has-stored-player body .brand,
     body.has-player .brand {
-      font-size: clamp(1.65rem, 4vw, 2.85rem);
+      font-size: 2.2rem;
       margin-bottom: 0;
     }
 
@@ -1501,7 +1672,7 @@
     @media (max-width: 520px) {
       main {
         width: 100%;
-        padding-inline: 0.75rem;
+        padding-inline: 0.5rem;
       }
 
       .masthead {
@@ -1518,15 +1689,18 @@
         font-size: clamp(2.7rem, 17vw, 4.6rem);
       }
 
+      html.has-stored-player body .masthead,
       body.has-player .masthead {
         grid-template-columns: minmax(0, 1fr) auto;
       }
 
+      html.has-stored-player body .brand,
       body.has-player .brand {
         justify-self: start;
-        font-size: clamp(1.45rem, 8vw, 2.2rem);
+        font-size: 2.2rem;
       }
 
+      html.has-stored-player body .game-controls,
       body.has-player .game-controls {
         justify-self: end;
       }
@@ -1548,6 +1722,11 @@
       }
     }
   </style>
+  <script>
+    if (document.cookie.split("; ").some((entry) => entry.startsWith("wordwefterPlayerName="))) {
+      document.documentElement.classList.add("has-stored-player");
+    }
+  </script>
 </head>
 <body class="screen-welcome">
   <main aria-label="WordWefter home">
@@ -1630,7 +1809,6 @@
 
     <section class="rules-page" aria-label="WordWefter rules">
       <div class="rules-hero">
-        <p class="rules-kicker">Scoring guide</p>
         <h2 class="section-title">Rules</h2>
       </div>
       <div class="rules-grid">
@@ -1727,11 +1905,12 @@
           <h3>Buying Tiles</h3>
           <p>The marketplace is shared by all players. Buy a tile by dragging it to your rack or directly to the board.</p>
           <ul>
-            <li>Price is 50 minus the tile point value.</li>
+            <li>Your first marketplace tile costs 5 points.</li>
+            <li>Your next costs are 10, 15, 25, 40, and so on.</li>
+            <li>Each player's purchase count is tracked separately.</li>
             <li>You can only spend finalized score.</li>
             <li>You cannot buy below zero.</li>
           </ul>
-          <p class="rules-equation">Z34 costs 16. E1 costs 49.</p>
         </article>
         <article class="rules-card">
           <h3>Wild Tiles</h3>
@@ -1767,7 +1946,9 @@
 
     <section class="game-area" aria-label="Game board">
       <div class="marketplace-wrap" aria-label="Tile marketplace">
-        <div class="marketplace" id="marketplace" aria-label="Tile marketplace"></div>
+        <div class="marketplace" id="marketplace" aria-label="Tile marketplace">
+          <div class="marketplace-cost-badge" aria-label="Marketplace tile cost">Cost: <span id="marketplace-cost">5</span> points</div>
+        </div>
       </div>
       <div class="board" id="board" aria-label="9 by 9 board"></div>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>

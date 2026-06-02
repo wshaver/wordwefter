@@ -74,6 +74,10 @@ class WordWefterGameState {
     this.boardBonuses = new Map();
     this.marketplaceTiles = [];
     this.activePlacements = new Map();
+    this.pendingMarketplacePurchaseTileIds = new Set();
+    this.pendingMarketplacePurchasePlayerIndex = null;
+    this.pendingMarketplacePurchaseCountStart = null;
+    this.pendingMarketplacePurchaseScoreStart = null;
     this.nextTileId = 1;
     this.flashActivePlacements = false;
   }
@@ -95,6 +99,7 @@ class WordWefterGameState {
     return uniqueNames.map((name) => ({
       name,
       score: 0,
+      marketplacePurchaseCount: 0,
       rack: []
     }));
   }
@@ -275,11 +280,20 @@ class WordWefterGameState {
   drawMarketplaceTiles(tileCount = 7) {
     const drawnTiles = [];
 
-    while (this.marketplaceTiles.length < tileCount && this.tilesRemaining > 0) {
+    while (
+      (this.marketplaceTiles.length < tileCount || this.marketplaceTiles.some((tile) => !tile)) &&
+      this.tilesRemaining > 0
+    ) {
       const tile = this.drawTile();
 
       if (tile) {
-        this.marketplaceTiles.push(tile);
+        const emptyIndex = this.marketplaceTiles.findIndex((marketplaceTile) => !marketplaceTile);
+
+        if (emptyIndex === -1) {
+          this.marketplaceTiles.push(tile);
+        } else {
+          this.marketplaceTiles[emptyIndex] = tile;
+        }
         drawnTiles.push(tile);
       }
     }
@@ -343,18 +357,50 @@ class WordWefterGameState {
     return this.drawSevenTiles();
   }
 
-  canBuyTile(tileId) {
-    const tile = this.marketplaceTiles.find((marketplaceTile) => marketplaceTile.id === tileId);
-
-    return Boolean(tile) && this.currentScore > 0 && this.currentScore >= this.getTilePrice(tile);
+  getMarketplaceTileCost(player = this.player) {
+    return this.getMarketplaceTileCostForPurchaseCount(player?.marketplacePurchaseCount || 0);
   }
 
-  getTilePrice(tile) {
-    return Math.max(0, 50 - Number(tile?.points || 0));
+  getMarketplaceTileCostForPurchaseCount(purchaseCountValue) {
+    const purchaseCount = Math.max(0, Number(purchaseCountValue || 0));
+    let previousCost = 5;
+    let currentCost = 10;
+
+    if (purchaseCount === 0) {
+      return previousCost;
+    }
+
+    if (purchaseCount === 1) {
+      return currentCost;
+    }
+
+    for (let index = 2; index <= purchaseCount; index += 1) {
+      const nextCost = previousCost + currentCost;
+
+      previousCost = currentCost;
+      currentCost = nextCost;
+    }
+
+    return currentCost;
+  }
+
+  canBuyTile(tileId) {
+    const tile = this.marketplaceTiles.find((marketplaceTile) => marketplaceTile?.id === tileId);
+
+    return Boolean(tile) && this.currentScore >= this.getMarketplaceTileCost();
+  }
+
+  beginMarketplacePurchaseTurn() {
+    if (this.pendingMarketplacePurchasePlayerIndex !== this.currentPlayerIndex) {
+      this.pendingMarketplacePurchaseTileIds.clear();
+      this.pendingMarketplacePurchasePlayerIndex = this.currentPlayerIndex;
+      this.pendingMarketplacePurchaseCountStart = Math.max(0, Number(this.player.marketplacePurchaseCount || 0));
+      this.pendingMarketplacePurchaseScoreStart = Number(this.currentScore || 0);
+    }
   }
 
   buyMarketplaceTile(tileId) {
-    const tileIndex = this.marketplaceTiles.findIndex((tile) => tile.id === tileId);
+    const tileIndex = this.marketplaceTiles.findIndex((tile) => tile?.id === tileId);
 
     if (tileIndex === -1) {
       return null;
@@ -366,11 +412,204 @@ class WordWefterGameState {
       return null;
     }
 
-    this.currentScore -= this.getTilePrice(tile);
-    this.marketplaceTiles.splice(tileIndex, 1);
-    this.drawMarketplaceTiles();
+    this.beginMarketplacePurchaseTurn();
+    const marketplaceCost = this.getMarketplaceTileCost();
 
-    return tile;
+    this.currentScore -= marketplaceCost;
+    this.player.marketplacePurchaseCount = Math.max(0, Number(this.player.marketplacePurchaseCount || 0)) + 1;
+    this.marketplaceTiles[tileIndex] = null;
+    this.pendingMarketplacePurchaseTileIds.add(tile.id);
+
+    return {
+      ...tile,
+      pendingMarketplace: true,
+      marketplaceIndex: tileIndex,
+      marketplaceCost
+    };
+  }
+
+  stripPendingMarketplaceTile(tile) {
+    const {
+      pendingMarketplace,
+      marketplaceIndex,
+      marketplaceCost,
+      ...cleanTile
+    } = tile;
+
+    return cleanTile;
+  }
+
+  getMarketplaceTileForRack(tile) {
+    const cleanTile = this.stripPendingMarketplaceTile(tile);
+    return {
+      id: cleanTile.id,
+      letter: cleanTile.letter,
+      points: cleanTile.points,
+      frequency: cleanTile.frequency,
+      ...(cleanTile.wildcard ? { wildcard: true } : {}),
+      ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
+      ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {})
+    };
+  }
+
+  returnPendingMarketplaceTile(tile) {
+    if (!tile?.pendingMarketplace) {
+      return false;
+    }
+
+    const cleanTile = this.stripPendingMarketplaceTile(tile);
+    const preferredIndex = Number(tile.marketplaceIndex);
+
+    if (
+      Number.isInteger(preferredIndex) &&
+      preferredIndex >= 0 &&
+      preferredIndex < Math.max(7, this.marketplaceTiles.length) &&
+      !this.marketplaceTiles[preferredIndex]
+    ) {
+      this.marketplaceTiles[preferredIndex] = cleanTile;
+    } else {
+      const emptyIndex = this.marketplaceTiles.findIndex((marketplaceTile) => !marketplaceTile);
+
+      if (emptyIndex === -1) {
+        this.marketplaceTiles.push(cleanTile);
+      } else {
+        this.marketplaceTiles[emptyIndex] = cleanTile;
+      }
+    }
+
+    this.pendingMarketplacePurchaseTileIds.delete(tile.id);
+    this.syncPendingMarketplacePurchaseTotals();
+    return true;
+  }
+
+  getPendingMarketplaceTiles() {
+    return [
+      ...this.currentRack.filter((tile) => tile.pendingMarketplace),
+      ...Array.from(this.activePlacements.values()).filter((tile) => tile.pendingMarketplace)
+    ];
+  }
+
+  syncPendingMarketplacePurchaseTotals() {
+    if (
+      this.pendingMarketplacePurchasePlayerIndex !== this.currentPlayerIndex ||
+      !Number.isInteger(this.pendingMarketplacePurchaseCountStart) ||
+      !Number.isFinite(this.pendingMarketplacePurchaseScoreStart)
+    ) {
+      return;
+    }
+
+    const pendingTiles = this.getPendingMarketplaceTiles()
+      .sort((first, second) => Math.max(0, Number(first.marketplaceCost || 0)) - Math.max(0, Number(second.marketplaceCost || 0)));
+    const pendingCost = pendingTiles.reduce((total, tile, index) => {
+      const marketplaceCost = this.getMarketplaceTileCostForPurchaseCount(this.pendingMarketplacePurchaseCountStart + index);
+
+      tile.marketplaceCost = marketplaceCost;
+      return total + marketplaceCost;
+    }, 0);
+
+    this.player.marketplacePurchaseCount = this.pendingMarketplacePurchaseCountStart + pendingTiles.length;
+    this.currentScore = this.pendingMarketplacePurchaseScoreStart - pendingCost;
+  }
+
+  returnPendingMarketplaceTileFromRack(tileId) {
+    const rackIndex = this.currentRack.findIndex((tile) => tile.id === tileId && tile.pendingMarketplace);
+
+    if (rackIndex === -1) {
+      return false;
+    }
+
+    const [tile] = this.currentRack.splice(rackIndex, 1);
+    return this.returnPendingMarketplaceTile(tile);
+  }
+
+  returnPendingMarketplaceTileFromBoard(tileId) {
+    const existingKey = this.findActiveTileKeyById(tileId);
+
+    if (!existingKey) {
+      return false;
+    }
+
+    const tile = this.activePlacements.get(existingKey);
+
+    if (!tile?.pendingMarketplace) {
+      return false;
+    }
+
+    this.activePlacements.delete(existingKey);
+    this.flashActivePlacements = false;
+    return this.returnPendingMarketplaceTile(tile);
+  }
+
+  returnPendingMarketplaceTileToMarketplace(tileId) {
+    return this.returnPendingMarketplaceTileFromRack(tileId) ||
+      this.returnPendingMarketplaceTileFromBoard(tileId);
+  }
+
+  hasPendingMarketplacePurchases() {
+    return this.pendingMarketplacePurchaseTileIds.size > 0 ||
+      this.currentRack.some((tile) => tile.pendingMarketplace) ||
+      Array.from(this.activePlacements.values()).some((tile) => tile.pendingMarketplace);
+  }
+
+  commitMarketplacePurchases() {
+    this.currentRack = this.currentRack.map((tile) => (
+      tile.pendingMarketplace ? this.getMarketplaceTileForRack(tile) : tile
+    ));
+    this.activePlacements = new Map(Array.from(this.activePlacements.entries()).map(([cellKey, tile]) => [
+      cellKey,
+      tile.pendingMarketplace ? {
+        ...this.stripPendingMarketplaceTile(tile),
+        row: tile.row,
+        column: tile.column,
+        active: tile.active
+      } : tile
+    ]));
+    this.pendingMarketplacePurchaseTileIds.clear();
+    this.pendingMarketplacePurchasePlayerIndex = null;
+    this.pendingMarketplacePurchaseCountStart = null;
+    this.pendingMarketplacePurchaseScoreStart = null;
+    this.drawMarketplaceTiles();
+  }
+
+  resetMarketplacePurchases() {
+    if (!this.hasPendingMarketplacePurchases()) {
+      return;
+    }
+
+    this.currentRack = this.currentRack.filter((tile) => {
+      if (tile.pendingMarketplace) {
+        this.returnPendingMarketplaceTile(tile);
+        return false;
+      }
+
+      return true;
+    });
+
+    Array.from(this.activePlacements.entries()).forEach(([cellKey, tile]) => {
+      if (tile.pendingMarketplace) {
+        this.activePlacements.delete(cellKey);
+        this.returnPendingMarketplaceTile(tile);
+      }
+    });
+
+    if (
+      this.pendingMarketplacePurchasePlayerIndex === this.currentPlayerIndex &&
+      Number.isInteger(this.pendingMarketplacePurchaseCountStart)
+    ) {
+      this.player.marketplacePurchaseCount = this.pendingMarketplacePurchaseCountStart;
+    }
+
+    if (
+      this.pendingMarketplacePurchasePlayerIndex === this.currentPlayerIndex &&
+      Number.isFinite(this.pendingMarketplacePurchaseScoreStart)
+    ) {
+      this.currentScore = this.pendingMarketplacePurchaseScoreStart;
+    }
+
+    this.pendingMarketplacePurchaseTileIds.clear();
+    this.pendingMarketplacePurchasePlayerIndex = null;
+    this.pendingMarketplacePurchaseCountStart = null;
+    this.pendingMarketplacePurchaseScoreStart = null;
   }
 
   drawTile() {
@@ -411,6 +650,7 @@ class WordWefterGameState {
     this.players = this.players.map((player) => ({
       name: player.name,
       score: 0,
+      marketplacePurchaseCount: 0,
       rack: []
     }));
     this.currentPlayerIndex = 0;
@@ -424,6 +664,10 @@ class WordWefterGameState {
     this.boardBonuses = this.createBoardBonuses();
     this.marketplaceTiles = [];
     this.activePlacements = new Map();
+    this.pendingMarketplacePurchaseTileIds.clear();
+    this.pendingMarketplacePurchasePlayerIndex = null;
+    this.pendingMarketplacePurchaseCountStart = null;
+    this.pendingMarketplacePurchaseScoreStart = null;
     this.nextTileId = 1;
     this.flashActivePlacements = false;
     this.drawMarketplaceTiles();
@@ -581,6 +825,9 @@ class WordWefterGameState {
       ...(tile.wildcard ? { wildcard: true } : {}),
       ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
       ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
+      ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
+      ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
+      ...(Number.isFinite(tile.marketplaceCost) ? { marketplaceCost: tile.marketplaceCost } : {}),
       ...(Number.isInteger(tile.row) ? { row: tile.row } : {}),
       ...(Number.isInteger(tile.column) ? { column: tile.column } : {})
     };
@@ -627,6 +874,9 @@ class WordWefterGameState {
       players: this.players.map((player) => ({
         name: player.name,
         score: player.score,
+        ...(Number(player.marketplacePurchaseCount) > 0 ? {
+          marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0))
+        } : {}),
         rack: player.rack.map((tile) => this.serializeTile(tile))
       })),
       lettersAvailable: { ...this.lettersAvailable },
@@ -642,7 +892,7 @@ class WordWefterGameState {
           .map(([cellKey, bonus]) => this.serializeBonus(bonus, cellKey))
       } : {}),
       ...(this.marketplaceTiles.length > 0 ? {
-        marketplaceTiles: this.marketplaceTiles.map((tile) => this.serializeTile(tile))
+        marketplaceTiles: this.marketplaceTiles.filter(Boolean).map((tile) => this.serializeTile(tile))
       } : {}),
       ...(this.activePlacements.size > 0 ? {
         activePlacements: this.mapToTileArray(this.activePlacements).map((tile) => this.serializeTile(tile))
@@ -760,6 +1010,9 @@ class WordWefterGameState {
         ...(wildcard ? { wildcard: true } : {}),
         ...(!wildcard && tile.rainbow ? { rainbow: true } : {}),
         ...(tile.sourceLetter ? { sourceLetter: String(tile.sourceLetter).toUpperCase() } : {}),
+        ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
+        ...(Number.isInteger(Number(tile.marketplaceIndex)) ? { marketplaceIndex: Number(tile.marketplaceIndex) } : {}),
+        ...(Number.isFinite(Number(tile.marketplaceCost)) ? { marketplaceCost: Number(tile.marketplaceCost) } : {}),
         ...(Number.isInteger(Number(tile.row)) ? { row: Number(tile.row) } : {}),
         ...(Number.isInteger(Number(tile.column)) ? { column: Number(tile.column) } : {})
       };
@@ -834,6 +1087,7 @@ class WordWefterGameState {
       return {
         name,
         score: Number(player.score || 0),
+        marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0)),
         rack: previousRack
           ? this.preserveRackOrderIfLettersMatch(hydratedRack, previousRack)
           : hydratedRack
@@ -858,6 +1112,10 @@ class WordWefterGameState {
       : 0;
     this.discardedTiles = (source.discardedTiles || []).map(hydrateTile);
     this.boardTiles = hydrateTileMap(source.boardTiles, false);
+    this.pendingMarketplacePurchaseTileIds = new Set();
+    this.pendingMarketplacePurchasePlayerIndex = null;
+    this.pendingMarketplacePurchaseCountStart = null;
+    this.pendingMarketplacePurchaseScoreStart = null;
     this.boardBonuses = new Map();
     (source.boardBonuses || []).forEach((bonus) => {
       const row = Number(bonus.row);
@@ -1240,7 +1498,10 @@ class WordWefterGameState {
       frequency: tile.frequency,
       ...(tile.wildcard ? { wildcard: true } : {}),
       ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
-      ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {})
+      ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
+      ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
+      ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
+      ...(Number.isFinite(tile.marketplaceCost) ? { marketplaceCost: tile.marketplaceCost } : {})
     });
     this.flashActivePlacements = false;
 
@@ -1306,16 +1567,24 @@ class WordWefterGameState {
   }
 
   resetActivePlacements() {
-    this.currentRack.push(...Array.from(this.activePlacements.values()).map((tile) => ({
-      id: tile.id,
-      letter: tile.letter,
-      points: tile.points,
-      frequency: tile.frequency,
-      ...(tile.wildcard ? { wildcard: true } : {}),
-      ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
-      ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {})
-    })));
+    Array.from(this.activePlacements.values()).forEach((tile) => {
+      if (tile.pendingMarketplace) {
+        this.returnPendingMarketplaceTile(tile);
+        return;
+      }
+
+      this.currentRack.push({
+        id: tile.id,
+        letter: tile.letter,
+        points: tile.points,
+        frequency: tile.frequency,
+        ...(tile.wildcard ? { wildcard: true } : {}),
+        ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
+        ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {})
+      });
+    });
     this.activePlacements.clear();
+    this.resetMarketplacePurchases();
   }
 
   getBoardWords() {
@@ -1780,16 +2049,19 @@ class WordWefterGameState {
       const stack = existingBoardTile
         ? this.getTileStack(existingBoardTile).map((stackTile) => ({ ...stackTile }))
         : [];
+      const cleanTile = tile.pendingMarketplace
+        ? this.stripPendingMarketplaceTile(tile)
+        : tile;
       const committedTile = {
-        id: tile.id,
-        letter: tile.letter,
-        points: tile.points,
-        frequency: tile.frequency,
-        ...(tile.wildcard ? { wildcard: true } : {}),
-        ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
-        ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
-        row: tile.row,
-        column: tile.column,
+        id: cleanTile.id,
+        letter: cleanTile.letter,
+        points: cleanTile.points,
+        frequency: cleanTile.frequency,
+        ...(cleanTile.wildcard ? { wildcard: true } : {}),
+        ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
+        ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {}),
+        row: cleanTile.row,
+        column: cleanTile.column,
         active: false
       };
 
@@ -1840,6 +2112,7 @@ let lastTurnNotificationKey = "";
 let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
 let loadingGameFromURL = false;
+let marketplaceRenderTimer = null;
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
@@ -1853,6 +2126,10 @@ function createTileElement(tile, options = {}) {
   tileElement.className = "tile";
   tileElement.dataset.tileId = tile.id;
   tileElement.dataset.tileSource = options.source || "rack";
+  if (tile.pendingMarketplace) {
+    tileElement.dataset.marketplacePending = "true";
+    tileElement.classList.add("tile-marketplace-pending");
+  }
   if (tile.letter === wildcardLetter) {
     letterElement.className = "material-symbols-outlined tile-wild-symbol";
     letterElement.textContent = "asterisk";
@@ -2114,42 +2391,77 @@ function renderRack(options = {}) {
   }
 }
 
-function renderMarketplace() {
+function animateMarketplaceEnter() {
+  document.querySelectorAll("#marketplace .marketplace-item").forEach((itemElement, index) => {
+    itemElement.style.setProperty("--marketplace-enter-x", `${index % 2 === 0 ? "-115%" : "115%"}`);
+    itemElement.style.setProperty("--marketplace-delay", `${Math.min(index * 120, 720)}ms`);
+    itemElement.classList.add(`marketplace-enter-${(index % 4) + 1}`);
+    window.setTimeout(() => {
+      itemElement.classList.remove("marketplace-enter-1", "marketplace-enter-2", "marketplace-enter-3", "marketplace-enter-4");
+      itemElement.style.removeProperty("--marketplace-enter-x");
+      itemElement.style.removeProperty("--marketplace-delay");
+    }, 1460);
+  });
+}
+
+function renderMarketplace(options = {}) {
   const marketplace = document.querySelector("#marketplace");
-  const loggedInPlayer = getLoggedInPlayer();
-  const loggedInPlayerScore = Number(loggedInPlayer?.score || 0);
+  const marketplaceCostBadge = document.querySelector(".marketplace-cost-badge");
+  const marketplaceCostElement = document.querySelector("#marketplace-cost");
 
   if (!marketplace) {
     return;
   }
 
-  marketplace.replaceChildren();
+  window.clearTimeout(marketplaceRenderTimer);
+  marketplaceRenderTimer = null;
+
+  if (Number.isFinite(options.delayMs) && options.delayMs > 0) {
+    marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
+    marketplaceRenderTimer = window.setTimeout(() => {
+      renderMarketplace({
+        enter: options.enter
+      });
+    }, options.delayMs);
+    return;
+  }
+
+  if (marketplaceCostElement) {
+    marketplaceCostElement.textContent = gameState.getMarketplaceTileCost();
+  }
+
+  marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
 
   gameState.marketplaceTiles.forEach((tile) => {
     const itemElement = document.createElement("div");
-    const priceElement = document.createElement("span");
-    const tilePrice = gameState.getTilePrice(tile);
-    const isTooExpensive = Boolean(loggedInPlayer) && tilePrice > loggedInPlayerScore;
-    const canBuy = isMyTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
 
     itemElement.className = "marketplace-item";
+    if (!tile) {
+      itemElement.classList.add("marketplace-item-empty");
+      marketplace.append(itemElement);
+      return;
+    }
+
+    const canBuy = isMyTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
+
     itemElement.dataset.tileId = tile.id;
     itemElement.dataset.tileSource = "marketplace";
     itemElement.classList.toggle("tile-movable", canBuy);
-    priceElement.className = "marketplace-price";
-    priceElement.classList.toggle("marketplace-price-expensive", isTooExpensive);
-    priceElement.textContent = tilePrice;
     itemElement.append(createTileElement(tile, {
       movable: canBuy,
       source: "marketplace"
-    }), priceElement);
+    }));
     marketplace.append(itemElement);
   });
+
+  if (options.enter) {
+    animateMarketplaceEnter();
+  }
 }
 
 function updatePlacementControls() {
   const canPlay = isMyTurn() && !gameState.gameOver;
-  const hasActivePlacements = gameState.hasActivePlacements();
+  const hasActivePlacements = gameState.hasActivePlacements() || gameState.hasPendingMarketplacePurchases();
 
   document.body.classList.toggle("has-active-placement", canPlay && hasActivePlacements);
   document.body.classList.toggle("is-my-turn", canPlay);
@@ -2284,7 +2596,10 @@ function renderGame(options = {}) {
     redrawEnter: options.rackRedrawEnter,
     shuffleRects: options.rackShuffleRects
   });
-  renderMarketplace();
+  renderMarketplace({
+    delayMs: options.marketplaceDelayMs,
+    enter: options.marketplaceEnter
+  });
   updatePlacementControls();
   renderScore();
   renderGameStateJSON();
@@ -2929,6 +3244,26 @@ function refreshTurnStateSoon() {
   }, 0);
 }
 
+function getGameListTouchedTime(game) {
+  const candidates = [
+    game.lastPlayDate,
+    game.updatedAt,
+    game.modifiedAt,
+    game.savedAt,
+    game.startDate
+  ];
+
+  for (const candidate of candidates) {
+    const timestamp = Date.parse(candidate);
+
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return Number(game.turnIndex || 0);
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -2945,9 +3280,21 @@ async function loadActiveGames() {
 
   try {
     const payload = await fetchJSON(`${serverURL}?action=list`);
-    const matchingGames = (payload.games || []).filter((game) => (
-      (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey)
-    ));
+    const matchingGames = (payload.games || [])
+      .filter((game) => (
+        (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey)
+      ))
+      .map((game) => ({
+        ...game,
+        isWaitingForStoredPlayer: !game.gameOver && normalizeNameKey(game.currentPlayerName) === storedPlayerKey
+      }))
+      .sort((firstGame, secondGame) => {
+        if (firstGame.isWaitingForStoredPlayer !== secondGame.isWaitingForStoredPlayer) {
+          return firstGame.isWaitingForStoredPlayer ? -1 : 1;
+        }
+
+        return getGameListTouchedTime(secondGame) - getGameListTouchedTime(firstGame);
+      });
 
     activeGamesList.replaceChildren();
 
@@ -2975,6 +3322,7 @@ async function loadActiveGames() {
       const resumeButton = document.createElement("button");
 
       row.className = "active-game-row";
+      row.classList.toggle("waiting-player", game.isWaitingForStoredPlayer);
       row.dataset.gameId = game.id;
       idElement.className = "active-game-id";
       detailsElement.className = "active-game-players";
@@ -3124,7 +3472,11 @@ async function startNewGame() {
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage("");
-  renderGame({ rackRedrawEnter: true });
+  renderGame({
+    marketplaceDelayMs: 2000,
+    marketplaceEnter: true,
+    rackRedrawEnter: true
+  });
 
   try {
     await saveGameState();
@@ -3231,6 +3583,7 @@ async function finishPlacement() {
     setGameMessage(result.placementError || `Not in dictionary: ${result.invalidWords.join(", ")}`);
     renderGame();
   } else if (result && result.isValid) {
+    gameState.commitMarketplacePurchases();
     const advanceResult = gameState.advanceTurn();
 
     gameState.advanceTurnIndex();
@@ -3376,12 +3729,6 @@ function initializeRackSortable() {
         if (gameState.moveMarketplaceTileToRack(event.item.dataset.tileId, event.newIndex)) {
           setGameMessage("");
           renderGame();
-
-          saveGameState()
-            .then(loadActiveGames)
-            .catch((error) => {
-              setGameMessage(`Tile bought, but could not save: ${error.message}`);
-            });
           return;
         }
 
@@ -3421,7 +3768,22 @@ function initializeMarketplaceSortable() {
     group: {
       name: "wordwefter-tiles",
       pull: "clone",
-      put: false
+      put(to, from, dragElement) {
+        return dragElement?.dataset?.marketplacePending === "true";
+      }
+    },
+    onStart(event) {
+      event.item.classList.add("marketplace-item-source-empty");
+    },
+    onEnd(event) {
+      event.item.classList.remove("marketplace-item-source-empty");
+    },
+    onAdd(event) {
+      if (gameState.returnPendingMarketplaceTileToMarketplace(event.item.dataset.tileId)) {
+        setGameMessage("");
+      }
+
+      renderGame();
     }
   });
 }
@@ -3466,14 +3828,6 @@ function initializeBoardSortables() {
         }
 
         renderGame();
-
-        if (wasPlaced && tileSource === "marketplace") {
-          saveGameState()
-            .then(loadActiveGames)
-            .catch((error) => {
-              setGameMessage(`Tile bought, but could not save: ${error.message}`);
-            });
-        }
       }
     });
 
