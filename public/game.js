@@ -2740,6 +2740,14 @@ function getVisibleRack() {
   return getLoggedInPlayer()?.rack || gameState.currentRack;
 }
 
+function getPlayerRackFromState(source, playerName) {
+  const playerKey = normalizeNameKey(playerName);
+
+  return (source?.players || [])
+    .find((player) => normalizeNameKey(player.name) === playerKey)
+    ?.rack || [];
+}
+
 function moveVisibleRackTile(tileId, targetIndex) {
   const visibleRack = getVisibleRack();
   const sourceIndex = visibleRack.findIndex((tile) => tile.id === tileId);
@@ -3282,12 +3290,29 @@ async function pollActiveGameState() {
 
     const changedCellKeys = getChangedBoardCellKeys(payload.gameState);
     const wasMyTurn = isMyTurn();
+    const storedPlayerName = getStoredPlayerName();
+    const previousVisibleRack = getVisibleRack();
+    const nextVisibleRack = getPlayerRackFromState(payload.gameState, storedPlayerName);
+    const visibleRackTileSetChanged = !gameState.rackTileSetsMatch(previousVisibleRack, nextVisibleRack);
 
     remotePlayedCellKeys = new Set(changedCellKeys);
     gameState.loadFromJSON(payload.gameState);
     const becameMyTurn = !wasMyTurn && isMyTurn();
+    const shouldRenderRefresh = becameMyTurn ||
+      changedCellKeys.length > 0 ||
+      visibleRackTileSetChanged ||
+      gameState.gameOver ||
+      gameState.hasActivePlacements() ||
+      gameState.hasPendingMarketplacePurchases();
 
-    renderGame();
+    if (shouldRenderRefresh) {
+      renderGame();
+    } else {
+      updatePlacementControls();
+      renderScore();
+      updateTurnPolling();
+    }
+
     notifyIfMyTurn({ becameMyTurn });
 
     if (changedCellKeys.length > 0) {
@@ -3360,6 +3385,20 @@ function getTurnDisplayNumber(turnIndex) {
   return Math.max(1, Number(turnIndex || 0) + 1);
 }
 
+function getGameListPlayerSummaries(game) {
+  if (Array.isArray(game.players) && game.players.length > 0) {
+    return game.players.map((player) => ({
+      name: String(player?.name || "Player"),
+      score: Number(player?.score || 0)
+    }));
+  }
+
+  return (game.playerNames || []).map((name) => ({
+    name,
+    score: null
+  }));
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -3412,8 +3451,9 @@ async function loadActiveGames() {
     matchingGames.forEach((game) => {
       const row = document.createElement("div");
       const idElement = document.createElement("span");
+      const gameCodeElement = document.createElement("span");
       const detailsElement = document.createElement("div");
-      const playersElement = document.createElement("span");
+      const playersElement = document.createElement("div");
       const turnElement = document.createElement("span");
       const resumeButton = document.createElement("button");
 
@@ -3421,19 +3461,39 @@ async function loadActiveGames() {
       row.classList.toggle("waiting-player", game.isWaitingForStoredPlayer);
       row.dataset.gameId = game.id;
       idElement.className = "active-game-id";
-      detailsElement.className = "active-game-players";
+      gameCodeElement.textContent = game.id;
+      detailsElement.className = "active-game-details";
+      playersElement.className = "active-game-player-list";
       turnElement.className = "active-game-turn";
       resumeButton.className = "game-button secondary";
       resumeButton.type = "button";
-      idElement.textContent = game.id;
-      playersElement.textContent = (game.playerNames || []).join(", ");
+      idElement.append(gameCodeElement, turnElement);
+      getGameListPlayerSummaries(game).forEach((player) => {
+        const playerElement = document.createElement("span");
+        const playerNameElement = document.createElement("span");
+        const playerPointsElement = document.createElement("span");
+
+        playerElement.className = "active-game-player-score";
+        playerElement.classList.toggle("current-player", normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
+        playerNameElement.className = "active-game-player-name";
+        playerNameElement.textContent = player.name;
+        playerElement.append(playerNameElement);
+
+        if (player.score !== null) {
+          playerPointsElement.className = "active-game-player-points";
+          playerPointsElement.textContent = player.score;
+          playerElement.append(playerPointsElement);
+        }
+
+        playersElement.append(playerElement);
+      });
       turnElement.textContent = game.gameOver
-        ? `Completed: Turn ${getTurnDisplayNumber(game.turnIndex)}`
-        : `Turn ${getTurnDisplayNumber(game.turnIndex)}: ${game.currentPlayerName || "Player"}`;
+        ? `Completed ${getTurnDisplayNumber(game.turnIndex)}`
+        : `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
       resumeButton.textContent = game.gameOver ? "View" : "Resume";
       resumeButton.addEventListener("click", () => resumeGame(game.id));
 
-      detailsElement.append(playersElement, turnElement);
+      detailsElement.append(playersElement);
       row.append(idElement, detailsElement, resumeButton);
       activeGamesList.append(row);
     });
@@ -3777,7 +3837,12 @@ function initializeRackSortable() {
 
   rackSortable = Sortable.create(rack, {
     animation: 120,
+    chosenClass: "sortable-chosen",
     draggable: ".tile-movable",
+    dragClass: "sortable-drag",
+    fallbackClass: "sortable-fallback",
+    forceFallback: true,
+    ghostClass: "sortable-ghost",
     group: {
       name: "wordwefter-tiles",
       pull: canPlay,
@@ -3829,7 +3894,12 @@ function initializeMarketplaceSortable() {
 
   marketplaceSortable = Sortable.create(marketplace, {
     animation: 120,
+    chosenClass: "sortable-chosen",
     draggable: ".marketplace-item",
+    dragClass: "sortable-drag",
+    fallbackClass: "sortable-fallback",
+    forceFallback: true,
+    ghostClass: "sortable-ghost",
     sort: false,
     group: {
       name: "wordwefter-tiles",
@@ -3862,7 +3932,16 @@ function initializeBoardSortables() {
   document.querySelectorAll(".board-cell").forEach((cell) => {
     const sortable = Sortable.create(cell, {
       animation: 120,
+      chosenClass: "sortable-chosen",
       draggable: ".tile-movable",
+      dragClass: "sortable-drag",
+      fallbackClass: "sortable-fallback",
+      forceFallback: true,
+      ghostClass: "sortable-ghost",
+      invertSwap: false,
+      sort: false,
+      swapThreshold: 0.98,
+      emptyInsertThreshold: 3,
       group: {
         name: "wordwefter-tiles",
         pull: true,

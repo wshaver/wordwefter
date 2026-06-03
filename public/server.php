@@ -80,9 +80,16 @@ if ($action === 'list') {
             continue;
         }
 
-        $players = array_values(array_map(
-            static fn(array $player): string => (string) ($player['name'] ?? 'Player'),
+        $playerSummaries = array_values(array_map(
+            static fn(array $player): array => [
+                'name' => (string) ($player['name'] ?? 'Player'),
+                'score' => (int) ($player['score'] ?? 0)
+            ],
             array_filter($state['players'] ?? [], 'is_array')
+        ));
+        $players = array_values(array_map(
+            static fn(array $player): string => $player['name'],
+            $playerSummaries
         ));
         $currentPlayerIndex = (int) ($state['currentPlayerIndex'] ?? 0);
 
@@ -93,6 +100,7 @@ if ($action === 'list') {
             'gameOver' => !empty($state['gameOver']),
             'turnIndex' => turn_index($state),
             'playerNames' => $players,
+            'players' => $playerSummaries,
             'currentPlayerName' => $players[$currentPlayerIndex] ?? ($players[0] ?? '')
         ];
     }

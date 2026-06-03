@@ -42,34 +42,6 @@
       font-family: Georgia, "Times New Roman", serif;
     }
 
-    body.screen-play {
-      background: #dfe3df;
-    }
-
-    body.screen-play.is-my-turn {
-      background:
-        linear-gradient(135deg, rgba(15, 139, 141, 0.34), transparent 36%),
-        linear-gradient(315deg, rgba(107, 176, 92, 0.28), transparent 42%),
-        linear-gradient(45deg, rgba(231, 242, 223, 0.72), transparent 55%),
-        var(--paper);
-      background-size: 180% 180%, 180% 180%, 160% 160%, auto;
-      animation: turn-background-scroll 14s ease-in-out infinite;
-    }
-
-    @keyframes turn-background-scroll {
-      0% {
-        background-position: 0% 50%, 100% 50%, 50% 0%, 0 0;
-      }
-
-      50% {
-        background-position: 100% 50%, 0% 50%, 50% 100%, 0 0;
-      }
-
-      100% {
-        background-position: 0% 50%, 100% 50%, 50% 0%, 0 0;
-      }
-    }
-
     main {
       min-height: 100vh;
       width: min(100vw, 1080px);
@@ -388,10 +360,10 @@
 
     .active-game-row {
       display: grid;
-      grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+      grid-template-columns: 5rem minmax(0, 1fr) auto;
       align-items: center;
-      gap: 0.65rem;
-      padding: 0.55rem 0.65rem;
+      gap: 0.7rem;
+      padding: 0.6rem 0.7rem;
       border: 2px solid rgba(23, 32, 42, 0.22);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.52);
@@ -399,9 +371,7 @@
     }
 
     .active-game-row.waiting-player {
-      border-color: rgba(15, 139, 141, 0.55);
-      background: rgba(15, 139, 141, 0.14);
-      box-shadow: 0.18rem 0.18rem 0 rgba(242, 177, 52, 0.42);
+      background: rgba(255, 255, 255, 0.52);
     }
 
     .active-games-empty {
@@ -429,19 +399,59 @@
     }
 
     .active-game-id {
-      font: 800 1rem/1 system-ui, sans-serif;
+      align-self: center;
+      display: grid;
+      gap: 0.28rem;
+      font: 900 0.95rem/1 system-ui, sans-serif;
       letter-spacing: 0.08em;
     }
 
-    .active-game-players {
-      overflow-wrap: anywhere;
+    .active-game-turn {
+      color: var(--accent);
+      font: 800 0.78rem/1.25 system-ui, sans-serif;
+      letter-spacing: 0;
     }
 
-    .active-game-turn {
-      display: block;
-      margin-top: 0.15rem;
+    .active-game-details {
+      min-width: 0;
+      display: grid;
+      gap: 0.28rem;
+    }
+
+    .active-game-player-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(7rem, max-content));
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+
+    .active-game-player-score {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.25rem;
+      min-width: 0;
+      padding: 0.18rem 0.45rem;
+      border: 1px solid rgba(23, 32, 42, 0.14);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.42);
+      white-space: nowrap;
+    }
+
+    .active-game-player-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .active-game-player-points {
+      font-weight: 900;
+    }
+
+    .active-game-player-score.current-player {
       color: var(--accent);
-      font: 800 0.82rem/1.25 system-ui, sans-serif;
+      font-weight: 900;
+      border-color: rgba(15, 139, 141, 0.28);
+      background: rgba(15, 139, 141, 0.08);
     }
 
     .page-hero,
@@ -630,6 +640,11 @@
       background: rgba(15, 139, 141, 0.24);
     }
 
+    .board-cell > .tile,
+    .board-cell > .marketplace-item {
+      z-index: 3;
+    }
+
     .board-cell-bonus-doubleLetter {
       background: #cceff0;
     }
@@ -712,6 +727,10 @@
       border: 3px solid var(--ink);
       border-radius: 8px;
       background: rgba(23, 32, 42, 0.08);
+    }
+
+    body.screen-play.is-my-turn .rack {
+      background: rgba(15, 139, 141, 0.12);
     }
 
     .marketplace-wrap {
@@ -874,6 +893,11 @@
       border-radius: 7px;
     }
 
+    .marketplace:has(> .tile.sortable-ghost) .marketplace-item-empty {
+      border: 2px solid rgba(23, 32, 42, 0.2);
+      background: rgba(255, 255, 255, 0.34);
+    }
+
     .marketplace-item-source-empty .tile {
       visibility: hidden;
     }
@@ -883,6 +907,18 @@
       max-width: 100%;
       align-self: stretch;
       justify-self: stretch;
+    }
+
+    .marketplace > .tile.sortable-ghost {
+      display: none !important;
+    }
+
+    .marketplace > .tile.sortable-drag,
+    .marketplace > .tile.sortable-fallback {
+      width: calc((var(--play-width) - 10px) / 9);
+      max-width: calc((var(--play-width) - 10px) / 9);
+      align-self: center;
+      justify-self: center;
     }
 
     .board-cell .marketplace-item {
@@ -933,6 +969,68 @@
       right: 0.14rem;
       bottom: 0.12rem;
       font-size: clamp(0.42rem, 1.05vw, 0.56rem);
+    }
+
+    .tile.sortable-drag,
+    .tile.sortable-chosen,
+    .tile.sortable-fallback,
+    .marketplace-item.sortable-drag,
+    .marketplace-item.sortable-chosen,
+    .marketplace-item.sortable-fallback,
+    .marketplace-item.sortable-drag .tile,
+    .marketplace-item.sortable-chosen .tile,
+    .marketplace-item.sortable-fallback .tile {
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    .tile.sortable-ghost,
+    .marketplace-item.sortable-ghost .tile {
+      border-color: rgba(23, 32, 42, 0.22);
+      outline: 0;
+      background: rgba(255, 255, 255, 0.46);
+      color: transparent;
+      text-shadow: none;
+      box-shadow: none;
+      opacity: 1;
+    }
+
+    .board-cell > .tile.sortable-ghost,
+    .board-cell > .marketplace-item.sortable-ghost {
+      position: absolute !important;
+      inset: 3px !important;
+      z-index: 30 !important;
+      width: auto;
+      height: auto;
+      min-width: 0;
+      min-height: 0;
+      margin: 0 !important;
+      pointer-events: none;
+      transform: none !important;
+    }
+
+    .board-cell > .tile.sortable-ghost {
+      width: auto;
+      max-width: 100%;
+      border-width: 2px;
+      border-radius: 6px;
+      font-size: clamp(0.95rem, 3vw, 1.55rem);
+    }
+
+    .board-cell > .tile.sortable-ghost.tile-active-placement,
+    .board-cell > .tile.sortable-ghost.tile-covering-placement {
+      outline: 0;
+      box-shadow: none;
+    }
+
+    .board-cell > .marketplace-item.sortable-ghost {
+      display: grid;
+      place-items: center;
+    }
+
+    .tile.sortable-ghost *,
+    .marketplace-item.sortable-ghost .tile * {
+      visibility: hidden;
     }
 
     .marketplace-enter-1,
@@ -1071,16 +1169,20 @@
 
     .tile-covered-underlay {
       position: absolute;
+      top: calc(3px + 0.18rem);
+      left: calc(3px - 0.18rem);
+      width: calc(100% - 6px);
       z-index: 1;
       opacity: 0.58;
-      transform: translate(-0.18rem, 0.18rem) scale(0.9);
       filter: saturate(0.7);
     }
 
     .tile-covering-placement {
       position: absolute;
+      top: calc(3px - 0.18rem);
+      left: calc(3px + 0.18rem);
+      width: calc(100% - 6px);
       z-index: 2;
-      transform: translate(0.18rem, -0.18rem) scale(0.92);
       box-shadow:
         inset 0 -0.16rem 0 rgba(0, 0, 0, 0.08),
         -0.2rem 0.2rem 0 rgba(23, 32, 42, 0.28);
@@ -1983,6 +2085,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=active-cover-return"></script>
+  <script type="module" src="./game.js?v=market-return-placeholder"></script>
 </body>
 </html>
