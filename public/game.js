@@ -1199,6 +1199,10 @@ class WordWefterGameState {
     return this.boardTiles.size > 0;
   }
 
+  isBoardFullyCovered() {
+    return this.boardTiles.size >= boardSize * boardSize;
+  }
+
   hasActivePlacementOnStartCell() {
     return Array.from(this.activePlacements.values()).some((tile) => (
       this.isStartCell(tile.row, tile.column)
@@ -1593,23 +1597,33 @@ class WordWefterGameState {
     this.resetMarketplacePurchases();
   }
 
-  getBoardWords() {
-    return this.getBoardWordTiles().map((tiles) => tiles.map((tile) => tile.letter).join(""));
+  getVisibleBoardTileAt(row, column) {
+    return this.getTopStackTile(this.boardTiles.get(this.getCellKey(row, column))) || null;
   }
 
-  getBoardWordTiles() {
+  getBoardWords(options = {}) {
+    return this.getBoardWordTiles(options).map((tiles) => tiles.map((tile) => tile.letter).join(""));
+  }
+
+  getBoardWordTiles(options = {}) {
+    const includeActivePlacements = options.includeActivePlacements !== false;
     const wordTiles = [];
     const collectWord = (tiles) => {
       if (tiles.length > 1) {
         wordTiles.push(tiles);
       }
     };
+    const getWordTileAt = (row, column) => (
+      includeActivePlacements
+        ? this.getTileAt(row, column)
+        : this.getVisibleBoardTileAt(row, column)
+    );
 
     for (let row = 0; row < boardSize; row += 1) {
       let currentWordTiles = [];
 
       for (let column = 0; column < boardSize; column += 1) {
-        const tile = this.getTileAt(row, column);
+        const tile = getWordTileAt(row, column);
 
         if (tile) {
           currentWordTiles.push(tile);
@@ -1626,7 +1640,7 @@ class WordWefterGameState {
       let currentWordTiles = [];
 
       for (let row = 0; row < boardSize; row += 1) {
-        const tile = this.getTileAt(row, column);
+        const tile = getWordTileAt(row, column);
 
         if (tile) {
           currentWordTiles.push(tile);
@@ -1640,6 +1654,22 @@ class WordWefterGameState {
     }
 
     return wordTiles;
+  }
+
+  validateStackingLeavesCoveredWordsVisible() {
+    const activeCellKeys = new Set(this.activePlacements.keys());
+    const coveredWords = this.getBoardWordTiles({ includeActivePlacements: false })
+      .filter((tiles) => (
+        tiles.some((tile) => activeCellKeys.has(this.getCellKey(tile.row, tile.column))) &&
+        tiles.every((tile) => activeCellKeys.has(this.getCellKey(tile.row, tile.column)))
+      ));
+
+    return {
+      isValid: coveredWords.length === 0,
+      placementError: coveredWords.length === 0
+        ? ""
+        : "At least one tile of each stacked-on word must remain visible this turn."
+    };
   }
 
   getDictionaryWordsByLength(length) {
@@ -2008,6 +2038,17 @@ class WordWefterGameState {
       };
     }
 
+    const stackingValidation = this.validateStackingLeavesCoveredWordsVisible();
+
+    if (!stackingValidation.isValid) {
+      this.flashActivePlacements = true;
+      return {
+        ...stackingValidation,
+        words: [],
+        invalidWords: []
+      };
+    }
+
     const wildcardResolution = this.getWildcardResolution();
 
     if (!wildcardResolution.isValid) {
@@ -2081,6 +2122,19 @@ class WordWefterGameState {
     this.activePlacements.clear();
     this.flashActivePlacements = false;
     this.currentScore += turnScore;
+
+    if (this.isBoardFullyCovered()) {
+      this.gameOver = true;
+      this.pendingFinalRound = false;
+      this.finalTurnsRemaining = null;
+
+      return {
+        ...validation,
+        turnScore,
+        turnWords
+      };
+    }
+
     const refillTileCount = Math.max(0, 7 - this.currentRack.length);
     const refillTiles = this.drawTiles(refillTileCount);
 
@@ -2128,9 +2182,33 @@ const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
 let tileEnterQueueAvailableAt = 0;
 
-window.WordWefterGameState = WordWefterGameState;
-window.wordWefterGame = gameState;
-window.isWordWefterWord = (word) => gameState.isRealWord(word);
+function exposeWordWefterTestingGlobals() {
+  const testGlobals = {
+    WordWefterGameState,
+    gameState,
+    boardSize,
+    startCell: { ...startCell },
+    wildcardLetter,
+    playableLetters: [...playableLetters],
+    bonusTypes,
+    gameLengthSettings,
+    createGameState: (setup = {}) => new WordWefterGameState(setup),
+    getGameState: () => gameState,
+    isWord: (word) => gameState.isRealWord(word)
+  };
+
+  globalThis.WordWefterGameState = WordWefterGameState;
+  globalThis.wordWefterGame = gameState;
+  globalThis.isWordWefterWord = testGlobals.isWord;
+  globalThis.wordWefterTest = testGlobals;
+
+  document.documentElement.dataset.wordWefterTestReady = "true";
+  document.documentElement.dataset.wordWefterBoardSize = String(boardSize);
+  document.documentElement.dataset.wordWefterStartCell = `${startCell.row},${startCell.column}`;
+  document.documentElement.dataset.wordWefterWildcardLetter = wildcardLetter;
+}
+
+exposeWordWefterTestingGlobals();
 
 function captureTurnStartGameState() {
   turnStartGameStateJSON = JSON.stringify(gameState.toJSON());

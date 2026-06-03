@@ -1982,6 +1982,7 @@
           <h3>Stacking Tiles</h3>
           <p>You may place a tile on top of an existing tile, but each turn must also place at least one tile on an empty square.</p>
           <p>Stacks keep growing. The top tile is the active letter for words.</p>
+          <p>You cannot completely cover an existing word in one turn. At least one tile from each stacked-on word must remain visible.</p>
           <p>The first tile has no stack multiplier. The second tile scores 2x, the third scores 3x, and so on.</p>
           <div class="rules-board-example rules-board-example-stack" aria-hidden="true">
             <div class="board-cell">
@@ -2038,6 +2039,7 @@
           <h3>Ending the Game</h3>
           <p>Game length controls when the final round begins. Short games start it after one third of the tile pool has been drawn, and medium games start it after two thirds.</p>
           <p>Long games keep going until a rack refill cannot draw enough tiles. Once the final round starts, each player gets one last turn, then final scores stand.</p>
+          <p>The game also ends immediately when every board square is covered by at least one tile.</p>
         </article>
       </div>
     </section>
@@ -2099,6 +2101,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=rack-control-alignment"></script>
+  <script type="module" src="./game.js?v=test-globals"></script>
 </body>
 </html>
