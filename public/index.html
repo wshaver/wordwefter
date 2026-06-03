@@ -1589,11 +1589,21 @@
     }
 
     .rack-controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      width: var(--play-width);
       justify-self: center;
       gap: 0.75rem;
+    }
+
+    #redraw-tiles-button,
+    #reset-placement-button {
+      justify-self: start;
+    }
+
+    #finish-placement-button {
+      justify-self: end;
     }
 
     .redraw-confirm {
@@ -1623,6 +1633,10 @@
     }
 
     body.confirm-redraw #redraw-tiles-button {
+      display: none;
+    }
+
+    body.has-active-placement #redraw-tiles-button {
       display: none;
     }
 
@@ -2043,8 +2057,8 @@
         <div class="rack" id="rack" aria-label="Rack"></div>
         <div class="rack-controls" aria-label="Rack controls">
           <button class="game-button redraw-tiles-button" type="button" id="redraw-tiles-button">Redraw Tiles</button>
-          <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
+          <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
         </div>
         <div class="redraw-confirm" id="redraw-confirm" role="status" aria-live="polite">
           <span>Redraw all rack tiles and skip this turn?</span>
@@ -2085,6 +2099,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=market-return-placeholder"></script>
+  <script type="module" src="./game.js?v=rack-control-alignment"></script>
 </body>
 </html>

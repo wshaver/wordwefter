@@ -966,7 +966,7 @@ class WordWefterGameState {
       : serverRack;
   }
 
-  loadFromJSON(gameStateJSON) {
+  loadFromJSON(gameStateJSON, options = {}) {
     const source = typeof gameStateJSON === "string"
       ? JSON.parse(gameStateJSON)
       : gameStateJSON;
@@ -979,10 +979,13 @@ class WordWefterGameState {
       throw new Error("Game state version must be 1.");
     }
 
-    const previousRackByPlayerName = new Map((this.players || []).map((player) => [
-      normalizeNameKey(player.name),
-      player.rack || []
-    ]));
+    const preserveRackOrder = options.preserveRackOrder !== false;
+    const previousRackByPlayerName = preserveRackOrder
+      ? new Map((this.players || []).map((player) => [
+        normalizeNameKey(player.name),
+        player.rack || []
+      ]))
+      : new Map();
 
     this.letterFrequencies = { ...letter_freq };
     this.letterPoints = { ...letter_points };
@@ -2119,6 +2122,7 @@ let marketplaceRenderTimer = null;
 let renderedRackTileIds = new Set();
 let renderedMarketplaceTileIds = new Set();
 let renderedGameId = "";
+let turnStartGameStateJSON = "";
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
@@ -2127,6 +2131,24 @@ let tileEnterQueueAvailableAt = 0;
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
 window.isWordWefterWord = (word) => gameState.isRealWord(word);
+
+function captureTurnStartGameState() {
+  turnStartGameStateJSON = JSON.stringify(gameState.toJSON());
+}
+
+function restoreTurnStartGameState() {
+  if (!turnStartGameStateJSON) {
+    return false;
+  }
+
+  gameState.loadFromJSON(JSON.parse(turnStartGameStateJSON), { preserveRackOrder: false });
+  remotePlayedCellKeys.clear();
+  renderedRackTileIds = getTileIds(getVisibleRack());
+  renderedMarketplaceTileIds = getTileIds(gameState.marketplaceTiles);
+  renderedGameId = gameState.id;
+  tileEnterQueueAvailableAt = 0;
+  return true;
+}
 
 function createTileElement(tile, options = {}) {
   const tileElement = document.createElement("div");
@@ -2165,17 +2187,18 @@ function createTileElement(tile, options = {}) {
     tileElement.classList.add("tile-movable");
   }
 
-  if (options.source === "board" && options.active) {
+  if (tile.pendingMarketplace) {
+    tileElement.addEventListener("dblclick", () => {
+      if (gameState.returnPendingMarketplaceTileToMarketplace(tile.id)) {
+        setGameMessage("");
+        renderGame();
+      }
+    });
+  } else if (options.source === "board" && options.active) {
     tileElement.addEventListener("dblclick", () => {
       if (gameState.moveActiveTileToRack(tile.id)) {
         setGameMessage("");
         renderGame();
-
-        saveGameState()
-          .then(loadActiveGames)
-          .catch((error) => {
-            setGameMessage(`Placement reset, but could not save: ${error.message}`);
-          });
       }
     });
   }
@@ -2674,34 +2697,36 @@ function isRulesURLHash() {
   return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "rules";
 }
 
-function setGameURLGameId(gameId) {
+function setURLHash(hash, options = {}) {
+  if (window.location.hash === hash) {
+    return;
+  }
+
+  const historyMethod = options.replace ? "replaceState" : "pushState";
+
+  window.history[historyMethod](null, "", hash);
+}
+
+function setGameURLGameId(gameId, options = {}) {
   const normalizedGameId = String(gameId || "").trim().toUpperCase();
 
   if (!/^[A-Z0-9]{5}$/.test(normalizedGameId)) {
     return;
   }
 
-  if (window.location.hash !== `#${normalizedGameId}`) {
-    window.history.replaceState(null, "", `#${normalizedGameId}`);
-  }
+  setURLHash(`#${normalizedGameId}`, options);
 }
 
-function setGameListURLHash() {
-  if (window.location.hash !== "#gamelist") {
-    window.history.replaceState(null, "", "#gamelist");
-  }
+function setGameListURLHash(options = {}) {
+  setURLHash("#gamelist", options);
 }
 
-function setNewGameURLHash() {
-  if (window.location.hash !== "#newgame") {
-    window.history.replaceState(null, "", "#newgame");
-  }
+function setNewGameURLHash(options = {}) {
+  setURLHash("#newgame", options);
 }
 
-function setRulesURLHash() {
-  if (window.location.hash !== "#rules") {
-    window.history.replaceState(null, "", "#rules");
-  }
+function setRulesURLHash(options = {}) {
+  setURLHash("#rules", options);
 }
 
 function clearGameURLGameId() {
@@ -3131,7 +3156,7 @@ function showRules(options = {}) {
   setScreen("rules", { clearGameURL: false });
 
   if (options.updateURL !== false) {
-    setRulesURLHash();
+    setRulesURLHash({ replace: options.replaceURL === true });
   }
 }
 
@@ -3147,7 +3172,7 @@ function showNewGameSetup(options = {}) {
     setScreen("setup", { clearGameURL: false });
 
     if (options.updateURL !== false) {
-      setNewGameURLHash();
+      setNewGameURLHash({ replace: options.replaceURL === true });
     }
   });
 }
@@ -3158,7 +3183,7 @@ async function showGameList(options = {}) {
     setScreen("list", { clearGameURL: false });
 
     if (options.updateURL !== false) {
-      setGameListURLHash();
+      setGameListURLHash({ replace: options.replaceURL === true });
     }
 
     await loadActiveGames();
@@ -3297,6 +3322,7 @@ async function pollActiveGameState() {
 
     remotePlayedCellKeys = new Set(changedCellKeys);
     gameState.loadFromJSON(payload.gameState);
+    captureTurnStartGameState();
     const becameMyTurn = !wasMyTurn && isMyTurn();
     const shouldRenderRefresh = becameMyTurn ||
       changedCellKeys.length > 0 ||
@@ -3519,6 +3545,7 @@ async function loadGameById(gameId) {
   }
 
   gameState.loadFromJSON(payload.gameState);
+  captureTurnStartGameState();
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage(gameState.gameOver ? "Game over. Viewing final board." : "");
@@ -3625,6 +3652,7 @@ async function startNewGame() {
     gameState.drawSevenTiles({ ensureRainbow: true });
   });
   gameState.currentPlayerIndex = 0;
+  captureTurnStartGameState();
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage("");
@@ -3691,6 +3719,7 @@ async function confirmRedrawTilesAndSkipTurn() {
 
   gameState.advanceTurn();
   gameState.advanceTurnIndex();
+  captureTurnStartGameState();
   setGameMessage(gameState.gameOver
     ? "Game over."
     : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
@@ -3743,6 +3772,7 @@ async function finishPlacement() {
     const advanceResult = gameState.advanceTurn();
 
     gameState.advanceTurnIndex();
+    captureTurnStartGameState();
     setGameMessage(gameState.gameOver
       ? "Game over."
       : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
@@ -3766,16 +3796,13 @@ function resetPlacement() {
     return;
   }
 
-  gameState.resetActivePlacements();
+  setRedrawConfirmationVisible(false);
+  if (!restoreTurnStartGameState()) {
+    gameState.resetActivePlacements();
+  }
   gameState.flashActivePlacements = false;
   setGameMessage("");
   renderGame();
-
-  saveGameState()
-    .then(loadActiveGames)
-    .catch((error) => {
-      setGameMessage(`Placement reset, but could not save: ${error.message}`);
-    });
 }
 
 function closeIdentityMenu() {
@@ -4109,7 +4136,7 @@ async function initializeApp() {
 
   if (!loadedHashGame) {
     if (getStoredPlayerName()) {
-      await showGameList();
+      await showGameList({ replaceURL: true });
     } else {
       loadActiveGames();
     }
