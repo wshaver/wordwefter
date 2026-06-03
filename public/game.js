@@ -900,29 +900,25 @@ class WordWefterGameState {
     };
   }
 
-  getRackLetterCounts(rack) {
+  getRackTileSignatureCounts(rack) {
     return (rack || []).reduce((counts, tile) => {
-      const letter = String(tile?.letter || "").toUpperCase();
+      const signature = this.getRackTileSignature(tile);
 
-      if (!letter) {
-        return counts;
-      }
-
-      counts.set(letter, (counts.get(letter) || 0) + 1);
+      counts.set(signature, (counts.get(signature) || 0) + 1);
       return counts;
     }, new Map());
   }
 
-  rackLettersMatch(firstRack, secondRack) {
-    const firstCounts = this.getRackLetterCounts(firstRack);
-    const secondCounts = this.getRackLetterCounts(secondRack);
+  rackTileSetsMatch(firstRack, secondRack) {
+    const firstCounts = this.getRackTileSignatureCounts(firstRack);
+    const secondCounts = this.getRackTileSignatureCounts(secondRack);
 
     if (firstCounts.size !== secondCounts.size) {
       return false;
     }
 
     return Array.from(firstCounts.entries())
-      .every(([letter, count]) => secondCounts.get(letter) === count);
+      .every(([signature, count]) => secondCounts.get(signature) === count);
   }
 
   getRackTileSignature(tile) {
@@ -955,8 +951,8 @@ class WordWefterGameState {
     return availableTiles.splice(matchIndex, 1)[0];
   }
 
-  preserveRackOrderIfLettersMatch(serverRack, previousRack) {
-    if (!this.rackLettersMatch(serverRack, previousRack)) {
+  preserveRackOrderIfTileSetMatches(serverRack, previousRack) {
+    if (!this.rackTileSetsMatch(serverRack, previousRack)) {
       return serverRack;
     }
 
@@ -1089,7 +1085,7 @@ class WordWefterGameState {
         score: Number(player.score || 0),
         marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0)),
         rack: previousRack
-          ? this.preserveRackOrderIfLettersMatch(hydratedRack, previousRack)
+          ? this.preserveRackOrderIfTileSetMatches(hydratedRack, previousRack)
           : hydratedRack
       };
     });
@@ -2113,6 +2109,13 @@ let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
 let loadingGameFromURL = false;
 let marketplaceRenderTimer = null;
+let renderedRackTileIds = new Set();
+let renderedMarketplaceTileIds = new Set();
+let renderedGameId = "";
+const tileEnterDurations = [520, 560, 540, 500];
+const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
+const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
+let tileEnterQueueAvailableAt = 0;
 
 window.WordWefterGameState = WordWefterGameState;
 window.wordWefterGame = gameState;
@@ -2353,16 +2356,7 @@ function animateRackRedrawExit() {
 }
 
 function animateRackRedrawEnter() {
-  document.querySelectorAll("#rack .tile").forEach((tileElement, index) => {
-    tileElement.style.setProperty("--redraw-enter-x", `${index % 2 === 0 ? "115%" : "-115%"}`);
-    tileElement.style.setProperty("--redraw-delay", `${Math.min(index * 150, 900)}ms`);
-    tileElement.classList.add(`tile-redraw-enter-${(index % 4) + 1}`);
-    window.setTimeout(() => {
-      tileElement.classList.remove("tile-redraw-enter-1", "tile-redraw-enter-2", "tile-redraw-enter-3", "tile-redraw-enter-4");
-      tileElement.style.removeProperty("--redraw-enter-x");
-      tileElement.style.removeProperty("--redraw-delay");
-    }, 1530);
-  });
+  animateSequentialTileEnter(Array.from(document.querySelectorAll("#rack .tile")));
 }
 
 function wait(milliseconds) {
@@ -2371,8 +2365,60 @@ function wait(milliseconds) {
   });
 }
 
+function getTileIds(tiles) {
+  return new Set((tiles || [])
+    .filter(Boolean)
+    .map((tile) => tile.id));
+}
+
+function getNewTileIds(nextTileIds, previousTileIds) {
+  return new Set(Array.from(nextTileIds)
+    .filter((tileId) => !previousTileIds.has(tileId)));
+}
+
+function animateSequentialTileEnter(tileElements) {
+  const now = Date.now();
+  let nextDelay = Math.max(0, tileEnterQueueAvailableAt - now);
+  const lodashShuffle = globalThis._?.shuffle;
+  const variantIndexes = tileElements.map((_, index) => index % tileEnterDurations.length);
+  const shuffledVariantIndexes = typeof lodashShuffle === "function"
+    ? lodashShuffle(variantIndexes)
+    : variantIndexes.sort(() => Math.random() - 0.5);
+
+  tileElements.forEach((tileElement, index) => {
+    const variantIndex = shuffledVariantIndexes[index];
+    const enterClass = `tile-enter-${variantIndex + 1}`;
+    const enterY = tileEnterYOffsets[variantIndex];
+    const duration = tileEnterDurations[variantIndex];
+
+    tileElement.style.setProperty("--shuffle-x", "115%");
+    tileElement.style.setProperty("--shuffle-y", enterY);
+    tileElement.style.setProperty("--shuffle-delay", "0ms");
+    tileElement.style.setProperty("--tile-enter-rotation", tileEnterRotations[variantIndex]);
+    tileElement.classList.add("tile-enter-pending");
+    window.setTimeout(() => {
+      tileElement.classList.remove("tile-enter-pending");
+      tileElement.classList.add(enterClass);
+    }, nextDelay);
+    window.setTimeout(() => {
+      tileElement.classList.remove("tile-enter-1", "tile-enter-2", "tile-enter-3", "tile-enter-4");
+      tileElement.style.removeProperty("--shuffle-x");
+      tileElement.style.removeProperty("--shuffle-y");
+      tileElement.style.removeProperty("--shuffle-delay");
+      tileElement.style.removeProperty("--tile-enter-rotation");
+    }, nextDelay + duration + 40);
+
+    nextDelay += duration / 2;
+  });
+
+  tileEnterQueueAvailableAt = now + nextDelay;
+}
+
 function renderRack(options = {}) {
   const rack = document.querySelector("#rack");
+  const visibleRack = getVisibleRack();
+  const nextRackTileIds = getTileIds(visibleRack);
+  const enteringTileIds = getNewTileIds(nextRackTileIds, renderedRackTileIds);
 
   if (!rack) {
     return;
@@ -2380,34 +2426,34 @@ function renderRack(options = {}) {
 
   rack.replaceChildren();
 
-  gameState.currentRack.forEach((tile) => {
+  visibleRack.forEach((tile) => {
     rack.append(createTileElement(tile, { movable: !gameState.gameOver, source: "rack" }));
   });
 
   animateRackShuffle(options.shuffleRects);
 
-  if (options.redrawEnter) {
-    animateRackRedrawEnter();
+  const enteringTileElements = Array.from(rack.querySelectorAll(".tile"))
+    .filter((tileElement) => enteringTileIds.has(tileElement.dataset.tileId));
+
+  if (enteringTileElements.length > 0) {
+    animateSequentialTileEnter(enteringTileElements);
   }
+
+  renderedRackTileIds = nextRackTileIds;
 }
 
 function animateMarketplaceEnter() {
-  document.querySelectorAll("#marketplace .marketplace-item").forEach((itemElement, index) => {
-    itemElement.style.setProperty("--marketplace-enter-x", `${index % 2 === 0 ? "-115%" : "115%"}`);
-    itemElement.style.setProperty("--marketplace-delay", `${Math.min(index * 120, 720)}ms`);
-    itemElement.classList.add(`marketplace-enter-${(index % 4) + 1}`);
-    window.setTimeout(() => {
-      itemElement.classList.remove("marketplace-enter-1", "marketplace-enter-2", "marketplace-enter-3", "marketplace-enter-4");
-      itemElement.style.removeProperty("--marketplace-enter-x");
-      itemElement.style.removeProperty("--marketplace-delay");
-    }, 1460);
-  });
+  animateSequentialTileEnter(Array.from(document.querySelectorAll("#marketplace .marketplace-item:not(.marketplace-item-empty)")));
 }
 
 function renderMarketplace(options = {}) {
   const marketplace = document.querySelector("#marketplace");
   const marketplaceCostBadge = document.querySelector(".marketplace-cost-badge");
   const marketplaceCostElement = document.querySelector("#marketplace-cost");
+  const nextMarketplaceTileIds = getTileIds(gameState.marketplaceTiles);
+  const enteringTileIds = options.enter
+    ? nextMarketplaceTileIds
+    : getNewTileIds(nextMarketplaceTileIds, renderedMarketplaceTileIds);
 
   if (!marketplace) {
     return;
@@ -2454,9 +2500,14 @@ function renderMarketplace(options = {}) {
     marketplace.append(itemElement);
   });
 
-  if (options.enter) {
-    animateMarketplaceEnter();
+  const enteringItemElements = Array.from(marketplace.querySelectorAll(".marketplace-item:not(.marketplace-item-empty)"))
+    .filter((itemElement) => enteringTileIds.has(itemElement.dataset.tileId));
+
+  if (enteringItemElements.length > 0) {
+    animateSequentialTileEnter(enteringItemElements);
   }
+
+  renderedMarketplaceTileIds = nextMarketplaceTileIds;
 }
 
 function updatePlacementControls() {
@@ -2476,29 +2527,18 @@ function updatePlacementControls() {
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
 
   if (shuffleRackButton) {
-    shuffleRackButton.disabled = gameState.gameOver || gameState.currentRack.length < 2;
+    shuffleRackButton.disabled = gameState.gameOver || getVisibleRack().length < 2;
   }
 }
 
 function renderScore() {
-  const currentScoreElement = document.querySelector("#current-score");
-  const currentTurnScoreElement = document.querySelector("#current-turn-score");
   const potentialPointsElement = document.querySelector("#potential-points");
   const currentGameIdElement = document.querySelector("#current-game-id");
   const currentTurnIndexElement = document.querySelector("#current-turn-index");
   const playerScoreListElement = document.querySelector("#player-score-list");
   const tilesRemainingElement = document.querySelector("#tiles-remaining");
-  const debugTilesRemainingElement = document.querySelector("#debug-tiles-remaining");
   const totalTilePoolElement = document.querySelector("#total-tile-pool");
   const tilesUntilGameEndElement = document.querySelector("#tiles-until-game-end");
-
-  if (currentScoreElement) {
-    currentScoreElement.textContent = gameState.currentScore;
-  }
-
-  if (currentTurnScoreElement) {
-    currentTurnScoreElement.textContent = gameState.getCurrentTurnScore();
-  }
 
   if (potentialPointsElement) {
     potentialPointsElement.textContent = gameState.gameOver
@@ -2511,15 +2551,11 @@ function renderScore() {
   }
 
   if (currentTurnIndexElement) {
-    currentTurnIndexElement.textContent = gameState.turnIndex;
+    currentTurnIndexElement.textContent = getTurnDisplayNumber(gameState.turnIndex);
   }
 
   if (tilesRemainingElement) {
     tilesRemainingElement.textContent = gameState.tilesRemaining;
-  }
-
-  if (debugTilesRemainingElement) {
-    debugTilesRemainingElement.textContent = gameState.tilesRemaining;
   }
 
   if (totalTilePoolElement) {
@@ -2577,19 +2613,14 @@ function renderScore() {
   }
 }
 
-function renderGameStateJSON() {
-  const gameStateElement = document.querySelector("#game-state-json");
-
-  renderPlayerNameInputs(gameState.players.map((player) => player.name));
-
-  if (!gameStateElement || document.activeElement === gameStateElement) {
-    return;
+function renderGame(options = {}) {
+  if (renderedGameId !== gameState.id) {
+    renderedRackTileIds = new Set();
+    renderedMarketplaceTileIds = new Set();
+    renderedGameId = gameState.id;
+    tileEnterQueueAvailableAt = 0;
   }
 
-  gameStateElement.value = JSON.stringify(gameState.toJSON(), null, 2);
-}
-
-function renderGame(options = {}) {
   destroySortables();
   renderBoard();
   renderRack({
@@ -2602,7 +2633,6 @@ function renderGame(options = {}) {
   });
   updatePlacementControls();
   renderScore();
-  renderGameStateJSON();
   initializeSortables();
   updateTurnPolling();
 }
@@ -2697,6 +2727,54 @@ function getLoggedInPlayer() {
   }
 
   return gameState.players.find((player) => normalizeNameKey(player.name) === storedPlayerKey) || null;
+}
+
+function getVisibleRack() {
+  return getLoggedInPlayer()?.rack || gameState.currentRack;
+}
+
+function moveVisibleRackTile(tileId, targetIndex) {
+  const visibleRack = getVisibleRack();
+  const sourceIndex = visibleRack.findIndex((tile) => tile.id === tileId);
+
+  if (sourceIndex === -1) {
+    return false;
+  }
+
+  const [tile] = visibleRack.splice(sourceIndex, 1);
+  const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  const normalizedTargetIndex = Math.max(0, Math.min(Number(adjustedTargetIndex), visibleRack.length));
+
+  visibleRack.splice(normalizedTargetIndex, 0, tile);
+  return true;
+}
+
+function shuffleVisibleRack() {
+  const visibleRack = getVisibleRack();
+
+  if (visibleRack.length < 2) {
+    return false;
+  }
+
+  const originalTileIds = visibleRack.map((tile) => tile.id);
+  const lodashShuffle = globalThis._?.shuffle;
+  let shuffledRack = visibleRack;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    shuffledRack = typeof lodashShuffle === "function"
+      ? lodashShuffle(visibleRack)
+      : visibleRack
+        .map((tile) => ({ tile, sort: Math.random() }))
+        .sort((first, second) => first.sort - second.sort)
+        .map(({ tile }) => tile);
+
+    if (shuffledRack.some((tile, index) => tile.id !== originalTileIds[index])) {
+      break;
+    }
+  }
+
+  visibleRack.splice(0, visibleRack.length, ...shuffledRack);
+  return true;
 }
 
 function getBoardTileSignatures(source) {
@@ -2913,8 +2991,10 @@ function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, op
   const removeButton = document.createElement("button");
   const playerNumber = index + 1;
   const inputId = `player-name-input-${playerNumber}`;
+  const isLocked = Boolean(options.locked);
 
   row.className = "player-name-row";
+  row.classList.toggle("locked", isLocked);
   label.className = "sr-only";
   label.htmlFor = inputId;
   label.textContent = `Player ${playerNumber} name`;
@@ -2924,7 +3004,7 @@ function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, op
   input.value = name;
   input.placeholder = `Player ${playerNumber}`;
   input.setAttribute("aria-label", `Player ${playerNumber} name`);
-  input.readOnly = Boolean(options.locked);
+  input.readOnly = isLocked;
   removeButton.className = "game-button secondary player-name-remove";
   removeButton.type = "button";
   removeButton.textContent = "-";
@@ -2938,7 +3018,12 @@ function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, op
     updatePlayerRemoveButtons();
   });
 
-  row.append(label, input, removeButton);
+  row.append(label, input);
+
+  if (!isLocked) {
+    row.append(removeButton);
+  }
+
   return row;
 }
 
@@ -3264,6 +3349,10 @@ function getGameListTouchedTime(game) {
   return Number(game.turnIndex || 0);
 }
 
+function getTurnDisplayNumber(turnIndex) {
+  return Math.max(1, Number(turnIndex || 0) + 1);
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -3332,8 +3421,8 @@ async function loadActiveGames() {
       idElement.textContent = game.id;
       playersElement.textContent = (game.playerNames || []).join(", ");
       turnElement.textContent = game.gameOver
-        ? `Completed: Turn ${Number(game.turnIndex || 0)}`
-        : `Turn ${Number(game.turnIndex || 0)}: ${game.currentPlayerName || "Player"}`;
+        ? `Completed: Turn ${getTurnDisplayNumber(game.turnIndex)}`
+        : `Turn ${getTurnDisplayNumber(game.turnIndex)}: ${game.currentPlayerName || "Player"}`;
       resumeButton.textContent = game.gameOver ? "View" : "Resume";
       resumeButton.addEventListener("click", () => resumeGame(game.id));
 
@@ -3565,7 +3654,7 @@ async function shuffleRackTiles() {
 
   const rackTileRects = getRackTileRects();
 
-  if (!gameState.shuffleCurrentRack()) {
+  if (!shuffleVisibleRack()) {
     return;
   }
 
@@ -3622,18 +3711,6 @@ function resetPlacement() {
     });
 }
 
-function toggleDebugPanel() {
-  const isOpen = !document.body.classList.contains("debug-open");
-  const debugToggleButton = document.querySelector("#debug-toggle-button");
-
-  document.body.classList.toggle("debug-open", isOpen);
-
-  if (debugToggleButton) {
-    debugToggleButton.setAttribute("aria-expanded", String(isOpen));
-    debugToggleButton.textContent = isOpen ? "Hide Debug" : "Debug";
-  }
-}
-
 function closeIdentityMenu() {
   const identityMenuButton = document.querySelector("#identity-menu-button");
 
@@ -3652,24 +3729,6 @@ function toggleIdentityMenu() {
 
   if (identityMenuButton) {
     identityMenuButton.setAttribute("aria-expanded", String(isOpen));
-  }
-}
-
-function installGameStateFromInput() {
-  const gameStateElement = document.querySelector("#game-state-json");
-
-  if (!gameStateElement) {
-    return;
-  }
-
-  try {
-    gameState.loadFromJSON(gameStateElement.value);
-    setScreen("play");
-    setGameMessage("");
-    gameStateElement.blur();
-    renderGame();
-  } catch (error) {
-    setGameMessage(`Could not install game state: ${error.message}`);
   }
 }
 
@@ -3748,7 +3807,7 @@ function initializeRackSortable() {
       renderGame();
     },
     onUpdate(event) {
-      gameState.moveRackTile(event.item.dataset.tileId, event.newIndex);
+      moveVisibleRackTile(event.item.dataset.tileId, event.newIndex);
       renderGame();
     }
   });
@@ -3864,8 +3923,6 @@ function bindGameControls() {
   const cancelRedrawButton = document.querySelector("#cancel-redraw-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
-  const installGameStateButton = document.querySelector("#install-game-state-button");
-  const debugToggleButton = document.querySelector("#debug-toggle-button");
 
   if (saveIdentityButton) {
     saveIdentityButton.addEventListener("click", saveIdentityFromInput);
@@ -3955,13 +4012,6 @@ function bindGameControls() {
     resetPlacementButton.addEventListener("click", resetPlacement);
   }
 
-  if (debugToggleButton) {
-    debugToggleButton.addEventListener("click", toggleDebugPanel);
-  }
-
-  if (installGameStateButton) {
-    installGameStateButton.addEventListener("click", installGameStateFromInput);
-  }
 }
 
 async function initializeApp() {
@@ -4003,6 +4053,5 @@ window.shuffleWordWefterRack = shuffleRackTiles;
 window.redrawWordWefterTiles = redrawTilesAndSkipTurn;
 window.finishWordWefterPlacement = finishPlacement;
 window.resetWordWefterPlacement = resetPlacement;
-window.installWordWefterGameState = installGameStateFromInput;
 
 export { WordWefterGameState, gameState };

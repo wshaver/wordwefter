@@ -272,6 +272,10 @@
       gap: 0.45rem;
     }
 
+    .player-name-row.locked .player-name-input {
+      grid-column: 1 / -1;
+    }
+
     .game-length-control {
       display: grid;
       gap: 0.45rem;
@@ -551,6 +555,15 @@
       gap: 1rem;
       text-align: left;
       font: 700 0.98rem/1.45 system-ui, sans-serif;
+    }
+
+    body.screen-rules .rules-page {
+      margin-top: calc(clamp(1.5rem, 3vw, 2.25rem) - 0.75rem);
+    }
+
+    body.screen-rules .rules-hero {
+      width: var(--play-width);
+      justify-self: center;
     }
 
     body.screen-welcome:not(.has-player) .identity-panel {
@@ -969,26 +982,39 @@
     .tile-shuffle-1,
     .tile-shuffle-2,
     .tile-shuffle-3,
-    .tile-shuffle-4 {
+    .tile-shuffle-4,
+    .tile-enter-1,
+    .tile-enter-2,
+    .tile-enter-3,
+    .tile-enter-4 {
       position: relative;
       z-index: 5;
       will-change: transform;
       animation-delay: var(--shuffle-delay, 0ms);
     }
 
-    .tile-shuffle-1 {
+    .tile-enter-pending {
+      opacity: 0;
+      transform: translate(var(--shuffle-x, 115%), var(--shuffle-y, 0)) rotate(var(--tile-enter-rotation, 0deg));
+    }
+
+    .tile-shuffle-1,
+    .tile-enter-1 {
       animation: tile-shuffle-swing-left 520ms cubic-bezier(0.22, 0.8, 0.28, 1) both;
     }
 
-    .tile-shuffle-2 {
+    .tile-shuffle-2,
+    .tile-enter-2 {
       animation: tile-shuffle-swing-right 560ms cubic-bezier(0.2, 0.78, 0.32, 1) both;
     }
 
-    .tile-shuffle-3 {
+    .tile-shuffle-3,
+    .tile-enter-3 {
       animation: tile-shuffle-hop 540ms cubic-bezier(0.2, 0.82, 0.34, 1) both;
     }
 
-    .tile-shuffle-4 {
+    .tile-shuffle-4,
+    .tile-enter-4 {
       animation: tile-shuffle-slide 500ms cubic-bezier(0.18, 0.86, 0.34, 1) both;
     }
 
@@ -1629,46 +1655,6 @@
       font: 800 1rem/1 system-ui, sans-serif;
     }
 
-    .state-debug {
-      width: 100%;
-      display: none;
-      gap: 0.5rem;
-    }
-
-    body.debug-open .state-debug {
-      display: grid;
-    }
-
-    .debug-summary {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.5rem;
-      font: 700 0.86rem/1.25 system-ui, sans-serif;
-    }
-
-    .debug-summary div {
-      padding: 0.45rem 0.55rem;
-      border: 2px solid rgba(23, 32, 42, 0.18);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.48);
-    }
-
-    .state-debug textarea {
-      width: 100%;
-      min-height: 8rem;
-      resize: vertical;
-      border: 2px solid rgba(23, 32, 42, 0.28);
-      border-radius: 8px;
-      padding: 0.65rem;
-      background: rgba(255, 255, 255, 0.72);
-      color: var(--ink);
-      font: 0.78rem/1.35 Consolas, "Courier New", monospace;
-    }
-
-    .state-debug .game-button {
-      justify-self: center;
-    }
-
     @media (max-width: 520px) {
       main {
         width: 100%;
@@ -1717,9 +1703,6 @@
         min-height: 3.8rem;
       }
 
-      .debug-summary {
-        grid-template-columns: 1fr;
-      }
     }
   </style>
   <script>
@@ -1762,10 +1745,9 @@
             <h2 class="section-title">New Game</h2>
           </div>
           <div class="player-name-list" id="player-name-list">
-            <div class="player-name-row">
+            <div class="player-name-row locked">
               <label class="sr-only" for="player-name-input-1">Player 1 name</label>
-              <input class="player-name-input" id="player-name-input-1" type="text" value="Player 1" aria-label="Player 1 name">
-              <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
+              <input class="player-name-input" id="player-name-input-1" type="text" value="Player 1" aria-label="Player 1 name" readonly>
             </div>
             <div class="player-name-row">
               <label class="sr-only" for="player-name-input-2">Player 2 name</label>
@@ -1977,7 +1959,7 @@
             </div>
             <div>
               <span class="game-state-kicker">Turn</span>
-              <span class="game-state-value" id="current-turn-index">0</span>
+              <span class="game-state-value" id="current-turn-index">1</span>
             </div>
             <div>
               <span class="game-state-kicker">Potential Points</span>
@@ -1994,16 +1976,6 @@
           </div>
           <div class="player-score-list" id="player-score-list"></div>
         </div>
-        <button class="game-button secondary" type="button" id="debug-toggle-button" aria-expanded="false">Debug</button>
-        <div class="state-debug" aria-label="Game state JSON debug">
-          <div class="debug-summary">
-            <div>Current score: <span id="current-score">0</span></div>
-            <div>Current turn score: <span id="current-turn-score">0</span></div>
-            <div>Tiles left: <span id="debug-tiles-remaining">0</span></div>
-          </div>
-          <textarea id="game-state-json" spellcheck="false" aria-label="Game state JSON"></textarea>
-          <button class="game-button" type="button" id="install-game-state-button">Install</button>
-        </div>
       </div>
     </section>
   </main>
@@ -2011,6 +1983,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=game-list-default"></script>
+  <script type="module" src="./game.js?v=tile-entry-half-delay"></script>
 </body>
 </html>
