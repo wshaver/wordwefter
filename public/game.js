@@ -1344,8 +1344,7 @@ class WordWefterGameState {
       normalizedRow < 0 ||
       normalizedRow >= boardSize ||
       normalizedColumn < 0 ||
-      normalizedColumn >= boardSize ||
-      this.isCellOccupiedForMove(normalizedRow, normalizedColumn, tileId)
+      normalizedColumn >= boardSize
     ) {
       return false;
     }
@@ -1392,15 +1391,30 @@ class WordWefterGameState {
     return null;
   }
 
-  isCellOccupiedForMove(row, column, movingTileId) {
-    const cellKey = this.getCellKey(row, column);
-    const activeTile = this.activePlacements.get(cellKey);
+  getRackTileFromActiveTile(tile) {
+    return {
+      id: tile.id,
+      letter: tile.letter,
+      points: tile.points,
+      frequency: tile.frequency,
+      ...(tile.wildcard ? { wildcard: true } : {}),
+      ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
+      ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
+      ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
+      ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
+      ...(Number.isFinite(tile.marketplaceCost) ? { marketplaceCost: tile.marketplaceCost } : {})
+    };
+  }
 
-    if (activeTile && activeTile.id === movingTileId) {
-      return false;
+  returnCoveredActiveTileToRack(cellKey) {
+    const coveredTile = this.activePlacements.get(cellKey);
+
+    if (!coveredTile) {
+      return;
     }
 
-    return Boolean(activeTile);
+    this.activePlacements.delete(cellKey);
+    this.currentRack.push(this.getRackTileFromActiveTile(coveredTile));
   }
 
   placeRackTile(tileId, row, column) {
@@ -1415,6 +1429,7 @@ class WordWefterGameState {
     const [tile] = this.currentRack.splice(rackIndex, 1);
     const cellKey = this.getCellKey(normalizedRow, normalizedColumn);
 
+    this.returnCoveredActiveTileToRack(cellKey);
     this.activePlacements.set(cellKey, {
       ...tile,
       row: normalizedRow,
@@ -1442,6 +1457,7 @@ class WordWefterGameState {
 
     const cellKey = this.getCellKey(normalizedRow, normalizedColumn);
 
+    this.returnCoveredActiveTileToRack(cellKey);
     this.activePlacements.set(cellKey, {
       ...tile,
       row: normalizedRow,
@@ -1463,9 +1479,11 @@ class WordWefterGameState {
 
     const existingKey = this.findActiveTileKeyById(tileId);
     const tile = this.activePlacements.get(existingKey);
+    const targetKey = this.getCellKey(normalizedRow, normalizedColumn);
 
     this.activePlacements.delete(existingKey);
-    this.activePlacements.set(this.getCellKey(normalizedRow, normalizedColumn), {
+    this.returnCoveredActiveTileToRack(targetKey);
+    this.activePlacements.set(targetKey, {
       ...tile,
       row: normalizedRow,
       column: normalizedColumn,
@@ -1487,18 +1505,7 @@ class WordWefterGameState {
     const normalizedTargetIndex = Math.max(0, Math.min(Number(targetIndex), this.currentRack.length));
 
     this.activePlacements.delete(existingKey);
-    this.currentRack.splice(normalizedTargetIndex, 0, {
-      id: tile.id,
-      letter: tile.letter,
-      points: tile.points,
-      frequency: tile.frequency,
-      ...(tile.wildcard ? { wildcard: true } : {}),
-      ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
-      ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
-      ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
-      ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
-      ...(Number.isFinite(tile.marketplaceCost) ? { marketplaceCost: tile.marketplaceCost } : {})
-    });
+    this.currentRack.splice(normalizedTargetIndex, 0, this.getRackTileFromActiveTile(tile));
     this.flashActivePlacements = false;
 
     return true;
