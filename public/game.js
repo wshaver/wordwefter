@@ -1925,6 +1925,15 @@ class WordWefterGameState {
       .reduce((total, word) => total + word.score, 0);
   }
 
+  getPendingMarketplacePurchaseCost() {
+    return this.getPendingMarketplaceTiles()
+      .reduce((total, tile) => total + Math.max(0, Number(tile.marketplaceCost || 0)), 0);
+  }
+
+  getCurrentTurnPotentialScore() {
+    return this.getCurrentTurnScore() - this.getPendingMarketplacePurchaseCost();
+  }
+
   validateBoardWords() {
     const words = this.getBoardWords();
     const invalidWords = words.filter((word) => !this.isRealWord(word));
@@ -2180,6 +2189,8 @@ let turnStartGameStateJSON = "";
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
+const rainbowTileAnimationMilliseconds = 7200;
+const rainbowTileAnimationStartedAt = Date.now();
 let tileEnterQueueAvailableAt = 0;
 
 function exposeWordWefterTestingGlobals() {
@@ -2258,6 +2269,10 @@ function createTileElement(tile, options = {}) {
 
   if (tile.rainbow && !tile.wildcard) {
     tileElement.classList.add("tile-rainbow");
+    tileElement.style.setProperty(
+      "--rainbow-animation-delay",
+      `-${(Date.now() - rainbowTileAnimationStartedAt) % rainbowTileAnimationMilliseconds}ms`
+    );
     tileElement.title = "Rainbow tile: doubles words containing it";
   }
 
@@ -2649,9 +2664,12 @@ function renderScore() {
   const tilesUntilGameEndElement = document.querySelector("#tiles-until-game-end");
 
   if (potentialPointsElement) {
+    const potentialPoints = gameState.getCurrentTurnPotentialScore();
+
     potentialPointsElement.textContent = gameState.gameOver
       ? "--"
-      : gameState.getCurrentTurnScore();
+      : potentialPoints;
+    potentialPointsElement.classList.toggle("negative", !gameState.gameOver && potentialPoints < 0);
   }
 
   if (currentGameIdElement) {

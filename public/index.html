@@ -868,6 +868,7 @@
       background-repeat: no-repeat;
       background-size: 400% 400%;
       animation: rainbow-tile-flow 7200ms ease-in-out infinite;
+      animation-delay: var(--rainbow-animation-delay, 0ms);
       color: #17202a;
       text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
     }
@@ -1715,6 +1716,10 @@
       font-size: 1.05rem;
     }
 
+    .game-state-value.negative {
+      color: var(--rose);
+    }
+
     .player-score-list {
       display: grid;
       gap: 0.45rem;
@@ -2101,6 +2106,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=test-globals"></script>
+  <script type="module" src="./game.js?v=marketplace-potential-score"></script>
 </body>
 </html>
