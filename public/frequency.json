@@ -1,0 +1,224 @@
+{
+    "ok": true,
+    "source": "dictionary.txt",
+    "wordCount": 178691,
+    "totalLetters": 1584476,
+    "letterPoolSize": 380,
+    "wildcardCount": 10,
+    "minFrequencyValue": 3,
+    "remainderPoolSize": 302,
+    "totalPoolSize": 390,
+    "lettersAvailable": {
+        "?": 10,
+        "A": 26,
+        "B": 9,
+        "C": 15,
+        "D": 14,
+        "E": 38,
+        "F": 7,
+        "G": 11,
+        "H": 10,
+        "I": 30,
+        "J": 3,
+        "K": 6,
+        "L": 19,
+        "M": 12,
+        "N": 23,
+        "O": 23,
+        "P": 12,
+        "Q": 3,
+        "R": 24,
+        "S": 32,
+        "T": 23,
+        "U": 13,
+        "V": 6,
+        "W": 5,
+        "X": 3,
+        "Y": 8,
+        "Z": 5
+    },
+    "letters": {
+        "A": {
+            "count": 120954,
+            "frequency": 0.07633690885819665,
+            "percent": 7.6337,
+            "exactAvailable": 26.053746475175387,
+            "available": 26
+        },
+        "B": {
+            "count": 30124,
+            "frequency": 0.01901196357660198,
+            "percent": 1.9012,
+            "exactAvailable": 8.741613000133798,
+            "available": 9
+        },
+        "C": {
+            "count": 64170,
+            "frequency": 0.04049919342419828,
+            "percent": 4.0499,
+            "exactAvailable": 15.230756414107882,
+            "available": 15
+        },
+        "D": {
+            "count": 54873,
+            "frequency": 0.03463163847227727,
+            "percent": 3.4632,
+            "exactAvailable": 13.458754818627737,
+            "available": 14
+        },
+        "E": {
+            "count": 182743,
+            "frequency": 0.11533339728717885,
+            "percent": 11.5333,
+            "exactAvailable": 37.83068598072801,
+            "available": 38
+        },
+        "F": {
+            "count": 20030,
+            "frequency": 0.012641403214690535,
+            "percent": 1.2641,
+            "exactAvailable": 6.817703770836541,
+            "available": 7
+        },
+        "G": {
+            "count": 43537,
+            "frequency": 0.02747722275376844,
+            "percent": 2.7477,
+            "exactAvailable": 11.298121271638069,
+            "available": 11
+        },
+        "H": {
+            "count": 36764,
+            "frequency": 0.023202623454063046,
+            "percent": 2.3203,
+            "exactAvailable": 10.00719228312704,
+            "available": 10
+        },
+        "I": {
+            "count": 140312,
+            "frequency": 0.08855419709733692,
+            "percent": 8.8554,
+            "exactAvailable": 29.743367523395747,
+            "available": 30
+        },
+        "J": {
+            "count": 2674,
+            "frequency": 0.0016876241735438089,
+            "percent": 0.1688,
+            "exactAvailable": 3.50966250041023,
+            "available": 3
+        },
+        "K": {
+            "count": 14451,
+            "frequency": 0.009120365344757509,
+            "percent": 0.912,
+            "exactAvailable": 5.754350334116768,
+            "available": 6
+        },
+        "L": {
+            "count": 84619,
+            "frequency": 0.05340503737513222,
+            "percent": 5.3405,
+            "exactAvailable": 19.128321287289932,
+            "available": 19
+        },
+        "M": {
+            "count": 44855,
+            "frequency": 0.02830904349450544,
+            "percent": 2.8309,
+            "exactAvailable": 11.549331135340642,
+            "available": 12
+        },
+        "N": {
+            "count": 106772,
+            "frequency": 0.06738631572835435,
+            "percent": 6.7386,
+            "exactAvailable": 23.350667349963015,
+            "available": 23
+        },
+        "O": {
+            "count": 103497,
+            "frequency": 0.06531938634602229,
+            "percent": 6.5319,
+            "exactAvailable": 22.72645467649873,
+            "available": 23
+        },
+        "P": {
+            "count": 46600,
+            "frequency": 0.029410353959290012,
+            "percent": 2.941,
+            "exactAvailable": 11.881926895705584,
+            "available": 12
+        },
+        "Q": {
+            "count": 2584,
+            "frequency": 0.0016308230607468969,
+            "percent": 0.1631,
+            "exactAvailable": 3.4925085643455627,
+            "available": 3
+        },
+        "R": {
+            "count": 112468,
+            "frequency": 0.07098119504492337,
+            "percent": 7.0981,
+            "exactAvailable": 24.436320903566855,
+            "available": 24
+        },
+        "S": {
+            "count": 150216,
+            "frequency": 0.09480484399889932,
+            "percent": 9.4805,
+            "exactAvailable": 31.631062887667596,
+            "available": 32
+        },
+        "T": {
+            "count": 104045,
+            "frequency": 0.06566524201060793,
+            "percent": 6.5665,
+            "exactAvailable": 22.830903087203595,
+            "available": 23
+        },
+        "U": {
+            "count": 52109,
+            "frequency": 0.03288721318593655,
+            "percent": 3.2887,
+            "exactAvailable": 12.931938382152838,
+            "available": 13
+        },
+        "V": {
+            "count": 15429,
+            "frequency": 0.009737604103817287,
+            "percent": 0.9738,
+            "exactAvailable": 5.940756439352821,
+            "available": 6
+        },
+        "W": {
+            "count": 12418,
+            "frequency": 0.007837291319022818,
+            "percent": 0.7837,
+            "exactAvailable": 5.366861978344891,
+            "available": 5
+        },
+        "X": {
+            "count": 4761,
+            "frequency": 0.0030047788669566467,
+            "percent": 0.3005,
+            "exactAvailable": 3.9074432178209073,
+            "available": 3
+        },
+        "Y": {
+            "count": 25870,
+            "frequency": 0.016327164311734605,
+            "percent": 1.6327,
+            "exactAvailable": 7.930803622143851,
+            "available": 8
+        },
+        "Z": {
+            "count": 7601,
+            "frequency": 0.0047971695374369825,
+            "percent": 0.4797,
+            "exactAvailable": 4.448745200305969,
+            "available": 5
+        }
+    }
+}

@@ -1,5 +1,5 @@
 import { dictionaryWordSet } from "./dictionary.js";
-import { letter_freq, letter_points, letters_available } from "./letter-setup.js";
+import { letter_points, letters_available } from "./letter-setup.js?v=common-one-prime-points";
 
 const bonusTypes = {
   doubleLetter: {
@@ -54,7 +54,6 @@ class WordWefterGameState {
     this.id = setup.id || WordWefterGameState.createGameId();
     this.startDate = setup.startDate || new Date().toISOString();
     this.lastPlayDate = setup.lastPlayDate || this.startDate;
-    this.letterFrequencies = { ...letter_freq, ...setup.letterFrequencies };
     this.letterPoints = { ...letter_points, ...setup.letterPoints };
     this.startingLettersAvailable = { ...letters_available, ...setup.lettersAvailable };
     this.lettersAvailable = { ...this.startingLettersAvailable };
@@ -378,7 +377,6 @@ class WordWefterGameState {
         ...tile,
         letter: wildcardLetter,
         points: 0,
-        frequency: this.letterFrequencies[wildcardLetter],
         wildcard: true,
         sourceLetter: tile.letter
       };
@@ -512,7 +510,6 @@ class WordWefterGameState {
       id: cleanTile.id,
       letter: cleanTile.letter,
       points: cleanTile.points,
-      frequency: cleanTile.frequency,
       ...(cleanTile.wildcard ? { wildcard: true } : {}),
       ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
       ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {})
@@ -700,7 +697,6 @@ class WordWefterGameState {
           id: `tile-${this.nextTileId++}`,
           letter,
           points: this.letterPoints[letter],
-          frequency: this.letterFrequencies[letter]
         };
       }
 
@@ -1066,7 +1062,6 @@ class WordWefterGameState {
       ]))
       : new Map();
 
-    this.letterFrequencies = { ...letter_freq };
     this.letterPoints = { ...letter_points };
     this.startingLettersAvailable = { ...letters_available };
     this.lettersAvailable = { ...this.startingLettersAvailable, ...source.lettersAvailable };
@@ -1084,7 +1079,6 @@ class WordWefterGameState {
         id: `tile-${this.nextTileId++}`,
         letter,
         points: wildcard ? 0 : this.letterPoints[letter],
-        frequency: wildcard ? this.letterFrequencies[wildcardLetter] : this.letterFrequencies[letter],
         ...(wildcard ? { wildcard: true } : {}),
         ...(!wildcard && tile.rainbow ? { rainbow: true } : {}),
         ...(tile.sourceLetter ? { sourceLetter: String(tile.sourceLetter).toUpperCase() } : {}),
@@ -1119,7 +1113,6 @@ class WordWefterGameState {
               id: hydratedTile.id,
               letter: hydratedTile.letter,
               points: hydratedTile.points,
-              frequency: hydratedTile.frequency,
               ...(hydratedTile.wildcard ? { wildcard: true } : {}),
               ...(hydratedTile.rainbow && !hydratedTile.wildcard ? { rainbow: true } : {}),
               ...(hydratedTile.sourceLetter ? { sourceLetter: hydratedTile.sourceLetter } : {}),
@@ -1132,7 +1125,6 @@ class WordWefterGameState {
           const topTile = hydratedTile.stack[hydratedTile.stack.length - 1];
           hydratedTile.letter = topTile.letter;
           hydratedTile.points = topTile.points;
-          hydratedTile.frequency = topTile.frequency;
           hydratedTile.wildcard = Boolean(topTile.wildcard);
           hydratedTile.rainbow = Boolean(topTile.rainbow) && !hydratedTile.wildcard;
           hydratedTile.sourceLetter = topTile.sourceLetter;
@@ -1243,7 +1235,6 @@ class WordWefterGameState {
         id: hydratedTile.id,
         letter: marketLetter,
         points: this.letterPoints[marketLetter],
-        frequency: this.letterFrequencies[marketLetter]
       };
     });
 
@@ -1500,7 +1491,6 @@ class WordWefterGameState {
       id: tile.id,
       letter: tile.letter,
       points: tile.points,
-      frequency: tile.frequency,
       ...(tile.wildcard ? { wildcard: true } : {}),
       ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
       ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
@@ -1684,7 +1674,6 @@ class WordWefterGameState {
         id: tile.id,
         letter: tile.letter,
         points: tile.points,
-        frequency: tile.frequency,
         ...(tile.wildcard ? { wildcard: true } : {}),
         ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
         ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {})
@@ -2209,7 +2198,6 @@ class WordWefterGameState {
         id: cleanTile.id,
         letter: cleanTile.letter,
         points: cleanTile.points,
-        frequency: cleanTile.frequency,
         ...(cleanTile.wildcard ? { wildcard: true } : {}),
         ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
         ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {}),
