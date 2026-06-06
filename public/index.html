@@ -1776,6 +1776,89 @@
       font: 800 1rem/1 system-ui, sans-serif;
     }
 
+    .game-log-title {
+      margin: 0;
+      color: rgba(23, 32, 42, 0.68);
+      font: 800 0.72rem/1.2 system-ui, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .word-score-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .word-score-item {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.25rem;
+      max-width: 100%;
+      padding: 0.18rem 0.42rem;
+      border: 1px solid rgba(15, 139, 141, 0.28);
+      border-radius: 8px;
+      background: rgba(15, 139, 141, 0.09);
+    }
+
+    .word-score-word {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-weight: 800;
+    }
+
+    .word-score-points {
+      color: var(--accent);
+      font: 800 0.78rem/1 system-ui, sans-serif;
+      white-space: nowrap;
+    }
+
+    .word-score-empty,
+    .game-log-empty {
+      color: rgba(23, 32, 42, 0.58);
+      font-size: 0.85rem;
+    }
+
+    .game-log {
+      display: grid;
+      gap: 0.55rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 2px solid rgba(23, 32, 42, 0.16);
+    }
+
+    .game-log-list {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .game-log-entry {
+      display: grid;
+      gap: 0.4rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid rgba(23, 32, 42, 0.16);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.38);
+    }
+
+    .game-log-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem 0.55rem;
+    }
+
+    .game-log-turn {
+      color: rgba(23, 32, 42, 0.62);
+      font: 800 0.72rem/1.2 system-ui, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .game-log-player {
+      overflow-wrap: anywhere;
+    }
+
     @media (max-width: 520px) {
       main {
         width: 100%;
@@ -2098,6 +2181,7 @@
             </div>
           </div>
           <div class="player-score-list" id="player-score-list"></div>
+          <div class="game-log" id="game-log" aria-label="Game log"></div>
         </div>
       </div>
     </section>
@@ -2106,6 +2190,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=marketplace-potential-score"></script>
+  <script type="module" src="./game.js?v=game-log-newest-first"></script>
 </body>
 </html>

@@ -67,6 +67,7 @@ class WordWefterGameState {
     this.gameOver = Boolean(setup.gameOver);
     this.dictionary = setup.dictionary || dictionaryWordSet;
     this.players = this.normalizePlayers(playerNames);
+    this.history = this.normalizeHistory(setup.history);
     this.currentPlayerIndex = 0;
     this.turnIndex = Number.isInteger(Number(setup.turnIndex)) ? Number(setup.turnIndex) : 0;
     this.discardedTiles = [];
@@ -100,8 +101,74 @@ class WordWefterGameState {
       name,
       score: 0,
       marketplacePurchaseCount: 0,
+      newWords: [],
       rack: []
     }));
+  }
+
+  normalizeWordScore(entry) {
+    const word = String(entry?.word || "").trim().toUpperCase();
+    const score = Number(entry?.score || 0);
+
+    if (!word) {
+      return null;
+    }
+
+    return {
+      word,
+      score: Number.isFinite(score) ? score : 0
+    };
+  }
+
+  normalizeHistoryEntry(entry, fallbackTurnIndex = 0) {
+    const words = (entry?.words || [])
+      .map((wordScore) => this.normalizeWordScore(wordScore))
+      .filter(Boolean);
+
+    if (words.length === 0) {
+      return null;
+    }
+
+    const turnIndex = Number(entry?.turnIndex);
+
+    return {
+      turnIndex: Number.isInteger(turnIndex) ? Math.max(0, turnIndex) : fallbackTurnIndex,
+      playerName: String(entry?.playerName || "Player").trim() || "Player",
+      words
+    };
+  }
+
+  normalizeHistory(history) {
+    return (Array.isArray(history) ? history : [])
+      .map((entry, index) => this.normalizeHistoryEntry(entry, index))
+      .filter(Boolean);
+  }
+
+  getSerializedWordScores(words) {
+    return (words || [])
+      .map((wordScore) => this.normalizeWordScore(wordScore))
+      .filter(Boolean);
+  }
+
+  recordTurnHistory(turnWords) {
+    const words = this.getSerializedWordScores((turnWords || []).map((word) => ({
+      word: word.word,
+      score: word.score
+    })));
+
+    if (words.length === 0) {
+      return null;
+    }
+
+    const entry = {
+      turnIndex: this.turnIndex,
+      playerName: this.currentPlayerName,
+      words
+    };
+
+    this.player.newWords.push(...words);
+    this.history.push(entry);
+    return entry;
   }
 
   get player() {
@@ -651,8 +718,10 @@ class WordWefterGameState {
       name: player.name,
       score: 0,
       marketplacePurchaseCount: 0,
+      newWords: [],
       rack: []
     }));
+    this.history = [];
     this.currentPlayerIndex = 0;
     this.turnIndex = 0;
     this.tilesDrawn = 0;
@@ -871,11 +940,21 @@ class WordWefterGameState {
       ...(this.gameOver ? { gameOver: true } : {}),
       turnIndex: this.turnIndex,
       currentPlayerIndex: this.currentPlayerIndex,
+      ...(this.history.length > 0 ? {
+        history: this.history.map((entry) => ({
+          turnIndex: entry.turnIndex,
+          playerName: entry.playerName,
+          words: entry.words.map((wordScore) => ({ ...wordScore }))
+        }))
+      } : {}),
       players: this.players.map((player) => ({
         name: player.name,
         score: player.score,
         ...(Number(player.marketplacePurchaseCount) > 0 ? {
           marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0))
+        } : {}),
+        ...(player.newWords?.length > 0 ? {
+          newWords: player.newWords.map((wordScore) => ({ ...wordScore }))
         } : {}),
         rack: player.rack.map((tile) => this.serializeTile(tile))
       })),
@@ -1078,6 +1157,7 @@ class WordWefterGameState {
     this.pendingFinalRound = Boolean(source.pendingFinalRound);
     this.gameOver = Boolean(source.gameOver);
     this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
+    this.history = this.normalizeHistory(source.history);
     this.players = (source.players || []).map((player) => {
       const name = String(player.name || "Player");
       const hydratedRack = (player.rack || []).map(hydrateTile);
@@ -1087,6 +1167,7 @@ class WordWefterGameState {
         name,
         score: Number(player.score || 0),
         marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0)),
+        newWords: this.getSerializedWordScores(player.newWords),
         rack: previousRack
           ? this.preserveRackOrderIfTileSetMatches(hydratedRack, previousRack)
           : hydratedRack
@@ -1103,6 +1184,22 @@ class WordWefterGameState {
 
     if (this.players.length === 0) {
       throw new Error("Game state must include at least one player.");
+    }
+
+    if (this.history.length > 0) {
+      const playerWordsByName = new Map(this.players.map((player) => [normalizeNameKey(player.name), []]));
+
+      this.history.forEach((entry) => {
+        const playerWords = playerWordsByName.get(normalizeNameKey(entry.playerName));
+
+        if (playerWords) {
+          playerWords.push(...entry.words.map((wordScore) => ({ ...wordScore })));
+        }
+      });
+
+      this.players.forEach((player) => {
+        player.newWords = playerWordsByName.get(normalizeNameKey(player.name)) || player.newWords;
+      });
     }
 
     const loadedPlayerIndex = Number(source.currentPlayerIndex);
@@ -2131,6 +2228,7 @@ class WordWefterGameState {
     this.activePlacements.clear();
     this.flashActivePlacements = false;
     this.currentScore += turnScore;
+    this.recordTurnHistory(turnWords);
 
     if (this.isBoardFullyCovered()) {
       this.gameOver = true;
@@ -2654,11 +2752,83 @@ function updatePlacementControls() {
   }
 }
 
+function createWordScoreList(words, emptyText = "No words yet") {
+  const list = document.createElement("div");
+
+  list.className = "word-score-list";
+
+  if (!Array.isArray(words) || words.length === 0) {
+    const emptyElement = document.createElement("span");
+
+    emptyElement.className = "word-score-empty";
+    emptyElement.textContent = emptyText;
+    list.append(emptyElement);
+    return list;
+  }
+
+  words.forEach((wordScore) => {
+    const item = document.createElement("span");
+    const wordElement = document.createElement("span");
+    const scoreElement = document.createElement("span");
+
+    item.className = "word-score-item";
+    wordElement.className = "word-score-word";
+    scoreElement.className = "word-score-points";
+    wordElement.textContent = wordScore.word;
+    scoreElement.textContent = `+${wordScore.score}`;
+    item.append(wordElement, scoreElement);
+    list.append(item);
+  });
+
+  return list;
+}
+
+function renderGameLog(gameLogElement) {
+  gameLogElement.replaceChildren();
+
+  const title = document.createElement("h3");
+
+  title.className = "game-log-title";
+  title.textContent = "Game Log";
+  gameLogElement.append(title);
+
+  if (gameState.history.length === 0) {
+    const emptyElement = document.createElement("div");
+
+    emptyElement.className = "game-log-empty";
+    emptyElement.textContent = "No completed turns yet.";
+    gameLogElement.append(emptyElement);
+    return;
+  }
+
+  const list = document.createElement("div");
+
+  list.className = "game-log-list";
+  [...gameState.history].reverse().forEach((entry) => {
+    const item = document.createElement("article");
+    const heading = document.createElement("div");
+    const turnElement = document.createElement("span");
+    const playerElement = document.createElement("strong");
+
+    item.className = "game-log-entry";
+    heading.className = "game-log-heading";
+    turnElement.className = "game-log-turn";
+    playerElement.className = "game-log-player";
+    turnElement.textContent = `Turn ${getTurnDisplayNumber(entry.turnIndex)}`;
+    playerElement.textContent = entry.playerName;
+    heading.append(turnElement, playerElement);
+    item.append(heading, createWordScoreList(entry.words, "No words"));
+    list.append(item);
+  });
+  gameLogElement.append(list);
+}
+
 function renderScore() {
   const potentialPointsElement = document.querySelector("#potential-points");
   const currentGameIdElement = document.querySelector("#current-game-id");
   const currentTurnIndexElement = document.querySelector("#current-turn-index");
   const playerScoreListElement = document.querySelector("#player-score-list");
+  const gameLogElement = document.querySelector("#game-log");
   const tilesRemainingElement = document.querySelector("#tiles-remaining");
   const totalTilePoolElement = document.querySelector("#total-tile-pool");
   const tilesUntilGameEndElement = document.querySelector("#tiles-until-game-end");
@@ -2736,6 +2906,10 @@ function renderScore() {
       row.append(nameElement, scoreElement);
       playerScoreListElement.append(row);
     });
+  }
+
+  if (gameLogElement) {
+    renderGameLog(gameLogElement);
   }
 }
 
