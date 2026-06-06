@@ -1168,7 +1168,9 @@
       animation: tile-redraw-slide-in-tilt-right 680ms cubic-bezier(0.2, 0.82, 0.32, 1) both;
     }
 
-    .tile-covered-underlay {
+    .board .tile-covered-underlay,
+    .rules-example .tile-covered-underlay,
+    .rules-board-example .tile-covered-underlay {
       position: absolute;
       top: calc(3px + 0.18rem);
       left: calc(3px - 0.18rem);
@@ -1178,7 +1180,9 @@
       filter: saturate(0.7);
     }
 
-    .tile-covering-placement {
+    .board .tile-covering-placement,
+    .rules-example .tile-covering-placement,
+    .rules-board-example .tile-covering-placement {
       position: absolute;
       top: calc(3px - 0.18rem);
       left: calc(3px + 0.18rem);
@@ -2190,6 +2194,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=game-log-newest-first"></script>
+  <script type="module" src="./game.js?v=stacked-rack-ghost-fix"></script>
 </body>
 </html>
