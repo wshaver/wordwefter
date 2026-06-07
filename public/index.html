@@ -1914,7 +1914,20 @@
     }
   </style>
   <script>
-    if (document.cookie.split("; ").some((entry) => entry.startsWith("wordwefterPlayerName="))) {
+    let hasStoredPlayerName = false;
+
+    try {
+      hasStoredPlayerName = document.cookie.split("; ").some((entry) => entry.startsWith("wordwefterPlayerName="));
+    } catch {
+      hasStoredPlayerName = false;
+    }
+
+    try {
+      hasStoredPlayerName = hasStoredPlayerName || Boolean(window.localStorage.getItem("wordwefterPlayerName"));
+    } catch {
+    }
+
+    if (hasStoredPlayerName) {
       document.documentElement.classList.add("has-stored-player");
     }
   </script>
@@ -2194,6 +2207,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=common-one-prime-points"></script>
+  <script type="module" src="./game.js?v=login-storage-fallback"></script>
 </body>
 </html>

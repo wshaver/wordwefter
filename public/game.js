@@ -2253,6 +2253,7 @@ const startCell = {
 };
 const serverURL = "./server.php";
 const playerNameCookie = "wordwefterPlayerName";
+const playerNameStorageKey = "wordwefterPlayerName";
 const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
@@ -3104,9 +3105,15 @@ function getChangedBoardCellKeys(nextGameState) {
 
 function getCookie(name) {
   const cookiePrefix = `${encodeURIComponent(name)}=`;
-  const cookie = document.cookie
-    .split("; ")
-    .find((entry) => entry.startsWith(cookiePrefix));
+  let cookie = "";
+
+  try {
+    cookie = document.cookie
+      .split("; ")
+      .find((entry) => entry.startsWith(cookiePrefix)) || "";
+  } catch {
+    cookie = "";
+  }
 
   return cookie ? decodeURIComponent(cookie.slice(cookiePrefix.length)) : "";
 }
@@ -3114,22 +3121,56 @@ function getCookie(name) {
 function setCookie(name, value) {
   const maxAge = 60 * 60 * 24 * 365;
 
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
+  try {
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
+  } catch {
+    // Some privacy modes reject cookie access; localStorage is used as a fallback.
+  }
 }
 
 function deleteCookie(name) {
-  document.cookie = `${encodeURIComponent(name)}=; max-age=0; path=/; samesite=lax`;
+  try {
+    document.cookie = `${encodeURIComponent(name)}=; max-age=0; path=/; samesite=lax`;
+  } catch {
+    // Some privacy modes reject cookie access; localStorage is cleared separately.
+  }
+}
+
+function getLocalStorageItem(key) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setLocalStorageItem(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeLocalStorageItem(key) {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getTurnNotificationsEnabled() {
-  return window.localStorage.getItem(turnNotificationsKey) === "enabled";
+  return getLocalStorageItem(turnNotificationsKey) === "enabled";
 }
 
 function setTurnNotificationsEnabled(enabled) {
   if (enabled) {
-    window.localStorage.setItem(turnNotificationsKey, "enabled");
+    setLocalStorageItem(turnNotificationsKey, "enabled");
   } else {
-    window.localStorage.removeItem(turnNotificationsKey);
+    removeLocalStorageItem(turnNotificationsKey);
   }
 }
 
@@ -3220,7 +3261,7 @@ function notifyIfMyTurn(options = {}) {
 }
 
 function getStoredPlayerName() {
-  return normalizePlayerName(getCookie(playerNameCookie));
+  return normalizePlayerName(getCookie(playerNameCookie) || getLocalStorageItem(playerNameStorageKey));
 }
 
 function setStoredPlayerName(name) {
@@ -3228,6 +3269,7 @@ function setStoredPlayerName(name) {
 
   if (normalizedName) {
     setCookie(playerNameCookie, normalizedName);
+    setLocalStorageItem(playerNameStorageKey, normalizedName);
   }
 
   return normalizedName;
@@ -3473,6 +3515,7 @@ function saveIdentityFromInput() {
 
 function logoutPlayer() {
   deleteCookie(playerNameCookie);
+  removeLocalStorageItem(playerNameStorageKey);
   pendingIdentityAction = null;
   closeIdentityMenu();
   setScreen("welcome");
