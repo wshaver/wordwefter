@@ -124,7 +124,9 @@ class WordWefterGameState {
       .map((wordScore) => this.normalizeWordScore(wordScore))
       .filter(Boolean);
 
-    if (words.length === 0) {
+    const action = String(entry?.action || "").trim().toLowerCase();
+
+    if (words.length === 0 && action !== "pass") {
       return null;
     }
 
@@ -133,7 +135,8 @@ class WordWefterGameState {
     return {
       turnIndex: Number.isInteger(turnIndex) ? Math.max(0, turnIndex) : fallbackTurnIndex,
       playerName: String(entry?.playerName || "Player").trim() || "Player",
-      words
+      words,
+      ...(action === "pass" ? { action: "pass" } : {})
     };
   }
 
@@ -168,6 +171,46 @@ class WordWefterGameState {
     this.player.newWords.push(...words);
     this.history.push(entry);
     return entry;
+  }
+
+  recordPassTurnHistory() {
+    const entry = {
+      turnIndex: this.turnIndex,
+      playerName: this.currentPlayerName,
+      action: "pass",
+      words: []
+    };
+
+    this.history.push(entry);
+    return entry;
+  }
+
+  getConsecutivePassCount() {
+    let passCount = 0;
+
+    for (let index = this.history.length - 1; index >= 0; index -= 1) {
+      if (this.history[index]?.action !== "pass") {
+        break;
+      }
+
+      passCount += 1;
+    }
+
+    return passCount;
+  }
+
+  getVictorResult() {
+    if (this.players.length === 0) {
+      return null;
+    }
+
+    const highScore = Math.max(...this.players.map((player) => Number(player.score || 0)));
+    const leaders = this.players.filter((player) => Number(player.score || 0) === highScore);
+
+    return {
+      highScore,
+      leaders
+    };
   }
 
   get player() {
@@ -306,6 +349,21 @@ class WordWefterGameState {
     }
 
     return result;
+  }
+
+  passTurn() {
+    this.recordPassTurnHistory();
+
+    if (this.getConsecutivePassCount() >= this.players.length) {
+      this.gameOver = true;
+      this.pendingFinalRound = false;
+      this.finalTurnsRemaining = null;
+      return {
+        drawnTiles: []
+      };
+    }
+
+    return this.advanceTurn();
   }
 
   advanceTurnIndex() {
@@ -940,6 +998,7 @@ class WordWefterGameState {
         history: this.history.map((entry) => ({
           turnIndex: entry.turnIndex,
           playerName: entry.playerName,
+          ...(entry.action ? { action: entry.action } : {}),
           words: entry.words.map((wordScore) => ({ ...wordScore }))
         }))
       } : {}),
@@ -2728,8 +2787,9 @@ function updatePlacementControls() {
   document.body.classList.toggle("is-my-turn", canPlay);
   if (!canPlay) {
     setRedrawConfirmationVisible(false);
+    setPassConfirmationVisible(false);
   }
-  document.querySelectorAll("#redraw-tiles-button, #finish-placement-button, #reset-placement-button")
+  document.querySelectorAll("#redraw-tiles-button, #pass-turn-button, #finish-placement-button, #reset-placement-button")
     .forEach((button) => {
       button.disabled = !canPlay;
     });
@@ -2781,6 +2841,27 @@ function renderGameLog(gameLogElement) {
   title.textContent = "Game Log";
   gameLogElement.append(title);
 
+  if (gameState.gameOver) {
+    const victorResult = gameState.getVictorResult();
+    const resultElement = document.createElement("div");
+    const labelElement = document.createElement("span");
+    const namesElement = document.createElement("strong");
+
+    resultElement.className = "game-log-result";
+    labelElement.className = "game-log-result-label";
+
+    if (victorResult && victorResult.leaders.length > 0) {
+      labelElement.textContent = victorResult.leaders.length === 1 ? "Winner" : "Tie";
+      namesElement.textContent = `${victorResult.leaders.map((player) => player.name).join(", ")} - ${victorResult.highScore} points`;
+    } else {
+      labelElement.textContent = "Game over";
+      namesElement.textContent = "Final scores stand";
+    }
+
+    resultElement.append(labelElement, namesElement);
+    gameLogElement.append(resultElement);
+  }
+
   if (gameState.history.length === 0) {
     const emptyElement = document.createElement("div");
 
@@ -2806,7 +2887,12 @@ function renderGameLog(gameLogElement) {
     turnElement.textContent = `Turn ${getTurnDisplayNumber(entry.turnIndex)}`;
     playerElement.textContent = entry.playerName;
     heading.append(turnElement, playerElement);
-    item.append(heading, createWordScoreList(entry.words, "No words"));
+    item.append(
+      heading,
+      entry.action === "pass"
+        ? createWordScoreList([], "Passed turn")
+        : createWordScoreList(entry.words, "No words")
+    );
     list.append(item);
   });
   gameLogElement.append(list);
@@ -2818,9 +2904,30 @@ function renderScore() {
   const currentTurnIndexElement = document.querySelector("#current-turn-index");
   const playerScoreListElement = document.querySelector("#player-score-list");
   const gameLogElement = document.querySelector("#game-log");
+  const winnerBannerElement = document.querySelector("#winner-banner");
+  const winnerBannerLabelElement = document.querySelector("#winner-banner-label");
+  const winnerBannerNamesElement = document.querySelector("#winner-banner-names");
   const tilesRemainingElement = document.querySelector("#tiles-remaining");
   const totalTilePoolElement = document.querySelector("#total-tile-pool");
   const tilesUntilGameEndElement = document.querySelector("#tiles-until-game-end");
+
+  if (winnerBannerElement) {
+    const victorResult = gameState.gameOver ? gameState.getVictorResult() : null;
+
+    winnerBannerElement.setAttribute("aria-hidden", victorResult ? "false" : "true");
+
+    if (winnerBannerLabelElement) {
+      winnerBannerLabelElement.textContent = victorResult
+        ? victorResult.leaders.length === 1 ? "Winner" : "Tie Game"
+        : "";
+    }
+
+    if (winnerBannerNamesElement) {
+      winnerBannerNamesElement.textContent = victorResult
+        ? `${victorResult.leaders.map((player) => player.name).join(", ")} - ${victorResult.highScore} points`
+        : "";
+    }
+  }
 
   if (potentialPointsElement) {
     const potentialPoints = gameState.getCurrentTurnPotentialScore();
@@ -2870,12 +2977,12 @@ function renderScore() {
       const scoreElement = document.createElement("div");
 
       row.className = "player-score-row";
-      row.classList.toggle("current-turn", index === gameState.currentPlayerIndex);
+      row.classList.toggle("current-turn", !gameState.gameOver && index === gameState.currentPlayerIndex);
       nameElement.className = "player-score-name";
       scoreElement.className = "player-score-points";
       nameElement.textContent = player.name;
 
-      if (index === gameState.currentPlayerIndex) {
+      if (!gameState.gameOver && index === gameState.currentPlayerIndex) {
         const badge = document.createElement("span");
 
         badge.className = "turn-badge";
@@ -2903,6 +3010,8 @@ function renderScore() {
 }
 
 function renderGame(options = {}) {
+  document.body.classList.toggle("game-over", gameState.gameOver);
+
   if (renderedGameId !== gameState.id) {
     renderedRackTileIds = new Set();
     renderedMarketplaceTileIds = new Set();
@@ -2936,6 +3045,10 @@ function setGameMessage(message) {
 
 function setRedrawConfirmationVisible(isVisible) {
   document.body.classList.toggle("confirm-redraw", Boolean(isVisible));
+}
+
+function setPassConfirmationVisible(isVisible) {
+  document.body.classList.toggle("confirm-pass", Boolean(isVisible));
 }
 
 function getGameIdFromURLHash() {
@@ -3443,6 +3556,10 @@ function setScreen(screenName, options = {}) {
   document.body.classList.remove("screen-welcome", "screen-setup", "screen-list", "screen-play", "screen-rules");
   document.body.classList.add(`screen-${screenName}`);
 
+  if (screenName !== "play") {
+    document.body.classList.remove("game-over");
+  }
+
   if (screenName !== "play" && shouldClearGameURL) {
     clearGameURLGameId();
   }
@@ -3726,6 +3843,21 @@ function getGameListPlayerSummaries(game) {
   }));
 }
 
+function getGameListVictorResult(players) {
+  const scoredPlayers = (players || []).filter((player) => Number.isFinite(Number(player.score)));
+
+  if (scoredPlayers.length === 0) {
+    return null;
+  }
+
+  const highScore = Math.max(...scoredPlayers.map((player) => Number(player.score)));
+
+  return {
+    highScore,
+    leaders: scoredPlayers.filter((player) => Number(player.score) === highScore)
+  };
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -3751,6 +3883,10 @@ async function loadActiveGames() {
         isWaitingForStoredPlayer: !game.gameOver && normalizeNameKey(game.currentPlayerName) === storedPlayerKey
       }))
       .sort((firstGame, secondGame) => {
+        if (Boolean(firstGame.gameOver) !== Boolean(secondGame.gameOver)) {
+          return firstGame.gameOver ? 1 : -1;
+        }
+
         if (firstGame.isWaitingForStoredPlayer !== secondGame.isWaitingForStoredPlayer) {
           return firstGame.isWaitingForStoredPlayer ? -1 : 1;
         }
@@ -3783,9 +3919,13 @@ async function loadActiveGames() {
       const playersElement = document.createElement("div");
       const turnElement = document.createElement("span");
       const resumeButton = document.createElement("button");
+      const playerSummaries = getGameListPlayerSummaries(game);
+      const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries) : null;
+      const victorNameKeys = new Set((victorResult?.leaders || []).map((player) => normalizeNameKey(player.name)));
 
       row.className = "active-game-row";
       row.classList.toggle("waiting-player", game.isWaitingForStoredPlayer);
+      row.classList.toggle("completed-game", Boolean(game.gameOver));
       row.dataset.gameId = game.id;
       idElement.className = "active-game-id";
       gameCodeElement.textContent = game.id;
@@ -3795,13 +3935,14 @@ async function loadActiveGames() {
       resumeButton.className = "game-button secondary";
       resumeButton.type = "button";
       idElement.append(gameCodeElement, turnElement);
-      getGameListPlayerSummaries(game).forEach((player) => {
+      playerSummaries.forEach((player) => {
         const playerElement = document.createElement("span");
         const playerNameElement = document.createElement("span");
         const playerPointsElement = document.createElement("span");
 
         playerElement.className = "active-game-player-score";
-        playerElement.classList.toggle("current-player", normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
+        playerElement.classList.toggle("current-player", !game.gameOver && normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
+        playerElement.classList.toggle("winner-player", Boolean(game.gameOver && victorNameKeys.has(normalizeNameKey(player.name))));
         playerNameElement.className = "active-game-player-name";
         playerNameElement.textContent = player.name;
         playerElement.append(playerNameElement);
@@ -3814,9 +3955,8 @@ async function loadActiveGames() {
 
         playersElement.append(playerElement);
       });
-      turnElement.textContent = game.gameOver
-        ? `Completed ${getTurnDisplayNumber(game.turnIndex)}`
-        : `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
+      turnElement.textContent = `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
+
       resumeButton.textContent = game.gameOver ? "View" : "Resume";
       resumeButton.addEventListener("click", () => resumeGame(game.id));
 
@@ -3849,7 +3989,7 @@ async function loadGameById(gameId) {
   captureTurnStartGameState();
   setScreen("play");
   setGameURLGameId(gameState.id);
-  setGameMessage(gameState.gameOver ? "Game over. Viewing final board." : "");
+  setGameMessage("");
   renderGame();
 }
 
@@ -3987,6 +4127,7 @@ async function redrawTilesAndSkipTurn() {
   }
 
   setGameMessage("");
+  setPassConfirmationVisible(false);
   setRedrawConfirmationVisible(true);
 }
 
@@ -4022,7 +4163,7 @@ async function confirmRedrawTilesAndSkipTurn() {
   gameState.advanceTurnIndex();
   captureTurnStartGameState();
   setGameMessage(gameState.gameOver
-    ? "Game over."
+    ? ""
     : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
   await wait(redrawExitMilliseconds);
   renderGame({ rackRedrawEnter: true });
@@ -4035,8 +4176,64 @@ async function confirmRedrawTilesAndSkipTurn() {
   }
 }
 
+async function passTurn() {
+  if (!document.body.classList.contains("screen-play")) {
+    showNewGameSetup();
+    return;
+  }
+
+  if (!isMyTurn() || gameState.gameOver) {
+    return;
+  }
+
+  setGameMessage("");
+  setRedrawConfirmationVisible(false);
+  setPassConfirmationVisible(true);
+}
+
+async function confirmPassTurn() {
+  if (!document.body.classList.contains("screen-play")) {
+    showNewGameSetup();
+    return;
+  }
+
+  if (!isMyTurn() || gameState.gameOver) {
+    setPassConfirmationVisible(false);
+    return;
+  }
+
+  if (gameState.hasActivePlacements() || gameState.hasPendingMarketplacePurchases()) {
+    setPassConfirmationVisible(false);
+    setGameMessage("Reset placed tiles before passing.");
+    return;
+  }
+
+  setRedrawConfirmationVisible(false);
+  setPassConfirmationVisible(false);
+
+  const advanceResult = gameState.passTurn();
+
+  gameState.advanceTurnIndex();
+  captureTurnStartGameState();
+  setGameMessage(gameState.gameOver
+    ? ""
+    : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
+  renderGame({ rackRedrawEnter: advanceResult.drawnTiles.length > 0 });
+
+  try {
+    await saveGameState();
+    await loadActiveGames();
+  } catch (error) {
+    setGameMessage(`Turn passed, but could not save: ${error.message}`);
+  }
+}
+
 function cancelRedrawTiles() {
   setRedrawConfirmationVisible(false);
+}
+
+function cancelPassTurn() {
+  setPassConfirmationVisible(false);
 }
 
 async function shuffleRackTiles() {
@@ -4075,7 +4272,7 @@ async function finishPlacement() {
     gameState.advanceTurnIndex();
     captureTurnStartGameState();
     setGameMessage(gameState.gameOver
-      ? "Game over."
+      ? ""
       : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
     renderGame({ rackRedrawEnter: advanceResult.drawnTiles.length > 0 });
   } else {
@@ -4098,6 +4295,7 @@ function resetPlacement() {
   }
 
   setRedrawConfirmationVisible(false);
+  setPassConfirmationVisible(false);
   if (!restoreTurnStartGameState()) {
     gameState.resetActivePlacements();
   }
@@ -4333,8 +4531,11 @@ function bindGameControls() {
   const addPlayerButton = document.querySelector("#add-player-button");
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
+  const passTurnButton = document.querySelector("#pass-turn-button");
   const confirmRedrawButton = document.querySelector("#confirm-redraw-button");
   const cancelRedrawButton = document.querySelector("#cancel-redraw-button");
+  const confirmPassButton = document.querySelector("#confirm-pass-button");
+  const cancelPassButton = document.querySelector("#cancel-pass-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
 
@@ -4406,12 +4607,24 @@ function bindGameControls() {
     redrawTilesButton.addEventListener("click", redrawTilesAndSkipTurn);
   }
 
+  if (passTurnButton) {
+    passTurnButton.addEventListener("click", passTurn);
+  }
+
   if (confirmRedrawButton) {
     confirmRedrawButton.addEventListener("click", confirmRedrawTilesAndSkipTurn);
   }
 
   if (cancelRedrawButton) {
     cancelRedrawButton.addEventListener("click", cancelRedrawTiles);
+  }
+
+  if (confirmPassButton) {
+    confirmPassButton.addEventListener("click", confirmPassTurn);
+  }
+
+  if (cancelPassButton) {
+    cancelPassButton.addEventListener("click", cancelPassTurn);
   }
 
   if (shuffleRackButton) {
@@ -4465,6 +4678,8 @@ window.addEventListener("hashchange", async () => {
 window.startWordWefterGame = startNewGame;
 window.shuffleWordWefterRack = shuffleRackTiles;
 window.redrawWordWefterTiles = redrawTilesAndSkipTurn;
+window.passWordWefterTurn = passTurn;
+window.confirmWordWefterPass = confirmPassTurn;
 window.finishWordWefterPlacement = finishPlacement;
 window.resetWordWefterPlacement = resetPlacement;
 

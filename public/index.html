@@ -374,6 +374,12 @@
       background: rgba(255, 255, 255, 0.52);
     }
 
+    .active-game-row.completed-game {
+      border-color: rgba(23, 32, 42, 0.12);
+      background: rgba(255, 255, 255, 0.3);
+      opacity: 0.82;
+    }
+
     .active-games-empty {
       display: grid;
       justify-items: start;
@@ -452,6 +458,28 @@
       font-weight: 900;
       border-color: rgba(15, 139, 141, 0.28);
       background: rgba(15, 139, 141, 0.08);
+    }
+
+    .active-game-player-score.winner-player {
+      color: #7a3f00;
+      font-weight: 900;
+      border-color: rgba(242, 177, 52, 0.75);
+      background:
+        linear-gradient(135deg, rgba(242, 177, 52, 0.28), rgba(255, 255, 255, 0.68));
+      box-shadow: 0.1rem 0.1rem 0 rgba(217, 79, 112, 0.2);
+    }
+
+    .active-game-player-score.winner-player::before {
+      content: "workspace_premium";
+      color: var(--warm);
+      font-family: "Material Symbols Outlined";
+      font-size: 1rem;
+      line-height: 1;
+      font-variation-settings:
+        "FILL" 1,
+        "wght" 700,
+        "GRAD" 0,
+        "opsz" 24;
     }
 
     .page-hero,
@@ -778,6 +806,235 @@
 
     body.screen-play .marketplace-cost-badge {
       display: block;
+    }
+
+    .winner-banner {
+      display: none;
+      position: relative;
+      width: 100%;
+      min-height: 4.75rem;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-rows: minmax(0, 1fr);
+      gap: clamp(0.35rem, 1.8vw, 0.75rem);
+      padding: calc(clamp(0.45rem, 1.8vw, 0.75rem) + 0.42rem) clamp(0.45rem, 1.8vw, 0.75rem) clamp(0.45rem, 1.8vw, 0.75rem);
+      border: 2px solid rgba(242, 177, 52, 0.9);
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, rgba(242, 177, 52, 0.3), rgba(15, 139, 141, 0.15)),
+        rgba(255, 255, 255, 0.72);
+      box-shadow: 0.18rem 0.18rem 0 rgba(217, 79, 112, 0.25);
+      overflow: visible;
+      text-align: left;
+    }
+
+    .winner-banner::before {
+      content: "Final Result";
+      position: absolute;
+      top: -0.58rem;
+      left: 0.7rem;
+      z-index: 2;
+      padding: 0.12rem 0.38rem;
+      border: 2px solid rgba(242, 177, 52, 0.9);
+      border-radius: 5px;
+      background: #fbfaf6;
+      color: #7a3f00;
+      font: 800 0.72rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .winner-banner-confetti {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .winner-banner-confetti-piece {
+      position: absolute;
+      top: -0.8rem;
+      left: var(--confetti-left);
+      width: var(--confetti-width, 0.38rem);
+      height: var(--confetti-height, 0.62rem);
+      border-radius: 2px;
+      background: var(--confetti-color);
+      opacity: 0.7;
+      transform: translateY(-0.8rem) rotate(var(--confetti-rotate, 0deg));
+      animation: winner-banner-confetti-fall var(--confetti-duration, 4.6s) linear infinite;
+      animation-delay: var(--confetti-delay, 0s);
+    }
+
+    .winner-banner-confetti-piece:nth-child(3n) {
+      border-radius: 50%;
+    }
+
+    .winner-banner-confetti-piece:nth-child(4n) {
+      height: var(--confetti-width, 0.38rem);
+    }
+
+    .winner-banner-confetti-piece:nth-child(1) {
+      --confetti-left: 4%;
+      --confetti-color: var(--rose);
+      --confetti-delay: -0.6s;
+      --confetti-duration: 4.8s;
+      --confetti-rotate: 12deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(2) {
+      --confetti-left: 13%;
+      --confetti-color: var(--accent);
+      --confetti-delay: -2.1s;
+      --confetti-duration: 5.4s;
+      --confetti-width: 0.3rem;
+      --confetti-rotate: -24deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(3) {
+      --confetti-left: 22%;
+      --confetti-color: var(--warm);
+      --confetti-delay: -1.4s;
+      --confetti-duration: 4.4s;
+      --confetti-height: 0.42rem;
+      --confetti-rotate: 36deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(4) {
+      --confetti-left: 31%;
+      --confetti-color: rgba(217, 79, 112, 0.9);
+      --confetti-delay: -3s;
+      --confetti-duration: 5.8s;
+      --confetti-rotate: 8deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(5) {
+      --confetti-left: 41%;
+      --confetti-color: rgba(15, 139, 141, 0.9);
+      --confetti-delay: -1.9s;
+      --confetti-duration: 4.9s;
+      --confetti-width: 0.32rem;
+      --confetti-rotate: -40deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(6) {
+      --confetti-left: 52%;
+      --confetti-color: var(--warm);
+      --confetti-delay: -0.2s;
+      --confetti-duration: 5.5s;
+      --confetti-rotate: 20deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(7) {
+      --confetti-left: 63%;
+      --confetti-color: var(--rose);
+      --confetti-delay: -2.7s;
+      --confetti-duration: 4.7s;
+      --confetti-width: 0.28rem;
+      --confetti-rotate: -16deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(8) {
+      --confetti-left: 73%;
+      --confetti-color: var(--accent);
+      --confetti-delay: -1.1s;
+      --confetti-duration: 5.9s;
+      --confetti-rotate: 44deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(9) {
+      --confetti-left: 84%;
+      --confetti-color: rgba(242, 177, 52, 0.95);
+      --confetti-delay: -3.5s;
+      --confetti-duration: 5.2s;
+      --confetti-height: 0.46rem;
+      --confetti-rotate: -28deg;
+    }
+
+    .winner-banner-confetti-piece:nth-child(10) {
+      --confetti-left: 94%;
+      --confetti-color: rgba(217, 79, 112, 0.86);
+      --confetti-delay: -1.7s;
+      --confetti-duration: 4.6s;
+      --confetti-rotate: 18deg;
+    }
+
+    @keyframes winner-banner-confetti-fall {
+      0% {
+        transform: translate3d(-0.18rem, -0.9rem, 0) rotate(var(--confetti-rotate, 0deg));
+      }
+
+      45% {
+        transform: translate3d(0.22rem, 2.45rem, 0) rotate(calc(var(--confetti-rotate, 0deg) + 110deg));
+      }
+
+      100% {
+        transform: translate3d(-0.08rem, 6.4rem, 0) rotate(calc(var(--confetti-rotate, 0deg) + 240deg));
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .winner-banner-confetti-piece {
+        animation: none;
+        transform: translateY(1.25rem) rotate(var(--confetti-rotate, 0deg));
+      }
+    }
+
+    .winner-banner-icon {
+      grid-column: 1;
+      grid-row: 1;
+      place-self: center;
+      z-index: 1;
+      color: var(--warm);
+      font-family: "Material Symbols Outlined";
+      font-size: clamp(2rem, 8vw, 2.7rem);
+      line-height: 1;
+      text-shadow: 0.06rem 0.06rem 0 rgba(23, 32, 42, 0.18);
+      font-variation-settings:
+        "FILL" 1,
+        "wght" 700,
+        "GRAD" 0,
+        "opsz" 24;
+    }
+
+    .winner-banner-spacer {
+      grid-column: 1;
+      grid-row: 1;
+      width: 100%;
+      aspect-ratio: 1;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .winner-banner-copy {
+      grid-column: 2 / -1;
+      grid-row: 1;
+      align-self: center;
+      z-index: 1;
+      display: grid;
+      gap: 0.2rem;
+      min-width: 0;
+    }
+
+    .winner-banner-label {
+      color: var(--rose);
+      font: 900 0.78rem/1.1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .winner-banner-names {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: var(--ink);
+      font: 900 clamp(1.1rem, 4.5vw, 1.55rem)/1.1 system-ui, sans-serif;
+    }
+
+    body.game-over .marketplace {
+      display: none;
+    }
+
+    body.game-over .winner-banner {
+      display: grid;
     }
 
     .rack::before,
@@ -1554,12 +1811,27 @@
       margin-top: clamp(1.5rem, 3vw, 2.25rem);
     }
 
-    .redraw-tiles-button {
+    .redraw-tiles-button,
+    .pass-turn-button {
       display: none;
     }
 
-    body.screen-play .redraw-tiles-button {
+    body.screen-play .redraw-tiles-button,
+    body.screen-play .pass-turn-button {
       display: inline-block;
+    }
+
+    body.game-over .rack,
+    body.game-over .rack-shuffle-button,
+    body.game-over .rack-controls,
+    body.game-over .redraw-confirm,
+    body.game-over .pass-confirm {
+      display: none;
+    }
+
+    body.game-over .redraw-tiles-button,
+    body.game-over .pass-turn-button {
+      display: none;
     }
 
     .rack-shuffle-button {
@@ -1603,6 +1875,7 @@
     }
 
     #redraw-tiles-button,
+    #pass-turn-button,
     #reset-placement-button {
       justify-self: start;
     }
@@ -1611,7 +1884,8 @@
       justify-self: end;
     }
 
-    .redraw-confirm {
+    .redraw-confirm,
+    .pass-confirm {
       display: none;
       width: 100%;
       max-width: 24rem;
@@ -1630,18 +1904,28 @@
       display: grid;
     }
 
-    .redraw-confirm-actions {
+    body.confirm-pass .pass-confirm {
+      display: grid;
+    }
+
+    .redraw-confirm-actions,
+    .pass-confirm-actions {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 0.55rem;
     }
 
-    body.confirm-redraw #redraw-tiles-button {
+    body.confirm-redraw #redraw-tiles-button,
+    body.confirm-pass #redraw-tiles-button,
+    body.confirm-pass #pass-turn-button,
+    body.confirm-redraw #pass-turn-button {
       display: none;
     }
 
-    body.has-active-placement #redraw-tiles-button {
+    body.has-active-placement #redraw-tiles-button,
+    body.has-active-placement #pass-turn-button,
+    body.has-active-placement .pass-confirm {
       display: none;
     }
 
@@ -1829,6 +2113,29 @@
       margin-top: 0.75rem;
       padding-top: 0.75rem;
       border-top: 2px solid rgba(23, 32, 42, 0.16);
+    }
+
+    .game-log-result {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem 0.5rem;
+      align-items: baseline;
+      color: rgba(23, 32, 42, 0.82);
+      font: 800 0.86rem/1.25 system-ui, sans-serif;
+    }
+
+    .game-log-result-label {
+      color: var(--rose);
+      font: 900 0.78rem/1.1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .game-log-result strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: var(--ink);
+      font: inherit;
     }
 
     .game-log-list {
@@ -2154,6 +2461,26 @@
         <div class="marketplace" id="marketplace" aria-label="Tile marketplace">
           <div class="marketplace-cost-badge" aria-label="Marketplace tile cost">Cost: <span id="marketplace-cost">5</span> points</div>
         </div>
+        <div class="winner-banner" id="winner-banner" role="status" aria-live="polite" aria-hidden="true">
+          <span class="winner-banner-confetti" aria-hidden="true">
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+            <span class="winner-banner-confetti-piece"></span>
+          </span>
+          <span class="winner-banner-spacer" aria-hidden="true"></span>
+          <span class="material-symbols-outlined winner-banner-icon" aria-hidden="true">workspace_premium</span>
+          <span class="winner-banner-copy">
+            <span class="winner-banner-label" id="winner-banner-label"></span>
+            <strong class="winner-banner-names" id="winner-banner-names"></strong>
+          </span>
+        </div>
       </div>
       <div class="board" id="board" aria-label="9 by 9 board"></div>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
@@ -2164,6 +2491,7 @@
         <div class="rack" id="rack" aria-label="Rack"></div>
         <div class="rack-controls" aria-label="Rack controls">
           <button class="game-button redraw-tiles-button" type="button" id="redraw-tiles-button">Redraw Tiles</button>
+          <button class="game-button secondary pass-turn-button" type="button" id="pass-turn-button">Pass</button>
           <button class="game-button placement-action" type="button" id="reset-placement-button">Reset</button>
           <button class="game-button placement-action" type="button" id="finish-placement-button">Finish</button>
         </div>
@@ -2172,6 +2500,13 @@
           <div class="redraw-confirm-actions">
             <button class="game-button" type="button" id="confirm-redraw-button">Redraw</button>
             <button class="game-button secondary" type="button" id="cancel-redraw-button">Cancel</button>
+          </div>
+        </div>
+        <div class="pass-confirm" id="pass-confirm" role="status" aria-live="polite">
+          <span>Pass this turn? If all players pass in a row, the game will end and the highest score wins.</span>
+          <div class="pass-confirm-actions">
+            <button class="game-button" type="button" id="confirm-pass-button">Pass</button>
+            <button class="game-button secondary" type="button" id="cancel-pass-button">Cancel</button>
           </div>
         </div>
         <div class="game-state-panel" aria-label="Game state">
@@ -2207,6 +2542,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=login-storage-fallback"></script>
+  <script type="module" src="./game.js?v=completed-turn-standard-color"></script>
 </body>
 </html>
