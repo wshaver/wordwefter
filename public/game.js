@@ -46,6 +46,7 @@ const gameLengthSettings = {
 const wildcardLetter = "?";
 const playableLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const rackWildcardProbability = 1 / 14;
+const rackRainbowProbability = 1 / 14;
 
 class WordWefterGameState {
   constructor(setup = {}) {
@@ -382,6 +383,7 @@ class WordWefterGameState {
 
       if (tile) {
         drawnTiles.push(this.prepareRackDrawnTile(tile, {
+          suppressRandomRainbow: Boolean(options.ensureRainbow),
           forceNonWildcard: Boolean(options.ensureRainbow) &&
             drawnTiles.length === tileCount - 1 &&
             !drawnTiles.some((drawnTile) => !drawnTile.wildcard)
@@ -440,7 +442,14 @@ class WordWefterGameState {
       };
     }
 
-    return tile;
+    return !options.suppressRandomRainbow &&
+      tile.letter !== wildcardLetter &&
+      Math.random() < rackRainbowProbability
+      ? {
+        ...tile,
+        rainbow: true
+      }
+      : tile;
   }
 
   assignRainbowTile(tiles) {
@@ -2328,8 +2337,8 @@ let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
 let loadingGameFromURL = false;
 let marketplaceRenderTimer = null;
-let renderedRackTileIds = new Set();
-let renderedMarketplaceTileIds = new Set();
+let renderedRackTileKeys = [];
+let renderedMarketplaceTileKeys = [];
 let renderedGameId = "";
 let turnStartGameStateJSON = "";
 const tileEnterDurations = [520, 560, 540, 500];
@@ -2378,8 +2387,8 @@ function restoreTurnStartGameState() {
 
   gameState.loadFromJSON(JSON.parse(turnStartGameStateJSON), { preserveRackOrder: false });
   remotePlayedCellKeys.clear();
-  renderedRackTileIds = getTileIds(getVisibleRack());
-  renderedMarketplaceTileIds = getTileIds(gameState.marketplaceTiles);
+  renderedRackTileKeys = getTileAnimationKeys(getVisibleRack());
+  renderedMarketplaceTileKeys = getTileAnimationKeys(gameState.marketplaceTiles);
   renderedGameId = gameState.id;
   tileEnterQueueAvailableAt = 0;
   return true;
@@ -2634,15 +2643,48 @@ function wait(milliseconds) {
   });
 }
 
-function getTileIds(tiles) {
-  return new Set((tiles || [])
-    .filter(Boolean)
-    .map((tile) => tile.id));
+function getTileAnimationKey(tile) {
+  return gameState.getRackTileSignature(tile);
 }
 
-function getNewTileIds(nextTileIds, previousTileIds) {
-  return new Set(Array.from(nextTileIds)
-    .filter((tileId) => !previousTileIds.has(tileId)));
+function getTileAnimationKeys(tiles) {
+  return (tiles || [])
+    .filter(Boolean)
+    .map((tile) => getTileAnimationKey(tile));
+}
+
+function getNewTileAnimationKeyCounts(nextTiles, previousTileKeys) {
+  const previousCounts = (previousTileKeys || []).reduce((counts, key) => {
+    counts.set(key, (counts.get(key) || 0) + 1);
+    return counts;
+  }, new Map());
+
+  return (nextTiles || [])
+    .filter(Boolean)
+    .reduce((newCounts, tile) => {
+      const key = getTileAnimationKey(tile);
+      const previousCount = previousCounts.get(key) || 0;
+
+      if (previousCount > 0) {
+        previousCounts.set(key, previousCount - 1);
+      } else {
+        newCounts.set(key, (newCounts.get(key) || 0) + 1);
+      }
+
+      return newCounts;
+    }, new Map());
+}
+
+function consumeTileAnimationKeyCount(counts, tile) {
+  const key = getTileAnimationKey(tile);
+  const count = counts.get(key) || 0;
+
+  if (count <= 0) {
+    return false;
+  }
+
+  counts.set(key, count - 1);
+  return true;
 }
 
 function animateSequentialTileEnter(tileElements) {
@@ -2686,8 +2728,7 @@ function animateSequentialTileEnter(tileElements) {
 function renderRack(options = {}) {
   const rack = document.querySelector("#rack");
   const visibleRack = getVisibleRack();
-  const nextRackTileIds = getTileIds(visibleRack);
-  const enteringTileIds = getNewTileIds(nextRackTileIds, renderedRackTileIds);
+  const enteringTileKeyCounts = getNewTileAnimationKeyCounts(visibleRack, renderedRackTileKeys);
 
   if (!rack) {
     return;
@@ -2702,13 +2743,13 @@ function renderRack(options = {}) {
   animateRackShuffle(options.shuffleRects);
 
   const enteringTileElements = Array.from(rack.querySelectorAll(".tile"))
-    .filter((tileElement) => enteringTileIds.has(tileElement.dataset.tileId));
+    .filter((tileElement, index) => consumeTileAnimationKeyCount(enteringTileKeyCounts, visibleRack[index]));
 
   if (enteringTileElements.length > 0) {
     animateSequentialTileEnter(enteringTileElements);
   }
 
-  renderedRackTileIds = nextRackTileIds;
+  renderedRackTileKeys = getTileAnimationKeys(visibleRack);
 }
 
 function animateMarketplaceEnter() {
@@ -2719,10 +2760,9 @@ function renderMarketplace(options = {}) {
   const marketplace = document.querySelector("#marketplace");
   const marketplaceCostBadge = document.querySelector(".marketplace-cost-badge");
   const marketplaceCostElement = document.querySelector("#marketplace-cost");
-  const nextMarketplaceTileIds = getTileIds(gameState.marketplaceTiles);
-  const enteringTileIds = options.enter
-    ? nextMarketplaceTileIds
-    : getNewTileIds(nextMarketplaceTileIds, renderedMarketplaceTileIds);
+  const enteringTileKeyCounts = options.enter
+    ? getNewTileAnimationKeyCounts(gameState.marketplaceTiles, [])
+    : getNewTileAnimationKeyCounts(gameState.marketplaceTiles, renderedMarketplaceTileKeys);
 
   if (!marketplace) {
     return;
@@ -2742,7 +2782,7 @@ function renderMarketplace(options = {}) {
   }
 
   if (marketplaceCostElement) {
-    marketplaceCostElement.textContent = gameState.getMarketplaceTileCost();
+    marketplaceCostElement.textContent = getDisplayedMarketplaceTileCost();
   }
 
   marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
@@ -2770,13 +2810,19 @@ function renderMarketplace(options = {}) {
   });
 
   const enteringItemElements = Array.from(marketplace.querySelectorAll(".marketplace-item:not(.marketplace-item-empty)"))
-    .filter((itemElement) => enteringTileIds.has(itemElement.dataset.tileId));
+    .filter((itemElement) => {
+      const tile = gameState.marketplaceTiles.find((marketplaceTile) => (
+        marketplaceTile?.id === itemElement.dataset.tileId
+      ));
+
+      return consumeTileAnimationKeyCount(enteringTileKeyCounts, tile);
+    });
 
   if (enteringItemElements.length > 0) {
     animateSequentialTileEnter(enteringItemElements);
   }
 
-  renderedMarketplaceTileIds = nextMarketplaceTileIds;
+  renderedMarketplaceTileKeys = getTileAnimationKeys(gameState.marketplaceTiles);
 }
 
 function updatePlacementControls() {
@@ -3013,8 +3059,8 @@ function renderGame(options = {}) {
   document.body.classList.toggle("game-over", gameState.gameOver);
 
   if (renderedGameId !== gameState.id) {
-    renderedRackTileIds = new Set();
-    renderedMarketplaceTileIds = new Set();
+    renderedRackTileKeys = [];
+    renderedMarketplaceTileKeys = [];
     renderedGameId = gameState.id;
     tileEnterQueueAvailableAt = 0;
   }
@@ -3135,6 +3181,10 @@ function getLoggedInPlayer() {
 
 function getVisibleRack() {
   return getLoggedInPlayer()?.rack || gameState.currentRack;
+}
+
+function getDisplayedMarketplaceTileCost() {
+  return gameState.getMarketplaceTileCost(getLoggedInPlayer() || gameState.player);
 }
 
 function getPlayerRackFromState(source, playerName) {
