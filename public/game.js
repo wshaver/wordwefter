@@ -31,22 +31,77 @@ const bonusTypes = {
 const gameLengthSettings = {
   short: {
     label: "Short",
-    drawThresholdRatio: 1 / 3
+    poolRatio: 1 / 3
   },
-  medium: {
-    label: "Medium",
-    drawThresholdRatio: 2 / 3
+  normal: {
+    label: "Normal",
+    poolRatio: 2 / 3
   },
   long: {
     label: "Long",
-    drawThresholdRatio: null
+    poolRatio: 1
   }
 };
 
 const wildcardLetter = "?";
 const playableLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const rackWildcardProbability = 1 / 14;
+const wildcardPoolFrequency = 14;
 const rackRainbowProbability = 1 / 14;
+
+function normalizeGameLength(gameLength) {
+  const normalizedLength = String(gameLength || "").trim().toLowerCase();
+
+  if (normalizedLength === "medium") {
+    return "normal";
+  }
+
+  return gameLengthSettings[normalizedLength] ? normalizedLength : "normal";
+}
+
+function createLettersAvailableForGameLength(gameLength) {
+  const normalizedLength = normalizeGameLength(gameLength);
+  const poolRatio = gameLengthSettings[normalizedLength].poolRatio;
+
+  const playableTotal = playableLetters
+    .reduce((total, letter) => total + Math.max(0, Number(letters_available[letter] || 0)), 0);
+  const targetTotal = Math.max(1, Math.round(playableTotal * poolRatio));
+  const scaledLetters = poolRatio === 1
+    ? playableLetters.map((letter) => ({
+      letter,
+      count: Math.max(0, Number(letters_available[letter] || 0)),
+      remainder: 0
+    }))
+    : playableLetters.map((letter) => {
+      const exactCount = (Math.max(0, Number(letters_available[letter] || 0)) / playableTotal) * targetTotal;
+      const count = Math.floor(exactCount);
+
+      return {
+        letter,
+        count,
+        remainder: exactCount - count
+      };
+    });
+  let assignedTotal = scaledLetters.reduce((total, entry) => total + entry.count, 0);
+
+  if (poolRatio !== 1) {
+    scaledLetters
+      .sort((first, second) => second.remainder - first.remainder)
+      .forEach((entry) => {
+        if (assignedTotal < targetTotal) {
+          entry.count += 1;
+          assignedTotal += 1;
+        }
+      });
+  }
+
+  return {
+    [wildcardLetter]: Math.max(1, Math.round(assignedTotal / (wildcardPoolFrequency - 1))),
+    ...scaledLetters.reduce((counts, entry) => {
+      counts[entry.letter] = entry.count;
+      return counts;
+    }, {})
+  };
+}
 
 class WordWefterGameState {
   constructor(setup = {}) {
@@ -56,14 +111,15 @@ class WordWefterGameState {
     this.startDate = setup.startDate || new Date().toISOString();
     this.lastPlayDate = setup.lastPlayDate || this.startDate;
     this.letterPoints = { ...letter_points, ...setup.letterPoints };
-    this.startingLettersAvailable = { ...letters_available, ...setup.lettersAvailable };
+    this.gameLength = normalizeGameLength(setup.gameLength);
+    this.startingLettersAvailable = { ...createLettersAvailableForGameLength(this.gameLength), ...setup.startingLettersAvailable };
     this.lettersAvailable = { ...this.startingLettersAvailable };
-    this.gameLength = gameLengthSettings[setup.gameLength] ? setup.gameLength : "medium";
+    if (setup.lettersAvailable) {
+      this.lettersAvailable = { ...this.lettersAvailable, ...setup.lettersAvailable };
+    }
     this.tilesDrawn = Number.isInteger(Number(setup.tilesDrawn)) ? Math.max(0, Number(setup.tilesDrawn)) : 0;
-    this.finalTurnsRemaining = Number.isInteger(Number(setup.finalTurnsRemaining))
-      ? Math.max(0, Number(setup.finalTurnsRemaining))
-      : null;
-    this.pendingFinalRound = Boolean(setup.pendingFinalRound);
+    this.finalTurnsRemaining = null;
+    this.pendingFinalRound = false;
     this.gameOver = Boolean(setup.gameOver);
     this.dictionary = setup.dictionary || dictionaryWordSet;
     this.players = this.normalizePlayers(playerNames);
@@ -127,7 +183,7 @@ class WordWefterGameState {
 
     const action = String(entry?.action || "").trim().toLowerCase();
 
-    if (words.length === 0 && action !== "pass") {
+    if (words.length === 0 && !["pass", "redraw"].includes(action)) {
       return null;
     }
 
@@ -137,7 +193,7 @@ class WordWefterGameState {
       turnIndex: Number.isInteger(turnIndex) ? Math.max(0, turnIndex) : fallbackTurnIndex,
       playerName: String(entry?.playerName || "Player").trim() || "Player",
       words,
-      ...(action === "pass" ? { action: "pass" } : {})
+      ...(["pass", "redraw"].includes(action) ? { action } : {})
     };
   }
 
@@ -186,6 +242,18 @@ class WordWefterGameState {
     return entry;
   }
 
+  recordRedrawTurnHistory() {
+    const entry = {
+      turnIndex: this.turnIndex,
+      playerName: this.currentPlayerName,
+      action: "redraw",
+      words: []
+    };
+
+    this.history.push(entry);
+    return entry;
+  }
+
   getConsecutivePassCount() {
     let passCount = 0;
 
@@ -224,39 +292,33 @@ class WordWefterGameState {
   }
 
   get tilesRemaining() {
-    return Object.entries(this.lettersAvailable)
-      .filter(([letter]) => letter !== wildcardLetter)
-      .reduce((total, [, count]) => total + count, 0);
+    return Object.values(this.lettersAvailable)
+      .reduce((total, count) => total + Math.max(0, Number(count || 0)), 0);
   }
 
   get totalTilePool() {
-    return Object.entries(this.startingLettersAvailable)
-      .filter(([letter]) => letter !== wildcardLetter)
-      .reduce((total, [, count]) => total + count, 0);
+    return Object.values(this.startingLettersAvailable)
+      .reduce((total, count) => total + Math.max(0, Number(count || 0)), 0);
+  }
+
+  reconcileStartingPoolForLoadedState() {
+    [wildcardLetter, ...playableLetters].forEach((letter) => {
+      this.startingLettersAvailable[letter] = Math.max(
+        Math.max(0, Number(this.startingLettersAvailable[letter] || 0)),
+        Math.max(0, Number(this.lettersAvailable[letter] || 0))
+      );
+    });
+
+    const expectedTotal = this.tilesRemaining + this.tilesDrawn;
+    const currentTotal = this.totalTilePool;
+
+    if (expectedTotal > currentTotal) {
+      this.startingLettersAvailable.E += expectedTotal - currentTotal;
+    }
   }
 
   get gameLengthSetting() {
-    return gameLengthSettings[this.gameLength] || gameLengthSettings.medium;
-  }
-
-  get drawThreshold() {
-    return this.gameLengthSetting.drawThresholdRatio === null
-      ? null
-      : Math.ceil(this.totalTilePool * this.gameLengthSetting.drawThresholdRatio);
-  }
-
-  get tilesUntilGameEndDrawTrigger() {
-    return this.drawThreshold === null
-      ? null
-      : Math.max(0, this.drawThreshold - this.tilesDrawn);
-  }
-
-  get isFinalRound() {
-    return Number.isInteger(this.finalTurnsRemaining);
-  }
-
-  get isFinalTurn() {
-    return this.isFinalRound && this.finalTurnsRemaining > 0 && !this.gameOver;
+    return gameLengthSettings[this.gameLength] || gameLengthSettings.normal;
   }
 
   get currentRack() {
@@ -291,47 +353,13 @@ class WordWefterGameState {
   }
 
   setGameLength(gameLength) {
-    this.gameLength = gameLengthSettings[gameLength] ? gameLength : "medium";
-  }
-
-  startFinalRound() {
-    if (!this.isFinalRound) {
-      this.finalTurnsRemaining = this.players.length;
-      this.pendingFinalRound = false;
-    }
-  }
-
-  completeTurn() {
-    if (this.isFinalRound && this.finalTurnsRemaining > 0) {
-      this.finalTurnsRemaining -= 1;
-
-      if (this.finalTurnsRemaining === 0) {
-        this.gameOver = true;
-      }
-    }
-  }
-
-  checkDrawTriggeredGameEnd() {
-    if (
-      this.gameLength !== "long" &&
-      this.drawThreshold !== null &&
-      this.tilesDrawn >= this.drawThreshold &&
-      !this.isFinalRound
-    ) {
-      this.pendingFinalRound = true;
-    }
+    this.gameLength = normalizeGameLength(gameLength);
   }
 
   advanceTurn() {
     const result = {
       drawnTiles: []
     };
-
-    this.completeTurn();
-
-    if (this.pendingFinalRound && !this.gameOver) {
-      this.startFinalRound();
-    }
 
     if (this.gameOver) {
       return result;
@@ -344,9 +372,6 @@ class WordWefterGameState {
 
       result.drawnTiles = drawnTiles;
 
-      if (this.gameLength === "long" && drawnTiles.length < 7) {
-        this.startFinalRound();
-      }
     }
 
     return result;
@@ -379,14 +404,15 @@ class WordWefterGameState {
     const drawnTiles = [];
 
     while (drawnTiles.length < tileCount && this.tilesRemaining > 0) {
-      const tile = this.drawTile();
+      const shouldForceNonWildcard = Boolean(options.ensureRainbow) &&
+        drawnTiles.length === tileCount - 1 &&
+        !drawnTiles.some((drawnTile) => !drawnTile.wildcard) &&
+        this.hasAvailableMarketplaceLetters();
+      const tile = this.drawTile({ excludeWildcards: shouldForceNonWildcard });
 
       if (tile) {
         drawnTiles.push(this.prepareRackDrawnTile(tile, {
-          suppressRandomRainbow: Boolean(options.ensureRainbow),
-          forceNonWildcard: Boolean(options.ensureRainbow) &&
-            drawnTiles.length === tileCount - 1 &&
-            !drawnTiles.some((drawnTile) => !drawnTile.wildcard)
+          suppressRandomRainbow: Boolean(options.ensureRainbow)
         }));
       }
     }
@@ -408,40 +434,50 @@ class WordWefterGameState {
 
     while (
       (this.marketplaceTiles.length < tileCount || this.marketplaceTiles.some((tile) => !tile)) &&
-      this.tilesRemaining > 0
+      this.tilesRemaining > 0 &&
+      this.hasAvailableMarketplaceLetters()
     ) {
+      const wasGameOver = this.gameOver;
       const tile = this.drawTile();
 
-      if (tile) {
-        const emptyIndex = this.marketplaceTiles.findIndex((marketplaceTile) => !marketplaceTile);
-
-        if (emptyIndex === -1) {
-          this.marketplaceTiles.push(tile);
-        } else {
-          this.marketplaceTiles[emptyIndex] = tile;
-        }
-        drawnTiles.push(tile);
+      if (!tile) {
+        continue;
       }
+
+      if (tile.wildcard) {
+        this.returnTileToAvailableLetters(tile, { restoreDrawCount: true });
+
+        if (!wasGameOver && this.tilesRemaining > 0) {
+          this.gameOver = false;
+          this.pendingFinalRound = false;
+          this.finalTurnsRemaining = null;
+        }
+
+        if (!this.hasAvailableMarketplaceLetters()) {
+          break;
+        }
+
+        continue;
+      }
+
+      const emptyIndex = this.marketplaceTiles.findIndex((marketplaceTile) => !marketplaceTile);
+
+      if (emptyIndex === -1) {
+        this.marketplaceTiles.push(tile);
+      } else {
+        this.marketplaceTiles[emptyIndex] = tile;
+      }
+      drawnTiles.push(tile);
     }
 
     return drawnTiles;
   }
 
-  prepareRackDrawnTile(tile, options = {}) {
-    if (
-      !options.forceNonWildcard &&
-      tile.letter !== wildcardLetter &&
-      Math.random() < rackWildcardProbability
-    ) {
-      return {
-        ...tile,
-        letter: wildcardLetter,
-        points: 0,
-        wildcard: true,
-        sourceLetter: tile.letter
-      };
-    }
+  hasAvailableMarketplaceLetters() {
+    return playableLetters.some((letter) => Math.max(0, Number(this.lettersAvailable[letter] || 0)) > 0);
+  }
 
+  prepareRackDrawnTile(tile, options = {}) {
     return !options.suppressRandomRainbow &&
       tile.letter !== wildcardLetter &&
       Math.random() < rackRainbowProbability
@@ -465,7 +501,7 @@ class WordWefterGameState {
     return rainbowTile;
   }
 
-  returnTileToAvailableLetters(tile) {
+  returnTileToAvailableLetters(tile, options = {}) {
     const letter = String(tile?.sourceLetter || tile?.letter || "").toUpperCase();
 
     if (!letter || !Object.hasOwn(this.lettersAvailable, letter)) {
@@ -473,16 +509,16 @@ class WordWefterGameState {
     }
 
     this.lettersAvailable[letter] += 1;
+
+    if (options.restoreDrawCount) {
+      this.tilesDrawn = Math.max(0, this.tilesDrawn - 1);
+    }
   }
 
-  redrawCurrentRack(options = {}) {
-    if (options.availableOnly) {
-      this.discardedTiles.push(...this.currentRack);
-    } else {
-      this.currentRack.forEach((tile) => {
-        this.returnTileToAvailableLetters(tile);
-      });
-    }
+  redrawCurrentRack() {
+    this.currentRack.forEach((tile) => {
+      this.returnTileToAvailableLetters(tile, { restoreDrawCount: true });
+    });
 
     this.currentRack = [];
 
@@ -743,9 +779,12 @@ class WordWefterGameState {
     this.pendingMarketplacePurchaseScoreStart = null;
   }
 
-  drawTile() {
+  drawTile(options = {}) {
     const weightedLetters = Object.entries(this.lettersAvailable)
-      .filter(([letter, count]) => letter !== wildcardLetter && count > 0);
+      .filter(([letter, count]) => (
+        count > 0 &&
+        (!options.excludeWildcards || letter !== wildcardLetter)
+      ));
     const totalWeight = weightedLetters.reduce((total, [, count]) => total + count, 0);
 
     if (totalWeight === 0) {
@@ -758,12 +797,18 @@ class WordWefterGameState {
       if (drawIndex < count) {
         this.lettersAvailable[letter] -= 1;
         this.tilesDrawn += 1;
-        this.checkDrawTriggeredGameEnd();
+
+        if (this.tilesRemaining === 0) {
+          this.gameOver = true;
+          this.pendingFinalRound = false;
+          this.finalTurnsRemaining = null;
+        }
 
         return {
           id: `tile-${this.nextTileId++}`,
           letter,
           points: this.letterPoints[letter],
+          ...(letter === wildcardLetter ? { wildcard: true } : {}),
         };
       }
 
@@ -774,6 +819,7 @@ class WordWefterGameState {
   }
 
   reset() {
+    this.startingLettersAvailable = createLettersAvailableForGameLength(this.gameLength);
     this.lettersAvailable = { ...this.startingLettersAvailable };
     this.id = WordWefterGameState.createGameId();
     this.startDate = new Date().toISOString();
@@ -998,8 +1044,6 @@ class WordWefterGameState {
       lastPlayDate: this.lastPlayDate,
       gameLength: this.gameLength,
       tilesDrawn: this.tilesDrawn,
-      ...(this.isFinalRound ? { finalTurnsRemaining: this.finalTurnsRemaining } : {}),
-      ...(this.pendingFinalRound ? { pendingFinalRound: true } : {}),
       ...(this.gameOver ? { gameOver: true } : {}),
       turnIndex: this.turnIndex,
       currentPlayerIndex: this.currentPlayerIndex,
@@ -1022,6 +1066,7 @@ class WordWefterGameState {
         } : {}),
         rack: player.rack.map((tile) => this.serializeTile(tile))
       })),
+      startingLettersAvailable: { ...this.startingLettersAvailable },
       lettersAvailable: { ...this.lettersAvailable },
       ...(this.flashActivePlacements ? { flashActivePlacements: true } : {}),
       ...(this.discardedTiles.length > 0 ? {
@@ -1131,7 +1176,10 @@ class WordWefterGameState {
       : new Map();
 
     this.letterPoints = { ...letter_points };
-    this.startingLettersAvailable = { ...letters_available };
+    this.gameLength = normalizeGameLength(source.gameLength);
+    this.startingLettersAvailable = source.startingLettersAvailable
+      ? { ...createLettersAvailableForGameLength(this.gameLength), ...source.startingLettersAvailable }
+      : createLettersAvailableForGameLength(this.gameLength);
     this.lettersAvailable = { ...this.startingLettersAvailable, ...source.lettersAvailable };
     this.nextTileId = 1;
 
@@ -1207,15 +1255,13 @@ class WordWefterGameState {
     this.id = String(source.id || "").toUpperCase();
     this.startDate = String(source.startDate || "");
     this.lastPlayDate = String(source.lastPlayDate || this.startDate);
-    this.gameLength = gameLengthSettings[source.gameLength] ? source.gameLength : "medium";
     this.tilesDrawn = Number.isInteger(Number(source.tilesDrawn))
       ? Math.max(0, Number(source.tilesDrawn))
       : Math.max(0, this.totalTilePool - this.tilesRemaining);
-    this.finalTurnsRemaining = Number.isInteger(Number(source.finalTurnsRemaining))
-      ? Math.max(0, Number(source.finalTurnsRemaining))
-      : null;
-    this.pendingFinalRound = Boolean(source.pendingFinalRound);
-    this.gameOver = Boolean(source.gameOver);
+    this.reconcileStartingPoolForLoadedState();
+    this.finalTurnsRemaining = null;
+    this.pendingFinalRound = false;
+    this.gameOver = Boolean(source.gameOver) || this.tilesRemaining === 0;
     this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
     this.history = this.normalizeHistory(source.history);
     this.players = (source.players || []).map((player) => {
@@ -2298,12 +2344,7 @@ class WordWefterGameState {
       };
     }
 
-    const refillTileCount = Math.max(0, 7 - this.currentRack.length);
-    const refillTiles = this.drawTiles(refillTileCount);
-
-    if (this.gameLength === "long" && refillTiles.length < refillTileCount) {
-      this.pendingFinalRound = true;
-    }
+    this.drawTiles(Math.max(0, 7 - this.currentRack.length));
 
     return {
       ...validation,
@@ -2341,12 +2382,85 @@ let renderedRackTileKeys = [];
 let renderedMarketplaceTileKeys = [];
 let renderedGameId = "";
 let turnStartGameStateJSON = "";
+let showingPoolView = false;
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
 const rainbowTileAnimationMilliseconds = 7200;
 const rainbowTileAnimationStartedAt = Date.now();
 let tileEnterQueueAvailableAt = 0;
+
+function createPoolSnapshotForTesting(game = gameState) {
+  return {
+    gameId: game.id,
+    gameLength: game.gameLength,
+    rackCount: game.currentRack.length,
+    tilesRemaining: game.tilesRemaining,
+    tilesDrawn: game.tilesDrawn,
+    totalTilePool: game.totalTilePool
+  };
+}
+
+function runRedrawPoolAccountingCheck(setup = {}) {
+  const testGame = new WordWefterGameState({
+    playerNames: ["Test Player", "Test Opponent"],
+    gameLength: "normal",
+    ...setup
+  });
+
+  testGame.currentRack = testGame.drawSevenTiles({ ensureRainbow: true });
+
+  const before = createPoolSnapshotForTesting(testGame);
+  testGame.redrawCurrentRack();
+  const after = createPoolSnapshotForTesting(testGame);
+
+  return {
+    before,
+    after,
+    passed:
+      before.rackCount === 7 &&
+      after.rackCount === 7 &&
+      before.tilesRemaining === after.tilesRemaining &&
+      before.tilesDrawn === after.tilesDrawn &&
+      before.totalTilePool === after.totalTilePool
+  };
+}
+
+function publishWordWefterTestingGlobals(target, testGlobals) {
+  if (!target) {
+    return;
+  }
+
+  Object.entries({
+    WordWefterGameState,
+    wordWefterGame: gameState,
+    isWordWefterWord: testGlobals.isWord,
+    wordWefterTest: testGlobals
+  }).forEach(([name, value]) => {
+    try {
+      Object.defineProperty(target, name, {
+        configurable: true,
+        writable: false,
+        value
+      });
+    } catch (error) {
+      try {
+        target[name] = value;
+      } catch (assignmentError) {
+        // Some browser inspection contexts reject global writes; dataset markers below are the fallback.
+      }
+    }
+  });
+}
+
+function updateWordWefterTestingDataset() {
+  const dataset = document.documentElement.dataset;
+
+  dataset.wordWefterCurrentPoolSnapshot = JSON.stringify(createPoolSnapshotForTesting());
+  dataset.wordWefterCurrentPlayerIndex = String(gameState.currentPlayerIndex);
+  dataset.wordWefterCurrentTurnIndex = String(gameState.turnIndex);
+  dataset.wordWefterGameOver = String(gameState.gameOver);
+}
 
 function exposeWordWefterTestingGlobals() {
   const testGlobals = {
@@ -2360,18 +2474,30 @@ function exposeWordWefterTestingGlobals() {
     gameLengthSettings,
     createGameState: (setup = {}) => new WordWefterGameState(setup),
     getGameState: () => gameState,
+    getPoolSnapshot: (game = gameState) => createPoolSnapshotForTesting(game),
+    runRedrawPoolAccountingCheck,
     isWord: (word) => gameState.isRealWord(word)
   };
 
-  globalThis.WordWefterGameState = WordWefterGameState;
-  globalThis.wordWefterGame = gameState;
-  globalThis.isWordWefterWord = testGlobals.isWord;
-  globalThis.wordWefterTest = testGlobals;
+  publishWordWefterTestingGlobals(globalThis, testGlobals);
+  publishWordWefterTestingGlobals(globalThis.window, testGlobals);
+  publishWordWefterTestingGlobals(globalThis.document, testGlobals);
+  publishWordWefterTestingGlobals(globalThis.document?.documentElement, testGlobals);
 
   document.documentElement.dataset.wordWefterTestReady = "true";
   document.documentElement.dataset.wordWefterBoardSize = String(boardSize);
   document.documentElement.dataset.wordWefterStartCell = `${startCell.row},${startCell.column}`;
   document.documentElement.dataset.wordWefterWildcardLetter = wildcardLetter;
+  document.documentElement.dataset.wordWefterTestGlobalNames = [
+    "WordWefterGameState",
+    "wordWefterGame",
+    "wordWefterTest",
+    "isWordWefterWord"
+  ].join(",");
+  document.documentElement.dataset.wordWefterRedrawPoolAccountingCheck = JSON.stringify(
+    runRedrawPoolAccountingCheck()
+  );
+  updateWordWefterTestingDataset();
 }
 
 exposeWordWefterTestingGlobals();
@@ -2843,6 +2969,7 @@ function updatePlacementControls() {
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
 
   if (shuffleRackButton) {
+    shuffleRackButton.hidden = gameState.gameOver;
     shuffleRackButton.disabled = gameState.gameOver || getVisibleRack().length < 2;
   }
 }
@@ -2881,11 +3008,14 @@ function createWordScoreList(words, emptyText = "No words yet") {
 function renderGameLog(gameLogElement) {
   gameLogElement.replaceChildren();
 
+  const header = document.createElement("div");
   const title = document.createElement("h3");
 
+  header.className = "game-log-header";
   title.className = "game-log-title";
   title.textContent = "Game Log";
-  gameLogElement.append(title);
+  header.append(title);
+  gameLogElement.append(header);
 
   if (gameState.gameOver) {
     const victorResult = gameState.getVictorResult();
@@ -2925,6 +3055,10 @@ function renderGameLog(gameLogElement) {
     const heading = document.createElement("div");
     const turnElement = document.createElement("span");
     const playerElement = document.createElement("strong");
+    const actionLabels = {
+      pass: "Passed turn",
+      redraw: "Redraw Tiles"
+    };
 
     item.className = "game-log-entry";
     heading.className = "game-log-heading";
@@ -2935,13 +3069,45 @@ function renderGameLog(gameLogElement) {
     heading.append(turnElement, playerElement);
     item.append(
       heading,
-      entry.action === "pass"
-        ? createWordScoreList([], "Passed turn")
+      actionLabels[entry.action]
+        ? createWordScoreList([], actionLabels[entry.action])
         : createWordScoreList(entry.words, "No words")
     );
     list.append(item);
   });
   gameLogElement.append(list);
+}
+
+function renderPoolView(gameLogElement) {
+  gameLogElement.replaceChildren();
+
+  const header = document.createElement("div");
+  const title = document.createElement("h3");
+  const poolGrid = document.createElement("div");
+
+  header.className = "game-log-header";
+  title.className = "game-log-title";
+  title.textContent = "Pool";
+
+  header.append(title);
+  poolGrid.className = "pool-grid";
+
+  [...playableLetters, wildcardLetter].forEach((letter) => {
+    const item = document.createElement("div");
+    const letterElement = document.createElement("span");
+    const countElement = document.createElement("span");
+
+    item.className = "pool-letter";
+    letterElement.className = "pool-letter-name";
+    countElement.className = "pool-letter-count";
+    letterElement.textContent = letter;
+    countElement.textContent = Math.max(0, Number(gameState.lettersAvailable[letter] || 0));
+
+    item.append(letterElement, countElement);
+    poolGrid.append(item);
+  });
+
+  gameLogElement.append(header, poolGrid);
 }
 
 function renderScore() {
@@ -2954,8 +3120,7 @@ function renderScore() {
   const winnerBannerLabelElement = document.querySelector("#winner-banner-label");
   const winnerBannerNamesElement = document.querySelector("#winner-banner-names");
   const tilesRemainingElement = document.querySelector("#tiles-remaining");
-  const totalTilePoolElement = document.querySelector("#total-tile-pool");
-  const tilesUntilGameEndElement = document.querySelector("#tiles-until-game-end");
+  const viewPoolButton = document.querySelector("#view-pool-button");
 
   if (winnerBannerElement) {
     const victorResult = gameState.gameOver ? gameState.getVictorResult() : null;
@@ -2996,22 +3161,9 @@ function renderScore() {
     tilesRemainingElement.textContent = gameState.tilesRemaining;
   }
 
-  if (totalTilePoolElement) {
-    totalTilePoolElement.textContent = gameState.totalTilePool;
-  }
-
-  if (tilesUntilGameEndElement) {
-    if (gameState.gameOver) {
-      tilesUntilGameEndElement.textContent = "Game over";
-    } else if (gameState.isFinalTurn) {
-      tilesUntilGameEndElement.textContent = "Final turn";
-    } else if (gameState.isFinalRound || gameState.pendingFinalRound) {
-      tilesUntilGameEndElement.textContent = "Final round";
-    } else if (gameState.gameLength === "long") {
-      tilesUntilGameEndElement.textContent = "Pool exhaustion";
-    } else {
-      tilesUntilGameEndElement.textContent = gameState.tilesUntilGameEndDrawTrigger;
-    }
+  if (viewPoolButton) {
+    viewPoolButton.setAttribute("aria-pressed", showingPoolView ? "true" : "false");
+    viewPoolButton.textContent = showingPoolView ? "View Log" : "View Pool";
   }
 
   if (playerScoreListElement) {
@@ -3032,14 +3184,9 @@ function renderScore() {
         const badge = document.createElement("span");
 
         badge.className = "turn-badge";
-        badge.title = gameState.isFinalTurn ? "Final turn" : "Current turn";
-
-        if (gameState.isFinalTurn) {
-          badge.textContent = "Last turn";
-        } else {
-          badge.classList.add("material-symbols-outlined");
-          badge.textContent = "line_start_arrow_notch";
-        }
+        badge.title = "Current turn";
+        badge.classList.add("material-symbols-outlined");
+        badge.textContent = "line_start_arrow_notch";
 
         nameElement.append(badge);
       }
@@ -3051,7 +3198,11 @@ function renderScore() {
   }
 
   if (gameLogElement) {
-    renderGameLog(gameLogElement);
+    if (showingPoolView) {
+      renderPoolView(gameLogElement);
+    } else {
+      renderGameLog(gameLogElement);
+    }
   }
 }
 
@@ -3077,6 +3228,7 @@ function renderGame(options = {}) {
   });
   updatePlacementControls();
   renderScore();
+  updateWordWefterTestingDataset();
   initializeSortables();
   updateTurnPolling();
 }
@@ -3577,7 +3729,7 @@ function parsePlayerNames() {
 }
 
 function getSelectedGameLength() {
-  return document.querySelector("input[name='game-length']:checked")?.value || "medium";
+  return document.querySelector("input[name='game-length']:checked")?.value || "normal";
 }
 
 function validatePlayerNames(playerNames) {
@@ -4200,21 +4352,14 @@ async function confirmRedrawTilesAndSkipTurn() {
 
   setRedrawConfirmationVisible(false);
 
-  const shouldStartLongFinalRound = gameState.gameLength === "long" && gameState.tilesRemaining < 7;
-
   const redrawExitMilliseconds = animateRackRedrawExit();
-  gameState.redrawCurrentRack({ availableOnly: shouldStartLongFinalRound });
-
-  if (shouldStartLongFinalRound) {
-    gameState.pendingFinalRound = true;
-  }
+  gameState.redrawCurrentRack();
+  gameState.recordRedrawTurnHistory();
 
   gameState.advanceTurn();
   gameState.advanceTurnIndex();
   captureTurnStartGameState();
-  setGameMessage(gameState.gameOver
-    ? ""
-    : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
+  setGameMessage("");
   await wait(redrawExitMilliseconds);
   renderGame({ rackRedrawEnter: true });
 
@@ -4265,9 +4410,7 @@ async function confirmPassTurn() {
 
   gameState.advanceTurnIndex();
   captureTurnStartGameState();
-  setGameMessage(gameState.gameOver
-    ? ""
-    : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
+  setGameMessage("");
   renderGame({ rackRedrawEnter: advanceResult.drawnTiles.length > 0 });
 
   try {
@@ -4321,9 +4464,7 @@ async function finishPlacement() {
 
     gameState.advanceTurnIndex();
     captureTurnStartGameState();
-    setGameMessage(gameState.gameOver
-      ? ""
-      : gameState.isFinalTurn ? `${gameState.currentPlayerName}'s final turn.` : "");
+    setGameMessage("");
     renderGame({ rackRedrawEnter: advanceResult.drawnTiles.length > 0 });
   } else {
     renderGame();
@@ -4582,6 +4723,7 @@ function bindGameControls() {
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
   const passTurnButton = document.querySelector("#pass-turn-button");
+  const viewPoolButton = document.querySelector("#view-pool-button");
   const confirmRedrawButton = document.querySelector("#confirm-redraw-button");
   const cancelRedrawButton = document.querySelector("#cancel-redraw-button");
   const confirmPassButton = document.querySelector("#confirm-pass-button");
@@ -4659,6 +4801,13 @@ function bindGameControls() {
 
   if (passTurnButton) {
     passTurnButton.addEventListener("click", passTurn);
+  }
+
+  if (viewPoolButton) {
+    viewPoolButton.addEventListener("click", () => {
+      showingPoolView = !showingPoolView;
+      renderScore();
+    });
   }
 
   if (confirmRedrawButton) {

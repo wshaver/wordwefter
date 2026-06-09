@@ -1856,6 +1856,10 @@
       display: grid;
     }
 
+    body.screen-play.game-over .rack-shuffle-button {
+      display: none;
+    }
+
     .rack-shuffle-button .material-symbols-outlined {
       width: 100%;
       height: 100%;
@@ -2008,6 +2012,15 @@
       color: var(--rose);
     }
 
+    .view-pool-button {
+      align-self: end;
+      width: 6.25rem;
+      min-height: 2.55rem;
+      padding-inline: 0.85rem;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
     .player-score-list {
       display: grid;
       gap: 0.45rem;
@@ -2070,6 +2083,13 @@
       font: 800 0.72rem/1.2 system-ui, sans-serif;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+    }
+
+    .game-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
     }
 
     .word-score-list {
@@ -2168,6 +2188,35 @@
 
     .game-log-player {
       overflow-wrap: anywhere;
+    }
+
+    .pool-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(4.4rem, 1fr));
+      gap: 0.4rem;
+    }
+
+    .pool-letter {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: baseline;
+      gap: 0.35rem;
+      min-height: 2.25rem;
+      padding: 0.42rem 0.55rem;
+      border: 1px solid rgba(23, 32, 42, 0.16);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.38);
+    }
+
+    .pool-letter-name {
+      color: var(--ink);
+      font: 900 1rem/1 system-ui, sans-serif;
+    }
+
+    .pool-letter-count {
+      justify-self: end;
+      color: var(--accent);
+      font: 800 0.9rem/1 system-ui, sans-serif;
     }
 
     @media (max-width: 520px) {
@@ -2291,8 +2340,8 @@
                 Short
               </label>
               <label class="game-length-option">
-                <input type="radio" name="game-length" value="medium" checked>
-                Medium
+                <input type="radio" name="game-length" value="normal" checked>
+                Normal
               </label>
               <label class="game-length-option">
                 <input type="radio" name="game-length" value="long">
@@ -2425,7 +2474,8 @@
         </article>
         <article class="rules-card">
           <h3>Wild Tiles</h3>
-          <p>Each tile drawn into a rack has a 1-in-14 chance to become wild. Wild tiles cost 50, score zero, and resolve to a real letter when played.</p>
+          <p>Wild tiles are mixed into the tile pool when the game is created. They score zero and resolve to a real letter when played.</p>
+          <p>If a wild tile would enter the marketplace, it goes back into the pool and a different tile is drawn.</p>
           <p>When a wild tile is placed on top of an existing tile, it must change that square's letter. A wild tile covering the A in SAT may make SIT, but not SAT again.</p>
           <div class="rules-example rules-example-bottom" aria-hidden="true">
             <div class="board-cell">
@@ -2449,9 +2499,8 @@
         </article>
         <article class="rules-card">
           <h3>Ending the Game</h3>
-          <p>Game length controls when the final round begins. Short games start it after one third of the tile pool has been drawn, and medium games start it after two thirds.</p>
-          <p>Long games keep going until a rack refill cannot draw enough tiles. Once the final round starts, each player gets one last turn, then final scores stand.</p>
-          <p>The game also ends immediately when every board square is covered by at least one tile.</p>
+          <p>Game length controls the size of the tile pool: Short uses a smaller pool, Normal uses a medium pool, and Long uses the full pool.</p>
+          <p>The game ends when the tile pool is empty, when every player passes in a row, or when every board square is covered by at least one tile.</p>
         </article>
       </div>
     </section>
@@ -2525,12 +2574,9 @@
             </div>
             <div>
               <span class="game-state-kicker">Pool</span>
-              <span class="game-state-value"><span id="tiles-remaining">0</span>/<span id="total-tile-pool">0</span></span>
+              <span class="game-state-value" id="tiles-remaining">0</span>
             </div>
-            <div>
-              <span class="game-state-kicker">End trigger</span>
-              <span class="game-state-value" id="tiles-until-game-end">--</span>
-            </div>
+            <button class="game-button secondary view-pool-button" type="button" id="view-pool-button">View Pool</button>
           </div>
           <div class="player-score-list" id="player-score-list"></div>
           <div class="game-log" id="game-log" aria-label="Game log"></div>
@@ -2542,6 +2588,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=teal-placement-outline"></script>
+  <script type="module" src="./game.js?v=hide-shuffle-game-over"></script>
 </body>
 </html>
