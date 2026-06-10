@@ -34,6 +34,27 @@ function turn_index(array $state): int
     return max(0, (int) ($state['turnIndex'] ?? 0));
 }
 
+function tiles_remaining(array $state): ?int
+{
+    if (isset($state['tilesRemaining']) && is_numeric($state['tilesRemaining'])) {
+        return max(0, (int) $state['tilesRemaining']);
+    }
+
+    if (!isset($state['lettersAvailable']) || !is_array($state['lettersAvailable'])) {
+        return null;
+    }
+
+    $remaining = 0;
+
+    foreach ($state['lettersAvailable'] as $count) {
+        if (is_numeric($count)) {
+            $remaining += max(0, (int) $count);
+        }
+    }
+
+    return $remaining;
+}
+
 function state_timestamp(array $state, string $file): int
 {
     $rawDate = (string) ($state['lastPlayDate'] ?? $state['startDate'] ?? '');
@@ -99,6 +120,7 @@ if ($action === 'list') {
             'lastPlayDate' => (string) ($state['lastPlayDate'] ?? ''),
             'gameOver' => !empty($state['gameOver']),
             'turnIndex' => turn_index($state),
+            'tilesRemaining' => tiles_remaining($state),
             'playerNames' => $players,
             'players' => $playerSummaries,
             'currentPlayerName' => $players[$currentPlayerIndex] ?? ($players[0] ?? '')

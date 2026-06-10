@@ -274,6 +274,23 @@
       cursor: pointer;
     }
 
+    .game-length-copy {
+      display: grid;
+      gap: 0.12rem;
+    }
+
+    .game-length-name {
+      line-height: 1;
+    }
+
+    .game-length-pool {
+      color: rgba(23, 32, 42, 0.62);
+      font: 800 0.68rem/1 system-ui, sans-serif;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
     .player-name-input {
       min-height: 2.75rem;
       width: min(82vw, 22rem);
@@ -415,6 +432,12 @@
     .active-game-turn {
       color: var(--accent);
       font: 800 0.78rem/1.25 system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .active-game-pool {
+      color: rgba(23, 32, 42, 0.6);
+      font: 800 0.72rem/1.2 system-ui, sans-serif;
       letter-spacing: 0;
     }
 
@@ -1995,6 +2018,10 @@
       gap: 0.5rem 1rem;
     }
 
+    .potential-points-kicker span {
+      display: inline;
+    }
+
     .game-state-kicker {
       color: rgba(23, 32, 42, 0.72);
       font: 800 0.76rem/1.2 system-ui, sans-serif;
@@ -2019,6 +2046,16 @@
       padding-inline: 0.85rem;
       font-size: 0.85rem;
       white-space: nowrap;
+    }
+
+    @media (max-width: 34rem) {
+      .game-state-summary {
+        gap: 0.5rem 0.7rem;
+      }
+
+      .potential-points-kicker span {
+        display: block;
+      }
     }
 
     .player-score-list {
@@ -2337,15 +2374,24 @@
             <div class="game-length-options">
               <label class="game-length-option">
                 <input type="radio" name="game-length" value="short">
-                Short
+                <span class="game-length-copy">
+                  <span class="game-length-name">Short</span>
+                  <span class="game-length-pool">69 tiles</span>
+                </span>
               </label>
               <label class="game-length-option">
                 <input type="radio" name="game-length" value="normal" checked>
-                Normal
+                <span class="game-length-copy">
+                  <span class="game-length-name">Normal</span>
+                  <span class="game-length-pool">136 tiles</span>
+                </span>
               </label>
               <label class="game-length-option">
                 <input type="radio" name="game-length" value="long">
-                Long
+                <span class="game-length-copy">
+                  <span class="game-length-name">Long</span>
+                  <span class="game-length-pool">205 tiles</span>
+                </span>
               </label>
             </div>
           </fieldset>
@@ -2499,7 +2545,7 @@
         </article>
         <article class="rules-card">
           <h3>Ending the Game</h3>
-          <p>Game length controls the size of the tile pool: Short uses a smaller pool, Normal uses a medium pool, and Long uses the full pool.</p>
+          <p>Game length controls the size of the tile pool: Short uses a smaller pool, Normal uses a medium pool, and Long uses the largest pool.</p>
           <p>The game ends when the tile pool is empty, when every player passes in a row, or when every board square is covered by at least one tile.</p>
         </article>
       </div>
@@ -2568,8 +2614,8 @@
               <span class="game-state-kicker">Turn</span>
               <span class="game-state-value" id="current-turn-index">1</span>
             </div>
-            <div>
-              <span class="game-state-kicker">Potential Points</span>
+            <div class="potential-points-summary">
+              <span class="game-state-kicker potential-points-kicker">Potential <span>Points</span></span>
               <span class="game-state-value" id="potential-points">0</span>
             </div>
             <div>
@@ -2588,6 +2634,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=hide-shuffle-game-over"></script>
+  <script type="module" src="./game.js?v=game-list-pool-size"></script>
 </body>
 </html>

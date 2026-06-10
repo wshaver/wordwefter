@@ -31,15 +31,15 @@ const bonusTypes = {
 const gameLengthSettings = {
   short: {
     label: "Short",
-    poolRatio: 1 / 3
+    totalTiles: 69
   },
   normal: {
     label: "Normal",
-    poolRatio: 2 / 3
+    totalTiles: 136
   },
   long: {
     label: "Long",
-    poolRatio: 1
+    totalTiles: 205
   }
 };
 
@@ -60,42 +60,35 @@ function normalizeGameLength(gameLength) {
 
 function createLettersAvailableForGameLength(gameLength) {
   const normalizedLength = normalizeGameLength(gameLength);
-  const poolRatio = gameLengthSettings[normalizedLength].poolRatio;
+  const targetTotal = Math.max(1, Number(gameLengthSettings[normalizedLength].totalTiles || 1));
+  const wildcardCount = Math.max(1, Math.round(targetTotal / wildcardPoolFrequency));
+  const targetPlayableTotal = Math.max(1, targetTotal - wildcardCount);
 
   const playableTotal = playableLetters
     .reduce((total, letter) => total + Math.max(0, Number(letters_available[letter] || 0)), 0);
-  const targetTotal = Math.max(1, Math.round(playableTotal * poolRatio));
-  const scaledLetters = poolRatio === 1
-    ? playableLetters.map((letter) => ({
-      letter,
-      count: Math.max(0, Number(letters_available[letter] || 0)),
-      remainder: 0
-    }))
-    : playableLetters.map((letter) => {
-      const exactCount = (Math.max(0, Number(letters_available[letter] || 0)) / playableTotal) * targetTotal;
-      const count = Math.floor(exactCount);
+  const scaledLetters = playableLetters.map((letter) => {
+    const exactCount = (Math.max(0, Number(letters_available[letter] || 0)) / playableTotal) * targetPlayableTotal;
+    const count = Math.floor(exactCount);
 
-      return {
-        letter,
-        count,
-        remainder: exactCount - count
-      };
-    });
+    return {
+      letter,
+      count,
+      remainder: exactCount - count
+    };
+  });
   let assignedTotal = scaledLetters.reduce((total, entry) => total + entry.count, 0);
 
-  if (poolRatio !== 1) {
-    scaledLetters
-      .sort((first, second) => second.remainder - first.remainder)
-      .forEach((entry) => {
-        if (assignedTotal < targetTotal) {
-          entry.count += 1;
-          assignedTotal += 1;
-        }
-      });
-  }
+  scaledLetters
+    .sort((first, second) => second.remainder - first.remainder)
+    .forEach((entry) => {
+      if (assignedTotal < targetPlayableTotal) {
+        entry.count += 1;
+        assignedTotal += 1;
+      }
+    });
 
   return {
-    [wildcardLetter]: Math.max(1, Math.round(assignedTotal / (wildcardPoolFrequency - 1))),
+    [wildcardLetter]: wildcardCount,
     ...scaledLetters.reduce((counts, entry) => {
       counts[entry.letter] = entry.count;
       return counts;
@@ -4060,6 +4053,28 @@ function getGameListVictorResult(players) {
   };
 }
 
+function getGameListPoolRemaining(game) {
+  const explicitRemaining = Number(game?.tilesRemaining);
+
+  if (Number.isFinite(explicitRemaining)) {
+    return Math.max(0, explicitRemaining);
+  }
+
+  if (game?.lettersAvailable && typeof game.lettersAvailable === "object") {
+    return Object.values(game.lettersAvailable)
+      .reduce((total, count) => total + Math.max(0, Number(count || 0)), 0);
+  }
+
+  try {
+    const listGameState = new WordWefterGameState();
+
+    listGameState.loadFromJSON(game);
+    return listGameState.tilesRemaining;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -4120,8 +4135,10 @@ async function loadActiveGames() {
       const detailsElement = document.createElement("div");
       const playersElement = document.createElement("div");
       const turnElement = document.createElement("span");
+      const poolElement = document.createElement("span");
       const resumeButton = document.createElement("button");
       const playerSummaries = getGameListPlayerSummaries(game);
+      const poolRemaining = getGameListPoolRemaining(game);
       const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries) : null;
       const victorNameKeys = new Set((victorResult?.leaders || []).map((player) => normalizeNameKey(player.name)));
 
@@ -4134,9 +4151,10 @@ async function loadActiveGames() {
       detailsElement.className = "active-game-details";
       playersElement.className = "active-game-player-list";
       turnElement.className = "active-game-turn";
+      poolElement.className = "active-game-pool";
       resumeButton.className = "game-button secondary";
       resumeButton.type = "button";
-      idElement.append(gameCodeElement, turnElement);
+      idElement.append(gameCodeElement, turnElement, poolElement);
       playerSummaries.forEach((player) => {
         const playerElement = document.createElement("span");
         const playerNameElement = document.createElement("span");
@@ -4158,6 +4176,7 @@ async function loadActiveGames() {
         playersElement.append(playerElement);
       });
       turnElement.textContent = `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
+      poolElement.textContent = Number.isFinite(poolRemaining) ? `Pool ${poolRemaining}` : "Pool --";
 
       resumeButton.textContent = game.gameOver ? "View" : "Resume";
       resumeButton.addEventListener("click", () => resumeGame(game.id));
