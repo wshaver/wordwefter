@@ -365,7 +365,7 @@
 
     .active-games-list {
       display: grid;
-      gap: 0.45rem;
+      gap: 0.8rem;
     }
 
     .active-games-actions {
@@ -373,6 +373,29 @@
       flex-wrap: wrap;
       justify-content: center;
       gap: 0.65rem;
+    }
+
+    .active-games-group {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .active-games-group + .active-games-group {
+      margin-top: 0.55rem;
+    }
+
+    .active-games-group-title {
+      justify-self: start;
+      margin: 0;
+      padding: 0.12rem 0.38rem;
+      border: 2px solid rgba(23, 32, 42, 0.55);
+      border-radius: 5px;
+      background: #fbfaf6;
+      color: rgba(23, 32, 42, 0.74);
+      font: 800 0.72rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-align: left;
+      text-transform: uppercase;
     }
 
     .active-game-row {
@@ -2634,6 +2657,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=game-list-pool-size"></script>
+  <script type="module" src="./game.js?v=game-list-section-chips"></script>
 </body>
 </html>

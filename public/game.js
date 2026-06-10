@@ -4128,62 +4128,93 @@ async function loadActiveGames() {
       return;
     }
 
-    matchingGames.forEach((game) => {
-      const row = document.createElement("div");
-      const idElement = document.createElement("span");
-      const gameCodeElement = document.createElement("span");
-      const detailsElement = document.createElement("div");
-      const playersElement = document.createElement("div");
-      const turnElement = document.createElement("span");
-      const poolElement = document.createElement("span");
-      const resumeButton = document.createElement("button");
-      const playerSummaries = getGameListPlayerSummaries(game);
-      const poolRemaining = getGameListPoolRemaining(game);
-      const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries) : null;
-      const victorNameKeys = new Set((victorResult?.leaders || []).map((player) => normalizeNameKey(player.name)));
+    const gameGroups = [
+      {
+        title: "Your Turn",
+        games: matchingGames.filter((game) => game.isWaitingForStoredPlayer)
+      },
+      {
+        title: "Waiting",
+        games: matchingGames.filter((game) => !game.gameOver && !game.isWaitingForStoredPlayer)
+      },
+      {
+        title: "Completed Games",
+        games: matchingGames.filter((game) => game.gameOver)
+      }
+    ];
 
-      row.className = "active-game-row";
-      row.classList.toggle("waiting-player", game.isWaitingForStoredPlayer);
-      row.classList.toggle("completed-game", Boolean(game.gameOver));
-      row.dataset.gameId = game.id;
-      idElement.className = "active-game-id";
-      gameCodeElement.textContent = game.id;
-      detailsElement.className = "active-game-details";
-      playersElement.className = "active-game-player-list";
-      turnElement.className = "active-game-turn";
-      poolElement.className = "active-game-pool";
-      resumeButton.className = "game-button secondary";
-      resumeButton.type = "button";
-      idElement.append(gameCodeElement, turnElement, poolElement);
-      playerSummaries.forEach((player) => {
-        const playerElement = document.createElement("span");
-        const playerNameElement = document.createElement("span");
-        const playerPointsElement = document.createElement("span");
+    gameGroups.forEach((group) => {
+      if (group.games.length === 0) {
+        return;
+      }
 
-        playerElement.className = "active-game-player-score";
-        playerElement.classList.toggle("current-player", !game.gameOver && normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
-        playerElement.classList.toggle("winner-player", Boolean(game.gameOver && victorNameKeys.has(normalizeNameKey(player.name))));
-        playerNameElement.className = "active-game-player-name";
-        playerNameElement.textContent = player.name;
-        playerElement.append(playerNameElement);
+      const groupElement = document.createElement("section");
+      const groupHeading = document.createElement("h3");
 
-        if (player.score !== null) {
-          playerPointsElement.className = "active-game-player-points";
-          playerPointsElement.textContent = player.score;
-          playerElement.append(playerPointsElement);
-        }
+      groupElement.className = "active-games-group";
+      groupHeading.className = "active-games-group-title";
+      groupHeading.textContent = group.title;
+      groupElement.append(groupHeading);
 
-        playersElement.append(playerElement);
+      group.games.forEach((game) => {
+        const row = document.createElement("div");
+        const idElement = document.createElement("span");
+        const gameCodeElement = document.createElement("span");
+        const detailsElement = document.createElement("div");
+        const playersElement = document.createElement("div");
+        const turnElement = document.createElement("span");
+        const poolElement = document.createElement("span");
+        const resumeButton = document.createElement("button");
+        const playerSummaries = getGameListPlayerSummaries(game);
+        const poolRemaining = getGameListPoolRemaining(game);
+        const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries) : null;
+        const victorNameKeys = new Set((victorResult?.leaders || []).map((player) => normalizeNameKey(player.name)));
+
+        row.className = "active-game-row";
+        row.classList.toggle("waiting-player", game.isWaitingForStoredPlayer);
+        row.classList.toggle("completed-game", Boolean(game.gameOver));
+        row.dataset.gameId = game.id;
+        idElement.className = "active-game-id";
+        gameCodeElement.textContent = game.id;
+        detailsElement.className = "active-game-details";
+        playersElement.className = "active-game-player-list";
+        turnElement.className = "active-game-turn";
+        poolElement.className = "active-game-pool";
+        resumeButton.className = "game-button secondary";
+        resumeButton.type = "button";
+        idElement.append(gameCodeElement, turnElement, poolElement);
+        playerSummaries.forEach((player) => {
+          const playerElement = document.createElement("span");
+          const playerNameElement = document.createElement("span");
+          const playerPointsElement = document.createElement("span");
+
+          playerElement.className = "active-game-player-score";
+          playerElement.classList.toggle("current-player", !game.gameOver && normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
+          playerElement.classList.toggle("winner-player", Boolean(game.gameOver && victorNameKeys.has(normalizeNameKey(player.name))));
+          playerNameElement.className = "active-game-player-name";
+          playerNameElement.textContent = player.name;
+          playerElement.append(playerNameElement);
+
+          if (player.score !== null) {
+            playerPointsElement.className = "active-game-player-points";
+            playerPointsElement.textContent = player.score;
+            playerElement.append(playerPointsElement);
+          }
+
+          playersElement.append(playerElement);
+        });
+        turnElement.textContent = `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
+        poolElement.textContent = Number.isFinite(poolRemaining) ? `Pool ${poolRemaining}` : "Pool --";
+
+        resumeButton.textContent = game.gameOver ? "View" : "Resume";
+        resumeButton.addEventListener("click", () => resumeGame(game.id));
+
+        detailsElement.append(playersElement);
+        row.append(idElement, detailsElement, resumeButton);
+        groupElement.append(row);
       });
-      turnElement.textContent = `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
-      poolElement.textContent = Number.isFinite(poolRemaining) ? `Pool ${poolRemaining}` : "Pool --";
 
-      resumeButton.textContent = game.gameOver ? "View" : "Resume";
-      resumeButton.addEventListener("click", () => resumeGame(game.id));
-
-      detailsElement.append(playersElement);
-      row.append(idElement, detailsElement, resumeButton);
-      activeGamesList.append(row);
+      activeGamesList.append(groupElement);
     });
   } catch (error) {
     activeGamesList.textContent = `Could not load active games: ${error.message}`;
