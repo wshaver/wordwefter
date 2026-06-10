@@ -2419,6 +2419,79 @@ function runRedrawPoolAccountingCheck(setup = {}) {
   };
 }
 
+function createWildcardPivotTestTile(id, letter, row, column) {
+  return {
+    id,
+    letter,
+    points: letter === wildcardLetter ? 0 : letter_points[letter],
+    row,
+    column
+  };
+}
+
+function runWildcardPivotResolutionCase(dictionaryWords) {
+  const testGame = new WordWefterGameState({
+    playerNames: ["Test Player", "Test Opponent"],
+    dictionary: new Set(dictionaryWords)
+  });
+
+  testGame.boardTiles = new Map();
+  testGame.activePlacements = new Map();
+  testGame.currentRack = [{
+    id: "wild-pivot",
+    letter: wildcardLetter,
+    points: 0,
+    wildcard: true
+  }];
+  testGame.boardTiles.set(testGame.getCellKey(3, 4), createWildcardPivotTestTile("c", "C", 3, 4));
+  testGame.boardTiles.set(testGame.getCellKey(5, 4), createWildcardPivotTestTile("t", "T", 5, 4));
+  testGame.boardTiles.set(testGame.getCellKey(4, 3), createWildcardPivotTestTile("b", "B", 4, 3));
+  testGame.boardTiles.set(testGame.getCellKey(4, 5), createWildcardPivotTestTile("d", "D", 4, 5));
+
+  const placed = testGame.placeRackTile("wild-pivot", 4, 4);
+  const resolution = testGame.getWildcardResolution();
+  const changedWords = testGame.getChangedWords(resolution.assignments, { includeSingleFallback: true })
+    .map((word) => word.word);
+  const boardValidation = testGame.validateBoardWordsWithWildcardAssignments(resolution.assignments);
+  const finishResult = testGame.finishActivePlacements();
+  const committedPivot = testGame.getVisibleBoardTileAt(4, 4);
+
+  return {
+    placed,
+    resolutionValid: resolution.isValid,
+    assignments: Array.from(resolution.assignments.entries()),
+    changedWords,
+    boardWords: boardValidation.words,
+    boardValid: boardValidation.isValid,
+    finishValid: finishResult.isValid,
+    finishWords: finishResult.words,
+    finishInvalidWords: finishResult.invalidWords,
+    placementError: finishResult.placementError || "",
+    committedPivotLetter: committedPivot?.letter || null,
+    committedPivotWildcard: Boolean(committedPivot?.wildcard)
+  };
+}
+
+function runWildcardPivotResolutionCheck() {
+  const sharedLetterSucceeds = runWildcardPivotResolutionCase(["CAT", "BAD"]);
+  const conflictingLettersFail = runWildcardPivotResolutionCase(["COT", "BAD"]);
+
+  return {
+    sharedLetterSucceeds,
+    conflictingLettersFail,
+    passed:
+      sharedLetterSucceeds.placed &&
+      sharedLetterSucceeds.resolutionValid &&
+      sharedLetterSucceeds.finishValid &&
+      sharedLetterSucceeds.committedPivotLetter === "A" &&
+      sharedLetterSucceeds.changedWords.includes("CAT") &&
+      sharedLetterSucceeds.changedWords.includes("BAD") &&
+      conflictingLettersFail.placed &&
+      !conflictingLettersFail.resolutionValid &&
+      !conflictingLettersFail.finishValid
+  };
+}
+
 function publishWordWefterTestingGlobals(target, testGlobals) {
   if (!target) {
     return;
@@ -2469,6 +2542,7 @@ function exposeWordWefterTestingGlobals() {
     getGameState: () => gameState,
     getPoolSnapshot: (game = gameState) => createPoolSnapshotForTesting(game),
     runRedrawPoolAccountingCheck,
+    runWildcardPivotResolutionCheck,
     isWord: (word) => gameState.isRealWord(word)
   };
 
@@ -2489,6 +2563,9 @@ function exposeWordWefterTestingGlobals() {
   ].join(",");
   document.documentElement.dataset.wordWefterRedrawPoolAccountingCheck = JSON.stringify(
     runRedrawPoolAccountingCheck()
+  );
+  document.documentElement.dataset.wordWefterWildcardPivotResolutionCheck = JSON.stringify(
+    runWildcardPivotResolutionCheck()
   );
   updateWordWefterTestingDataset();
 }
