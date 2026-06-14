@@ -104,7 +104,12 @@ if ($action === 'list') {
         $playerSummaries = array_values(array_map(
             static fn(array $player): array => [
                 'name' => (string) ($player['name'] ?? 'Player'),
-                'score' => (int) ($player['score'] ?? 0)
+                'score' => (int) ($player['score'] ?? 0),
+                'invitedName' => (string) ($player['invitedName'] ?? ''),
+                'authKey' => (string) ($player['authKey'] ?? ''),
+                'provider' => (string) ($player['provider'] ?? ''),
+                'claimed' => !isset($player['claimed']) || $player['claimed'] !== false,
+                'open' => !empty($player['open']) || (isset($player['claimed']) && $player['claimed'] === false)
             ],
             array_filter($state['players'] ?? [], 'is_array')
         ));

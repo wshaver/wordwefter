@@ -147,6 +147,28 @@
       overflow-wrap: anywhere;
     }
 
+    .identity-provider {
+      color: rgba(23, 32, 42, 0.58);
+      font: 800 0.68rem/1 system-ui, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .oauth-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.55rem;
+    }
+
+    .oauth-button.google {
+      border-color: #4285f4;
+    }
+
+    .oauth-button.facebook {
+      border-color: #1877f2;
+    }
+
     .menu-button {
       width: 2.75rem;
       min-width: 2.75rem;
@@ -236,6 +258,123 @@
     .player-name-list {
       display: grid;
       gap: 0.45rem;
+    }
+
+    .invite-setup {
+      display: grid;
+      justify-items: stretch;
+      gap: 0.65rem;
+      width: min(82vw, 32rem);
+      font: 700 0.9rem/1.35 system-ui, sans-serif;
+      text-align: left;
+    }
+
+    .player-count-control {
+      display: inline-grid;
+      grid-template-columns: auto 5rem;
+      justify-self: center;
+      align-items: center;
+      gap: 0.55rem;
+      font-weight: 900;
+    }
+
+    .player-count-control input {
+      min-height: 2.55rem;
+      border: 2px solid var(--ink);
+      border-radius: 8px;
+      padding: 0.45rem 0.6rem;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--ink);
+      font: 800 1rem/1 system-ui, sans-serif;
+    }
+
+    .friend-invite-panel {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .friend-invite-panel h3 {
+      margin: 0;
+      color: rgba(23, 32, 42, 0.74);
+      font: 900 0.78rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .friend-invite-list {
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    .friend-invite-empty,
+    .invite-copy,
+    .invite-link-copy {
+      margin: 0;
+      color: rgba(23, 32, 42, 0.68);
+      font: 700 0.86rem/1.35 system-ui, sans-serif;
+    }
+
+    .friend-invite-option {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.55rem;
+      min-height: 2.75rem;
+      padding: 0.48rem 0.65rem;
+      border: 2px solid rgba(23, 32, 42, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+    }
+
+    .friend-invite-option input {
+      width: 1.05rem;
+      height: 1.05rem;
+      accent-color: var(--accent);
+    }
+
+    .friend-invite-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 900;
+    }
+
+    .friend-invite-recency {
+      color: rgba(23, 32, 42, 0.58);
+      font-size: 0.78rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .invite-link-panel {
+      display: none;
+      justify-items: center;
+      gap: 0.42rem;
+      width: min(82vw, 32rem);
+      padding: 0.65rem;
+      border: 2px solid rgba(15, 139, 141, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.5);
+      font: 700 0.9rem/1.35 system-ui, sans-serif;
+    }
+
+    body.screen-play .invite-link-panel {
+      display: grid;
+    }
+
+    .invite-link-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .invite-link-value {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      color: var(--accent);
+      font: 800 0.82rem/1.35 system-ui, sans-serif;
     }
 
     .player-name-row {
@@ -674,6 +813,10 @@
 
     body.screen-setup .player-setup {
       display: grid;
+    }
+
+    body.screen-setup .player-name-list {
+      display: none;
     }
 
     body.screen-list .active-games {
@@ -2357,11 +2500,16 @@
           <label class="sr-only" for="identity-name-input">Your name</label>
           <input class="player-name-input" id="identity-name-input" type="text" aria-label="Your name" placeholder="Your name">
           <button class="game-button" type="button" id="save-identity-button">Continue</button>
+          <div class="oauth-buttons" aria-label="OAuth sign in">
+            <button class="game-button secondary oauth-button google" type="button" id="google-login-button">Google</button>
+            <button class="game-button secondary oauth-button facebook" type="button" id="facebook-login-button">Facebook</button>
+          </div>
         </div>
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
           <span class="identity-current">
             <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
             <span class="identity-name" id="identity-name-display"></span>
+            <span class="identity-provider" id="identity-provider-display"></span>
           </span>
           <button class="game-button secondary menu-button" type="button" id="identity-menu-button" aria-label="Menu" aria-expanded="false">
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
@@ -2391,6 +2539,17 @@
               <input class="player-name-input" id="player-name-input-2" type="text" value="Player 2" aria-label="Player 2 name">
               <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
             </div>
+          </div>
+          <div class="invite-setup" aria-label="Invite setup">
+            <label class="player-count-control" for="player-count-input">
+              <span>Players</span>
+              <input id="player-count-input" type="number" min="1" max="8" step="1" value="2">
+            </label>
+            <div class="friend-invite-panel" id="friend-invite-panel">
+              <h3>Invite Friends</h3>
+              <div class="friend-invite-list" id="friend-invite-list"></div>
+            </div>
+            <p class="invite-copy">After creating the game, copy the game link and send it to players so they can log in and claim a spot.</p>
           </div>
           <fieldset class="game-length-control">
             <legend>Game length</legend>
@@ -2602,6 +2761,13 @@
       </div>
       <div class="board" id="board" aria-label="9 by 9 board"></div>
       <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
+      <div class="invite-link-panel" id="invite-link-panel" aria-label="Game invite link">
+        <p class="invite-link-copy">Invite players to claim open spots.</p>
+        <div class="invite-link-value" id="invite-link-value"></div>
+        <div class="invite-link-actions">
+          <button class="game-button secondary" type="button" id="copy-invite-link-button">Copy Link</button>
+        </div>
+      </div>
       <div class="rack-wrap">
         <button class="game-button secondary rack-shuffle-button" type="button" id="shuffle-rack-button" aria-label="Shuffle rack" title="Shuffle rack">
           <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
@@ -2657,6 +2823,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=wildcard-pivot-check"></script>
+  <script type="module" src="./game.js?v=oauth-invites"></script>
 </body>
 </html>

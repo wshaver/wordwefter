@@ -141,13 +141,41 @@ class WordWefterGameState {
   }
 
   normalizePlayers(playerNames) {
-    const names = (Array.isArray(playerNames) ? playerNames : [playerNames])
-      .map((name) => String(name || "").trim())
-      .filter(Boolean);
-    const uniqueNames = names.length > 0 ? names : ["Player 1"];
+    const entries = (Array.isArray(playerNames) ? playerNames : [playerNames])
+      .map((entry, index) => {
+        if (entry && typeof entry === "object") {
+          const name = normalizePlayerName(entry.name || entry.invitedName || `Player ${index + 1}`);
+          const claimed = entry.claimed !== false && !entry.open;
 
-    return uniqueNames.map((name) => ({
-      name,
+          return {
+            name: name || `Player ${index + 1}`,
+            invitedName: normalizePlayerName(entry.invitedName || ""),
+            authKey: String(entry.authKey || ""),
+            provider: String(entry.provider || ""),
+            claimed,
+            open: !claimed,
+            score: 0,
+            marketplacePurchaseCount: 0,
+            newWords: [],
+            rack: []
+          };
+        }
+
+        return {
+          name: normalizePlayerName(entry),
+          claimed: true,
+          open: false
+        };
+      })
+      .filter((entry) => entry.name);
+    const uniqueEntries = entries.length > 0 ? entries : [{ name: "Player 1", claimed: true, open: false }];
+
+    return uniqueEntries.map((entry) => ({
+      name: entry.name,
+      ...(entry.invitedName ? { invitedName: entry.invitedName } : {}),
+      ...(entry.authKey ? { authKey: entry.authKey } : {}),
+      ...(entry.provider ? { provider: entry.provider } : {}),
+      ...(entry.claimed === false ? { claimed: false, open: true } : {}),
       score: 0,
       marketplacePurchaseCount: 0,
       newWords: [],
@@ -818,6 +846,10 @@ class WordWefterGameState {
     this.startDate = new Date().toISOString();
     this.players = this.players.map((player) => ({
       name: player.name,
+      ...(player.invitedName ? { invitedName: player.invitedName } : {}),
+      ...(player.authKey ? { authKey: player.authKey } : {}),
+      ...(player.provider ? { provider: player.provider } : {}),
+      ...(player.claimed === false || player.open ? { claimed: false, open: true } : {}),
       score: 0,
       marketplacePurchaseCount: 0,
       newWords: [],
@@ -1050,6 +1082,10 @@ class WordWefterGameState {
       } : {}),
       players: this.players.map((player) => ({
         name: player.name,
+        ...(player.invitedName ? { invitedName: player.invitedName } : {}),
+        ...(player.authKey ? { authKey: player.authKey } : {}),
+        ...(player.provider ? { provider: player.provider } : {}),
+        ...(player.claimed === false || player.open ? { claimed: false, open: true } : {}),
         score: player.score,
         ...(Number(player.marketplacePurchaseCount) > 0 ? {
           marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0))
@@ -1264,6 +1300,11 @@ class WordWefterGameState {
 
       return {
         name,
+        invitedName: normalizePlayerName(player.invitedName || ""),
+        authKey: String(player.authKey || ""),
+        provider: String(player.provider || ""),
+        claimed: player.claimed !== false && !player.open,
+        open: player.claimed === false || Boolean(player.open),
         score: Number(player.score || 0),
         marketplacePurchaseCount: Math.max(0, Number(player.marketplacePurchaseCount || 0)),
         newWords: this.getSerializedWordScores(player.newWords),
@@ -2356,6 +2397,9 @@ const startCell = {
 const serverURL = "./server.php";
 const playerNameCookie = "wordwefterPlayerName";
 const playerNameStorageKey = "wordwefterPlayerName";
+const playerAuthStorageKey = "wordwefterPlayerAuth";
+const friendsStorageKey = "wordwefterFriends";
+const oauthStateStorageKey = "wordwefterOAuthState";
 const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
@@ -3298,6 +3342,7 @@ function renderGame(options = {}) {
   });
   updatePlacementControls();
   renderScore();
+  updateInviteLinkUI();
   updateWordWefterTestingDataset();
   initializeSortables();
   updateTurnPolling();
@@ -3547,6 +3592,257 @@ function removeLocalStorageItem(key) {
   }
 }
 
+function parseJSONStorageItem(key, fallbackValue) {
+  try {
+    const value = window.localStorage.getItem(key);
+
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
+}
+
+function setJSONStorageItem(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getStoredPlayerAuth() {
+  const auth = parseJSONStorageItem(playerAuthStorageKey, null);
+  const fallbackName = getStoredPlayerName();
+
+  if (auth && typeof auth === "object" && normalizePlayerName(auth.name)) {
+    return {
+      provider: String(auth.provider || "name"),
+      userId: String(auth.userId || normalizeNameKey(auth.name)),
+      name: normalizePlayerName(auth.name),
+      signedInAt: String(auth.signedInAt || "")
+    };
+  }
+
+  return fallbackName
+    ? {
+      provider: "name",
+      userId: normalizeNameKey(fallbackName),
+      name: fallbackName,
+      signedInAt: ""
+    }
+    : null;
+}
+
+function getStoredPlayerAuthKey() {
+  const auth = getStoredPlayerAuth();
+
+  return auth ? `${auth.provider}:${auth.userId || normalizeNameKey(auth.name)}` : "";
+}
+
+function getProviderLabel(provider) {
+  const labels = {
+    google: "Google",
+    facebook: "Facebook",
+    name: "Name"
+  };
+
+  return labels[String(provider || "").toLowerCase()] || "Account";
+}
+
+function setStoredPlayerAuth(auth) {
+  const normalizedName = setStoredPlayerName(auth?.name);
+
+  if (!normalizedName) {
+    return null;
+  }
+
+  const normalizedProvider = String(auth?.provider || "name").toLowerCase();
+  const normalizedAuth = {
+    provider: normalizedProvider,
+    userId: String(auth?.userId || normalizeNameKey(normalizedName)),
+    name: normalizedName,
+    signedInAt: new Date().toISOString()
+  };
+
+  setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
+  return normalizedAuth;
+}
+
+function getOAuthConfig(provider) {
+  return globalThis.wordWefterOAuth?.[provider] || {};
+}
+
+function getOAuthRedirectURI() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function createOAuthState(provider) {
+  const state = `${provider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  setJSONStorageItem(oauthStateStorageKey, {
+    state,
+    provider,
+    returnHash: window.location.hash || "#gamelist"
+  });
+  return state;
+}
+
+function buildOAuthURL(provider, config) {
+  const state = createOAuthState(provider);
+  const redirectURI = getOAuthRedirectURI();
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: redirectURI,
+    response_type: "token",
+    scope: config.scope || (provider === "google" ? "openid profile email" : "public_profile,email"),
+    state
+  });
+
+  if (provider === "google") {
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  return `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+}
+
+function startOAuthLogin(provider) {
+  const normalizedProvider = String(provider || "").toLowerCase();
+  const config = getOAuthConfig(normalizedProvider);
+
+  if (config.clientId) {
+    window.location.assign(buildOAuthURL(normalizedProvider, config));
+    return;
+  }
+
+  const providerLabel = getProviderLabel(normalizedProvider);
+  const suggestedName = getStoredPlayerName();
+  const name = normalizePlayerName(window.prompt(`${providerLabel} sign-in name`, suggestedName));
+
+  if (!name) {
+    return;
+  }
+
+  setStoredPlayerAuth({
+    provider: normalizedProvider,
+    userId: normalizeNameKey(`${normalizedProvider}:${name}`),
+    name
+  });
+  finishIdentitySignIn();
+}
+
+async function fetchOAuthProfile(provider, accessToken) {
+  const endpoint = provider === "google"
+    ? "https://www.googleapis.com/oauth2/v3/userinfo"
+    : `https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`;
+  const response = await fetch(endpoint, provider === "google"
+    ? { headers: { Authorization: `Bearer ${accessToken}` } }
+    : {});
+
+  if (!response.ok) {
+    throw new Error("Could not read OAuth profile.");
+  }
+
+  const profile = await response.json();
+
+  return {
+    userId: String(profile.sub || profile.id || ""),
+    name: normalizePlayerName(profile.name)
+  };
+}
+
+async function completeOAuthRedirectIfPresent() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const accessToken = params.get("access_token");
+  const state = params.get("state");
+  const savedState = parseJSONStorageItem(oauthStateStorageKey, null);
+
+  if (!accessToken || !state || !savedState || savedState.state !== state) {
+    return false;
+  }
+
+  removeLocalStorageItem(oauthStateStorageKey);
+  let profile = null;
+
+  try {
+    profile = await fetchOAuthProfile(savedState.provider, accessToken);
+  } catch {
+    profile = null;
+  }
+
+  setStoredPlayerAuth({
+    provider: savedState.provider,
+    userId: profile?.userId || state,
+    name: profile?.name || `${getProviderLabel(savedState.provider)} Player`
+  });
+  window.history.replaceState(null, "", savedState.returnHash || "#gamelist");
+  return true;
+}
+
+function finishIdentitySignIn() {
+  updateIdentityUI();
+  setGameMessage("");
+
+  const nextAction = pendingIdentityAction;
+  pendingIdentityAction = null;
+
+  if (nextAction) {
+    nextAction();
+  } else {
+    showGameList();
+  }
+}
+
+function getStoredFriends() {
+  return parseJSONStorageItem(friendsStorageKey, [])
+    .filter((friend) => friend && normalizePlayerName(friend.name))
+    .map((friend) => ({
+      key: String(friend.key || normalizeNameKey(friend.name)),
+      name: normalizePlayerName(friend.name),
+      provider: String(friend.provider || ""),
+      lastPlayedAt: String(friend.lastPlayedAt || "")
+    }))
+    .sort((first, second) => Date.parse(second.lastPlayedAt || 0) - Date.parse(first.lastPlayedAt || 0));
+}
+
+function rememberFriendsFromGame(game) {
+  const currentName = getStoredPlayerName();
+  const currentKey = normalizeNameKey(currentName);
+  const authKey = getStoredPlayerAuthKey();
+  const players = Array.isArray(game?.players) ? game.players : [];
+  const isParticipant = players.some((player) => (
+    normalizeNameKey(player.name) === currentKey ||
+    (authKey && String(player.authKey || "") === authKey)
+  ));
+
+  if (!currentKey || !isParticipant) {
+    return;
+  }
+
+  const touchedAt = game.lastPlayDate || game.startDate || new Date().toISOString();
+  const friendsByKey = new Map(getStoredFriends().map((friend) => [friend.key, friend]));
+
+  players.forEach((player) => {
+    const name = normalizePlayerName(player.name);
+    const key = String(player.authKey || normalizeNameKey(name));
+
+    if (!name || normalizeNameKey(name) === currentKey || (authKey && key === authKey) || player.open || player.claimed === false) {
+      return;
+    }
+
+    friendsByKey.set(key, {
+      key,
+      name,
+      provider: String(player.provider || ""),
+      lastPlayedAt: touchedAt
+    });
+  });
+
+  setJSONStorageItem(friendsStorageKey, Array.from(friendsByKey.values())
+    .sort((first, second) => Date.parse(second.lastPlayedAt || 0) - Date.parse(first.lastPlayedAt || 0))
+    .slice(0, 80));
+}
+
 function getTurnNotificationsEnabled() {
   return getLocalStorageItem(turnNotificationsKey) === "enabled";
 }
@@ -3582,6 +3878,37 @@ function updateNotificationUI() {
   notificationToggleItem.setAttribute("aria-disabled", notificationsBlocked ? "true" : "false");
   notificationToggleCheckbox.disabled = notificationsBlocked;
   notificationToggleCheckbox.checked = getTurnNotificationsEnabled() && Notification.permission === "granted";
+}
+
+function getCurrentInviteLink() {
+  if (!/^[A-Z0-9]{5}$/.test(gameState.id)) {
+    return "";
+  }
+
+  return `${window.location.origin}${window.location.pathname}#${gameState.id}`;
+}
+
+function updateInviteLinkUI() {
+  const inviteLinkValue = document.querySelector("#invite-link-value");
+
+  if (inviteLinkValue) {
+    inviteLinkValue.textContent = getCurrentInviteLink();
+  }
+}
+
+async function copyInviteLink() {
+  const inviteLink = getCurrentInviteLink();
+
+  if (!inviteLink) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(inviteLink);
+    setGameMessage("Invite link copied.");
+  } catch {
+    setGameMessage(inviteLink);
+  }
 }
 
 async function toggleTurnNotifications() {
@@ -3662,13 +3989,21 @@ function setStoredPlayerName(name) {
 
 function updateIdentityUI() {
   const playerName = getStoredPlayerName();
+  const auth = getStoredPlayerAuth();
   const identityNameDisplay = document.querySelector("#identity-name-display");
   const identityNameInput = document.querySelector("#identity-name-input");
+  const identityProviderDisplay = document.querySelector("#identity-provider-display");
 
   document.body.classList.toggle("has-player", Boolean(playerName));
 
   if (identityNameDisplay) {
     identityNameDisplay.textContent = playerName;
+  }
+
+  if (identityProviderDisplay) {
+    identityProviderDisplay.textContent = auth?.provider && auth.provider !== "name"
+      ? getProviderLabel(auth.provider)
+      : "";
   }
 
   if (identityNameInput && document.activeElement !== identityNameInput) {
@@ -3786,6 +4121,125 @@ function renderPlayerNameInputs(playerNames) {
   updatePlayerRemoveButtons();
 }
 
+function getSelectedPlayerCount() {
+  const input = document.querySelector("#player-count-input");
+  const count = Number(input?.value || 2);
+
+  return Math.max(1, Math.min(8, Number.isFinite(count) ? Math.round(count) : 2));
+}
+
+function setSelectedPlayerCount(count) {
+  const input = document.querySelector("#player-count-input");
+
+  if (input) {
+    input.value = Math.max(1, Math.min(8, Math.round(Number(count) || 2)));
+  }
+}
+
+function formatFriendRecency(lastPlayedAt) {
+  const timestamp = Date.parse(lastPlayedAt);
+
+  if (!Number.isFinite(timestamp)) {
+    return "";
+  }
+
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86400000));
+
+  if (days === 0) {
+    return "recent";
+  }
+
+  return `${days}d ago`;
+}
+
+function renderFriendInviteOptions() {
+  const friendInviteList = document.querySelector("#friend-invite-list");
+
+  if (!friendInviteList) {
+    return;
+  }
+
+  const friends = getStoredFriends();
+  friendInviteList.replaceChildren();
+
+  if (friends.length === 0) {
+    const emptyElement = document.createElement("p");
+
+    emptyElement.className = "friend-invite-empty";
+    emptyElement.textContent = "Friends appear here after you play games together.";
+    friendInviteList.append(emptyElement);
+    return;
+  }
+
+  friends.slice(0, 12).forEach((friend) => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    const name = document.createElement("span");
+    const recency = document.createElement("span");
+
+    label.className = "friend-invite-option";
+    checkbox.type = "checkbox";
+    checkbox.className = "friend-invite-checkbox";
+    checkbox.value = friend.key;
+    checkbox.dataset.friendName = friend.name;
+    checkbox.dataset.friendProvider = friend.provider;
+    name.className = "friend-invite-name";
+    name.textContent = friend.name;
+    recency.className = "friend-invite-recency";
+    recency.textContent = formatFriendRecency(friend.lastPlayedAt);
+    label.append(checkbox, name, recency);
+    friendInviteList.append(label);
+  });
+}
+
+function getSelectedFriendInvites() {
+  return Array.from(document.querySelectorAll("#friend-invite-list .friend-invite-checkbox:checked"))
+    .map((checkbox) => ({
+      key: checkbox.value,
+      name: normalizePlayerName(checkbox.dataset.friendName),
+      provider: String(checkbox.dataset.friendProvider || "")
+    }))
+    .filter((friend) => friend.name);
+}
+
+function createOpenPlayerSlot(index) {
+  return {
+    name: `Open Spot ${index + 1}`,
+    claimed: false,
+    open: true
+  };
+}
+
+function createPlayerSetupEntries() {
+  const auth = getStoredPlayerAuth();
+  const hostName = getStoredPlayerName() || "Player 1";
+  const playerCount = getSelectedPlayerCount();
+  const selectedFriends = getSelectedFriendInvites().slice(0, Math.max(0, playerCount - 1));
+  const entries = [
+    {
+      name: hostName,
+      authKey: getStoredPlayerAuthKey(),
+      provider: auth?.provider || "name",
+      claimed: true,
+      open: false
+    },
+    ...selectedFriends.map((friend) => ({
+      name: friend.name,
+      invitedName: friend.name,
+      authKey: friend.key,
+      provider: friend.provider,
+      claimed: false,
+      open: true
+    }))
+  ];
+
+  while (entries.length < playerCount) {
+    entries.push(createOpenPlayerSlot(entries.length));
+  }
+
+  return entries;
+}
+
 function parsePlayerNames() {
   const storedPlayerName = getStoredPlayerName();
   const playerNames = [
@@ -3820,6 +4274,17 @@ function validatePlayerNames(playerNames) {
   }
 
   return "";
+}
+
+function validatePlayerSetupEntries(entries) {
+  const claimedNames = (entries || [])
+    .filter((entry) => entry.claimed !== false && !entry.open)
+    .map((entry) => entry.name);
+  const invitedNames = (entries || [])
+    .filter((entry) => entry.invitedName)
+    .map((entry) => entry.invitedName);
+
+  return validatePlayerNames([...claimedNames, ...invitedNames]);
 }
 
 function setScreen(screenName, options = {}) {
@@ -3857,6 +4322,8 @@ function showNewGameSetup(options = {}) {
       getStoredPlayerName(),
       ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Player 2"])
     ]);
+    setSelectedPlayerCount(Math.max(2, gameState.players.length || 2));
+    renderFriendInviteOptions();
     setGameMessage("");
     setScreen("setup", { clearGameURL: false });
 
@@ -3881,7 +4348,10 @@ async function showGameList(options = {}) {
 
 function saveIdentityFromInput() {
   const identityNameInput = document.querySelector("#identity-name-input");
-  const playerName = setStoredPlayerName(identityNameInput?.value);
+  const playerName = setStoredPlayerAuth({
+    provider: "name",
+    name: identityNameInput?.value
+  })?.name;
 
   if (!playerName) {
     setGameMessage("Enter your name first.");
@@ -3889,22 +4359,13 @@ function saveIdentityFromInput() {
     return;
   }
 
-  updateIdentityUI();
-  setGameMessage("");
-
-  const nextAction = pendingIdentityAction;
-  pendingIdentityAction = null;
-
-  if (nextAction) {
-    nextAction();
-  } else {
-    showGameList();
-  }
+  finishIdentitySignIn();
 }
 
 function logoutPlayer() {
   deleteCookie(playerNameCookie);
   removeLocalStorageItem(playerNameStorageKey);
+  removeLocalStorageItem(playerAuthStorageKey);
   pendingIdentityAction = null;
   closeIdentityMenu();
   setScreen("welcome");
@@ -3963,6 +4424,7 @@ async function saveGameState() {
     gameState.lastPlayDate = payload.lastPlayDate;
   }
 
+  rememberFriendsFromGame(gameState.toJSON());
   return payload.id;
 }
 
@@ -4152,6 +4614,45 @@ function getGameListPoolRemaining(game) {
   }
 }
 
+function claimGameSpot(sourceGameState, auth) {
+  if (!sourceGameState || !auth?.name) {
+    return false;
+  }
+
+  const authKey = getStoredPlayerAuthKey();
+  const playerNameKey = normalizeNameKey(auth.name);
+  const players = Array.isArray(sourceGameState.players) ? sourceGameState.players : [];
+  const reservedIndex = players.findIndex((player) => (
+    (player.open || player.claimed === false) &&
+    (
+      (player.invitedName && normalizeNameKey(player.invitedName) === playerNameKey) ||
+      (authKey && String(player.authKey || "") === authKey)
+    )
+  ));
+  const openIndex = players.findIndex((player) => (
+    player.open ||
+    player.claimed === false ||
+    /^open spot \d+$/i.test(String(player.name || ""))
+  ));
+  const claimIndex = reservedIndex !== -1 ? reservedIndex : openIndex;
+
+  if (claimIndex === -1) {
+    return false;
+  }
+
+  players[claimIndex] = {
+    ...players[claimIndex],
+    name: auth.name,
+    authKey,
+    provider: auth.provider,
+    claimed: true,
+    open: false
+  };
+  delete players[claimIndex].invitedName;
+  sourceGameState.players = players;
+  return true;
+}
+
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
@@ -4168,9 +4669,11 @@ async function loadActiveGames() {
 
   try {
     const payload = await fetchJSON(`${serverURL}?action=list`);
+    (payload.games || []).forEach((game) => rememberFriendsFromGame(game));
     const matchingGames = (payload.games || [])
       .filter((game) => (
-        (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey)
+        (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey) ||
+        (game.players || []).some((player) => String(player.authKey || "") === getStoredPlayerAuthKey())
       ))
       .map((game) => ({
         ...game,
@@ -4307,19 +4810,35 @@ async function loadGameById(gameId) {
 
   const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(normalizedGameId)}`);
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
-  const canPlayGame = (payload.gameState.players || [])
-    .some((player) => normalizeNameKey(player.name) === storedPlayerKey);
+  const auth = getStoredPlayerAuth();
+  const authKey = getStoredPlayerAuthKey();
+  const players = payload.gameState.players || [];
+  const canPlayGame = players
+    .some((player) => (
+      player.claimed !== false &&
+      !player.open &&
+      (
+        normalizeNameKey(player.name) === storedPlayerKey ||
+        (authKey && String(player.authKey || "") === authKey)
+      )
+    ));
 
-  if (!canPlayGame) {
+  if (!canPlayGame && !claimGameSpot(payload.gameState, auth)) {
     throw new Error("This game does not include your player name.");
   }
 
   gameState.loadFromJSON(payload.gameState);
+  rememberFriendsFromGame(gameState.toJSON());
   captureTurnStartGameState();
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage("");
   renderGame();
+
+  if (!canPlayGame) {
+    await saveGameState();
+    setGameMessage(`Claimed a spot in game ${gameState.id}.`);
+  }
 }
 
 async function resumeGame(gameId) {
@@ -4400,8 +4919,8 @@ async function loadGameFromURLHash() {
 }
 
 async function startNewGame() {
-  const playerNames = parsePlayerNames();
-  const validationMessage = validatePlayerNames(playerNames);
+  const playerEntries = createPlayerSetupEntries();
+  const validationMessage = validatePlayerSetupEntries(playerEntries);
 
   if (!getStoredPlayerName()) {
     showNewGameSetup();
@@ -4413,7 +4932,7 @@ async function startNewGame() {
     return;
   }
 
-  gameState.setPlayerNames(playerNames);
+  gameState.players = gameState.normalizePlayers(playerEntries);
   gameState.setGameLength(getSelectedGameLength());
   gameState.reset();
   gameState.lastPlayDate = gameState.startDate;
@@ -4837,6 +5356,8 @@ function initializeSortables() {
 
 function bindGameControls() {
   const saveIdentityButton = document.querySelector("#save-identity-button");
+  const googleLoginButton = document.querySelector("#google-login-button");
+  const facebookLoginButton = document.querySelector("#facebook-login-button");
   const identityNameInput = document.querySelector("#identity-name-input");
   const identityMenuButton = document.querySelector("#identity-menu-button");
   const logoutButton = document.querySelector("#logout-button");
@@ -4847,6 +5368,8 @@ function bindGameControls() {
   const createGameFromListButton = document.querySelector("#create-game-from-list-button");
   const createGameButton = document.querySelector("#create-game-button");
   const addPlayerButton = document.querySelector("#add-player-button");
+  const playerCountInput = document.querySelector("#player-count-input");
+  const copyInviteLinkButton = document.querySelector("#copy-invite-link-button");
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
   const passTurnButton = document.querySelector("#pass-turn-button");
@@ -4860,6 +5383,14 @@ function bindGameControls() {
 
   if (saveIdentityButton) {
     saveIdentityButton.addEventListener("click", saveIdentityFromInput);
+  }
+
+  if (googleLoginButton) {
+    googleLoginButton.addEventListener("click", () => startOAuthLogin("google"));
+  }
+
+  if (facebookLoginButton) {
+    facebookLoginButton.addEventListener("click", () => startOAuthLogin("facebook"));
   }
 
   if (identityNameInput) {
@@ -4918,8 +5449,19 @@ function bindGameControls() {
     addPlayerButton.addEventListener("click", () => {
       const input = addPlayerNameInput(`Player ${getPlayerNameInputs().length + 1}`);
 
+      setSelectedPlayerCount(getSelectedPlayerCount() + 1);
       input?.focus();
     });
+  }
+
+  if (playerCountInput) {
+    playerCountInput.addEventListener("change", () => {
+      setSelectedPlayerCount(getSelectedPlayerCount());
+    });
+  }
+
+  if (copyInviteLinkButton) {
+    copyInviteLinkButton.addEventListener("click", copyInviteLink);
   }
 
   if (redrawTilesButton) {
@@ -4968,6 +5510,7 @@ function bindGameControls() {
 }
 
 async function initializeApp() {
+  await completeOAuthRedirectIfPresent();
   updateIdentityUI();
   renderPlayerNameInputs(parsePlayerNames());
   bindGameControls();
