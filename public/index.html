@@ -163,18 +163,27 @@
     }
 
     .oauth-buttons {
-      display: grid;
+      display: none;
       justify-items: stretch;
       gap: 0.55rem;
       width: min(82vw, 22rem);
     }
 
+    html.oauth-login-available .oauth-buttons {
+      display: grid;
+    }
+
     .oauth-button {
-      display: inline-flex;
+      display: none;
       align-items: center;
       justify-content: center;
       gap: 0.62rem;
       width: 100%;
+    }
+
+    html.oauth-google-available .oauth-button.google,
+    html.oauth-facebook-available .oauth-button.facebook {
+      display: inline-flex;
     }
 
     .oauth-icon {
@@ -2698,22 +2707,26 @@
   </style>
   <script>
     let hasStoredPlayerName = false;
-    let allowsLocalNameLogin = false;
+    let allowsLegacyNameLogin = false;
 
     try {
-      allowsLocalNameLogin = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i.test(window.location.hostname);
+      allowsLegacyNameLogin = /(^|\.)willshaver\.com$/i.test(window.location.hostname);
     } catch {
-      allowsLocalNameLogin = false;
+      allowsLegacyNameLogin = false;
     }
 
     try {
-      hasStoredPlayerName = document.cookie.split("; ").some((entry) => entry.startsWith("wordwefterPlayerName="));
+      hasStoredPlayerName = allowsLegacyNameLogin &&
+        document.cookie.split("; ").some((entry) => entry.startsWith("wordwefterPlayerName="));
     } catch {
       hasStoredPlayerName = false;
     }
 
     try {
-      hasStoredPlayerName = hasStoredPlayerName || Boolean(window.localStorage.getItem("wordwefterPlayerName"));
+      const storedAuth = JSON.parse(window.localStorage.getItem("wordwefterPlayerAuth") || "null");
+      hasStoredPlayerName = hasStoredPlayerName ||
+        (storedAuth && storedAuth.provider && storedAuth.provider !== "name") ||
+        (allowsLegacyNameLogin && Boolean(window.localStorage.getItem("wordwefterPlayerName")));
     } catch {
     }
 
@@ -2721,7 +2734,7 @@
       document.documentElement.classList.add("has-stored-player");
     }
 
-    if (allowsLocalNameLogin) {
+    if (allowsLegacyNameLogin) {
       document.documentElement.classList.add("local-name-login-allowed");
     }
   </script>
@@ -3098,6 +3111,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=server-oauth-config"></script>
+  <script type="module" src="./game.js?v=game-list-auto-refresh"></script>
 </body>
 </html>

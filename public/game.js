@@ -2555,6 +2555,7 @@ const localOAuthUserIdsStorageKey = "wordwefterLocalOAuthUserIds";
 const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
+const gameListRefreshMilliseconds = 10000;
 const maxPlayerSlots = 6;
 let rackSortable = null;
 let marketplaceSortable = null;
@@ -2564,6 +2565,8 @@ let pendingOAuthDisplayAuth = null;
 let turnPollTimer = null;
 let turnPollTimerMilliseconds = 0;
 let immediateTurnRefreshTimer = null;
+let gameListRefreshTimer = null;
+let loadingActiveGames = false;
 let gameMessageClearTimer = null;
 let gameMessageExitTimer = null;
 let lastTurnNotificationKey = "";
@@ -2586,7 +2589,11 @@ const rainbowTileAnimationStartedAt = Date.now();
 const gameMessageAnimationMilliseconds = 180;
 let tileEnterQueueAvailableAt = 0;
 
-function isLocalNameLoginAllowed() {
+function isLegacyNameLoginAllowed() {
+  return /(^|\.)willshaver\.com$/i.test(window.location.hostname);
+}
+
+function isLocalOAuthFallbackAllowed() {
   return window.location.protocol === "http:" &&
     /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i.test(window.location.hostname);
 }
@@ -3865,8 +3872,14 @@ function getStoredPlayerAuth() {
   const fallbackName = getStoredPlayerName();
 
   if (auth && typeof auth === "object" && normalizePlayerName(auth.name)) {
+    const provider = String(auth.provider || "name");
+
+    if (provider === "name" && !isLegacyNameLoginAllowed()) {
+      return null;
+    }
+
     return {
-      provider: String(auth.provider || "name"),
+      provider,
       userId: String(auth.userId || normalizeNameKey(auth.name)),
       name: normalizePlayerName(auth.name),
       signedInAt: String(auth.signedInAt || ""),
@@ -3876,7 +3889,7 @@ function getStoredPlayerAuth() {
     };
   }
 
-  return fallbackName
+  return fallbackName && isLegacyNameLoginAllowed()
     ? {
       provider: "name",
       userId: normalizeNameKey(fallbackName),
@@ -3911,7 +3924,7 @@ function isRealOAuthAuth(auth) {
   return ["google", "facebook"].includes(provider) &&
     userId &&
     userId.toLowerCase() !== "null" &&
-    (!isLocalFallback || isLocalNameLoginAllowed());
+    (!isLocalFallback || isLocalOAuthFallbackAllowed());
 }
 
 function getLocalOAuthUserId(provider) {
@@ -3931,13 +3944,18 @@ function getLocalOAuthUserId(provider) {
 }
 
 function setStoredPlayerAuth(auth) {
+  const normalizedProvider = String(auth?.provider || "name").toLowerCase();
+
+  if (normalizedProvider === "name" && !isLegacyNameLoginAllowed()) {
+    return null;
+  }
+
   const normalizedName = setStoredPlayerName(auth?.name);
 
   if (!normalizedName) {
     return null;
   }
 
-  const normalizedProvider = String(auth?.provider || "name").toLowerCase();
   const normalizedAuth = {
     provider: normalizedProvider,
     userId: String(auth?.userId || normalizeNameKey(normalizedName)),
@@ -4082,11 +4100,29 @@ async function saveStoredOAuthUserLogin(auth) {
 }
 
 function getOAuthConfig(provider) {
-  return serverOAuthConfig?.[provider] || globalThis.wordWefterOAuth?.[provider] || {};
+  return serverOAuthConfig?.[provider] || {};
+}
+
+function hasOAuthProviderConfig(provider) {
+  return Boolean(String(getOAuthConfig(provider).clientId || "").trim());
+}
+
+function providerLoginIsVisible(provider) {
+  return hasOAuthProviderConfig(provider) || isLocalOAuthFallbackAllowed();
+}
+
+function updateOAuthLoginAvailability() {
+  const googleAvailable = providerLoginIsVisible("google");
+  const facebookAvailable = providerLoginIsVisible("facebook");
+
+  document.documentElement.classList.toggle("oauth-google-available", googleAvailable);
+  document.documentElement.classList.toggle("oauth-facebook-available", facebookAvailable);
+  document.documentElement.classList.toggle("oauth-login-available", googleAvailable || facebookAvailable);
 }
 
 async function loadOAuthConfig() {
   if (serverOAuthConfig) {
+    updateOAuthLoginAvailability();
     return serverOAuthConfig;
   }
 
@@ -4099,6 +4135,7 @@ async function loadOAuthConfig() {
     serverOAuthConfig = {};
   }
 
+  updateOAuthLoginAvailability();
   return serverOAuthConfig;
 }
 
@@ -4145,7 +4182,7 @@ async function startOAuthLogin(provider) {
     return;
   }
 
-  if (!isLocalNameLoginAllowed()) {
+  if (!isLocalOAuthFallbackAllowed()) {
     setGameMessage(`${getProviderLabel(normalizedProvider)} sign-in is not configured.`);
     return;
   }
@@ -4482,14 +4519,15 @@ function setStoredPlayerName(name) {
 }
 
 function updateIdentityUI() {
-  const playerName = getStoredPlayerName();
   const auth = getStoredPlayerAuth();
+  const playerName = auth?.name || "";
   const identityNameDisplay = document.querySelector("#identity-name-display");
   const identityNameInput = document.querySelector("#identity-name-input");
   const identityProviderDisplay = document.querySelector("#identity-provider-display");
 
   document.body.classList.toggle("has-player", Boolean(playerName));
-  document.documentElement.classList.toggle("local-name-login-allowed", isLocalNameLoginAllowed());
+  document.documentElement.classList.toggle("local-name-login-allowed", isLegacyNameLoginAllowed());
+  updateOAuthLoginAvailability();
 
   if (identityNameDisplay) {
     identityNameDisplay.textContent = playerName;
@@ -4520,10 +4558,12 @@ function requirePlayerName(action, options = {}) {
   setGameMessage("");
   setScreen("welcome", { clearGameURL: options.clearGameURL !== false });
   updateIdentityUI();
-  if (isLocalNameLoginAllowed()) {
+  if (isLegacyNameLoginAllowed()) {
     document.querySelector("#identity-name-input")?.focus();
-  } else {
+  } else if (providerLoginIsVisible("google")) {
     document.querySelector("#google-login-button")?.focus();
+  } else if (providerLoginIsVisible("facebook")) {
+    document.querySelector("#facebook-login-button")?.focus();
   }
 }
 
@@ -4961,8 +5001,40 @@ function validatePlayerSetupEntries(entries) {
   return validatePlayerNames([...claimedNames, ...invitedNames]);
 }
 
+function stopGameListRefreshTimer() {
+  window.clearInterval(gameListRefreshTimer);
+  gameListRefreshTimer = null;
+}
+
+function startGameListRefreshTimer() {
+  if (gameListRefreshTimer || !document.body.classList.contains("screen-list")) {
+    return;
+  }
+
+  gameListRefreshTimer = window.setInterval(() => {
+    if (!document.body.classList.contains("screen-list") || document.hidden || loadingActiveGames) {
+      return;
+    }
+
+    void loadActiveGames();
+  }, gameListRefreshMilliseconds);
+}
+
+function updateGameListRefreshTimer() {
+  if (document.body.classList.contains("screen-list")) {
+    startGameListRefreshTimer();
+  } else {
+    stopGameListRefreshTimer();
+  }
+}
+
 function setScreen(screenName, options = {}) {
   const shouldClearGameURL = options.clearGameURL !== false;
+
+  if (screenName !== "play") {
+    window.clearTimeout(immediateTurnRefreshTimer);
+    immediateTurnRefreshTimer = null;
+  }
 
   document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-play", "screen-rules");
   document.body.classList.add(`screen-${screenName}`);
@@ -4978,6 +5050,7 @@ function setScreen(screenName, options = {}) {
 
   closeIdentityMenu();
   updateTurnPolling();
+  updateGameListRefreshTimer();
 }
 
 function showRules(options = {}) {
@@ -5024,7 +5097,7 @@ async function showGameList(options = {}) {
 }
 
 function saveIdentityFromInput() {
-  if (!isLocalNameLoginAllowed()) {
+  if (!isLegacyNameLoginAllowed()) {
     setGameMessage("Use Google or Facebook to sign in.");
     return;
   }
@@ -5042,6 +5115,21 @@ function saveIdentityFromInput() {
   }
 
   void finishIdentitySignIn();
+}
+
+function clearDisallowedLegacyNameLogin() {
+  if (isLegacyNameLoginAllowed()) {
+    return;
+  }
+
+  const auth = parseJSONStorageItem(playerAuthStorageKey, null);
+  const provider = String(auth?.provider || (auth ? "name" : ""));
+
+  if (!auth || provider === "name") {
+    deleteCookie(playerNameCookie);
+    removeLocalStorageItem(playerNameStorageKey);
+    removeLocalStorageItem(playerAuthStorageKey);
+  }
 }
 
 function logoutPlayer() {
@@ -5227,11 +5315,26 @@ function updateTurnPolling() {
 }
 
 function refreshTurnStateSoon() {
+  if (document.body.classList.contains("screen-list")) {
+    updateGameListRefreshTimer();
+
+    if (!document.hidden) {
+      void loadActiveGames();
+    }
+  }
+
+  if (!document.body.classList.contains("screen-play")) {
+    window.clearTimeout(immediateTurnRefreshTimer);
+    immediateTurnRefreshTimer = null;
+    updateTurnPolling();
+    return;
+  }
+
   window.clearTimeout(immediateTurnRefreshTimer);
   immediateTurnRefreshTimer = window.setTimeout(() => {
     updateTurnPolling();
 
-    if (!document.hidden) {
+    if (!document.hidden && document.body.classList.contains("screen-play")) {
       pollActiveGameState();
     }
   }, 0);
@@ -5492,6 +5595,10 @@ async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
 
+  if (loadingActiveGames) {
+    return;
+  }
+
   if (!activeGamesList) {
     return;
   }
@@ -5501,6 +5608,8 @@ async function loadActiveGames() {
     setWaitingGamesForMenu([]);
     return;
   }
+
+  loadingActiveGames = true;
 
   try {
     const payload = await fetchJSON(`${serverURL}?action=list`);
@@ -5633,6 +5742,8 @@ async function loadActiveGames() {
     });
   } catch (error) {
     activeGamesList.textContent = `Could not load active games: ${error.message}`;
+  } finally {
+    loadingActiveGames = false;
   }
 }
 
@@ -6446,6 +6557,8 @@ function bindGameControls() {
 }
 
 async function initializeApp() {
+  clearDisallowedLegacyNameLogin();
+  await loadOAuthConfig();
   await completeOAuthRedirectIfPresent();
   if (getPendingOAuthDisplayAuth()) {
     showOAuthDisplayNamePage();

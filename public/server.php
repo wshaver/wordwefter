@@ -52,6 +52,11 @@ function public_oauth_provider_config(array $config, string $envPrefix): array
     return $publicConfig;
 }
 
+function public_oauth_config_object(array $config): object
+{
+    return (object) $config;
+}
+
 function read_public_oauth_config(string $oauthConfigFile): array
 {
     $fileConfig = [];
@@ -65,14 +70,14 @@ function read_public_oauth_config(string $oauthConfigFile): array
     }
 
     return [
-        'google' => public_oauth_provider_config(
+        'google' => public_oauth_config_object(public_oauth_provider_config(
             is_array($fileConfig['google'] ?? null) ? $fileConfig['google'] : [],
             'WORDWEFTER_GOOGLE'
-        ),
-        'facebook' => public_oauth_provider_config(
+        )),
+        'facebook' => public_oauth_config_object(public_oauth_provider_config(
             is_array($fileConfig['facebook'] ?? null) ? $fileConfig['facebook'] : [],
             'WORDWEFTER_FACEBOOK'
-        )
+        ))
     ];
 }
 
@@ -191,13 +196,24 @@ function normalize_provider_user_id(string $userId): string
     return $normalizedUserId;
 }
 
+function request_host(): string
+{
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+
+    return preg_replace('/:\d+$/', '', $host) ?? $host;
+}
+
+function request_allows_legacy_name_login(): bool
+{
+    return preg_match('/(^|\.)willshaver\.com$/i', request_host()) === 1;
+}
+
 function request_is_local_http(): bool
 {
     $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
     $scheme = strtolower((string) ($_SERVER['REQUEST_SCHEME'] ?? ''));
     $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
-    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
-    $host = preg_replace('/:\d+$/', '', $host) ?? $host;
+    $host = request_host();
     $isHttps = $https === 'on' || $https === '1' || $scheme === 'https' || $forwardedProto === 'https';
     $isLocalHost = preg_match('/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i', $host) === 1;
 
@@ -227,7 +243,20 @@ function normalize_auth_key(string $authKey): string
         return '';
     }
 
+    if (strtolower(trim($parts[0])) === 'name') {
+        $nameKey = normalize_name_key($parts[1]);
+
+        return request_allows_legacy_name_login() && $nameKey !== ''
+            ? 'name:' . $nameKey
+            : '';
+    }
+
     return user_login_key($parts[0], $parts[1]);
+}
+
+function is_legacy_name_auth_key(string $authKey): bool
+{
+    return strncmp($authKey, 'name:', 5) === 0;
 }
 
 function read_user_logins(string $userLoginFile): array
@@ -841,18 +870,19 @@ if ($action === 'save') {
     $incomingTurnIndex = turn_index($state);
     $isNewGame = !is_file($file);
     $requestAuthKey = normalize_auth_key((string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''));
+    $isLegacyNameLogin = is_legacy_name_auth_key($requestAuthKey);
     $registeredLogin = get_user_login_by_auth_key($userLoginFile, $requestAuthKey);
     $requestSessionToken = trim((string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''));
 
-    if ($requestAuthKey === '' || $registeredLogin === null) {
+    if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
         send_json(['ok' => false, 'error' => 'Save rejected because this login token is not registered on the server.'], 403);
     }
 
-    if (is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
+    if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
         send_json(['ok' => false, 'error' => 'Save rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
     }
 
-    if (!session_token_matches($registeredLogin, $requestSessionToken)) {
+    if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, $requestSessionToken)) {
         send_json(['ok' => false, 'error' => 'Save rejected because this login session is not valid.'], 403);
     }
 
