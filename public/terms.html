@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Service - WordWefter</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="./favicon.ico">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --paper: #f7f4ec;
+      --accent: #0f8b8d;
+      --warm: #f2b134;
+      --tile: #fbdfa3;
+      --tile-edge: #c69238;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        linear-gradient(135deg, rgba(15, 139, 141, 0.16), transparent 34%),
+        linear-gradient(315deg, rgba(217, 79, 112, 0.14), transparent 40%),
+        var(--paper);
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: clamp(1rem, 4vw, 2.25rem);
+      flex: 1 0 auto;
+    }
+
+    .brand {
+      --brand-tile-size: clamp(2.1rem, 8vw, 3.2rem);
+      --brand-overlap-y: calc(var(--brand-tile-size) * -0.28);
+      --brand-bottom-offset: calc(var(--brand-tile-size) * 0.16);
+      display: grid;
+      width: max-content;
+      max-width: 100%;
+      margin: 0 0 clamp(1.75rem, 5vw, 2.6rem);
+      padding-right: var(--brand-bottom-offset);
+      padding-bottom: calc(var(--brand-tile-size) * 0.12);
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .brand-word {
+      display: grid;
+      grid-template-columns: repeat(4, var(--brand-tile-size));
+      gap: clamp(0.14rem, 0.55vw, 0.28rem);
+      width: max-content;
+    }
+
+    .brand-word-bottom {
+      position: relative;
+      grid-template-columns: repeat(6, var(--brand-tile-size));
+      left: var(--brand-bottom-offset);
+      top: calc(var(--brand-bottom-offset) * -1);
+      margin-top: var(--brand-overlap-y);
+      opacity: 0.9;
+    }
+
+    .brand-spacer {
+      width: var(--brand-tile-size);
+      height: var(--brand-tile-size);
+    }
+
+    .brand-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: var(--brand-tile-size);
+      aspect-ratio: 1;
+      border: max(2px, calc(var(--brand-tile-size) * 0.035)) solid var(--tile-edge);
+      border-radius: 9px;
+      background: linear-gradient(145deg, #ffe8ad, var(--tile));
+      box-shadow:
+        inset 0 0 0 max(1px, calc(var(--brand-tile-size) * 0.018)) rgba(255, 255, 255, 0.42),
+        inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08);
+      font: 900 calc(var(--brand-tile-size) * 0.58)/1 Georgia, "Times New Roman", serif;
+    }
+
+    .brand-word-bottom .brand-tile {
+      outline: max(2px, calc(var(--brand-tile-size) * 0.035)) solid var(--accent);
+      outline-offset: calc(var(--brand-tile-size) * -0.052);
+    }
+
+    .brand-tile-rainbow {
+      background: linear-gradient(120deg, #ff6b6b, #f2b134, #7fc96f, #42b8c7, #7b61ff, #d94f70, #ff6b6b);
+      background-size: 400% 400%;
+      animation: rainbow-tile-flow 7200ms ease-in-out infinite;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+
+    .brand-tile-points {
+      position: absolute;
+      right: calc(var(--brand-tile-size) * 0.11);
+      bottom: calc(var(--brand-tile-size) * 0.08);
+      font: 900 calc(var(--brand-tile-size) * 0.19)/1 system-ui, sans-serif;
+    }
+
+    .content {
+      padding: clamp(1rem, 4vw, 1.5rem);
+      border: 2px solid rgba(23, 32, 42, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
+      box-shadow: 0.18rem 0.18rem 0 rgba(15, 139, 141, 0.14);
+    }
+
+    h1 {
+      margin: 0 0 0.65rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 3px solid rgba(23, 32, 42, 0.16);
+      font-size: clamp(2rem, 7vw, 3rem);
+      line-height: 1;
+    }
+
+    h2 {
+      margin: 1.45rem 0 0.45rem;
+      font: 900 1.1rem/1.2 system-ui, sans-serif;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    p,
+    li {
+      font: 600 1rem/1.55 system-ui, sans-serif;
+    }
+
+    ul {
+      padding-left: 1.25rem;
+    }
+
+    a {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      font: 800 0.95rem/1 system-ui, sans-serif;
+    }
+
+    .site-footer {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 0.7rem clamp(1rem, 4vw, 2.25rem) 1rem;
+      color: rgba(23, 32, 42, 0.62);
+      text-align: center;
+      font: 700 0.78rem/1.35 system-ui, sans-serif;
+      flex: 0 0 auto;
+    }
+
+    .site-footer-links {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      margin-right: 0.55rem;
+    }
+
+    .site-footer-copy {
+      white-space: nowrap;
+    }
+
+    @keyframes rainbow-tile-flow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="./" aria-label="WordWefter home">
+      <span class="brand-word" aria-hidden="true">
+        <span class="brand-tile brand-tile-rainbow"><span>W</span><span class="brand-tile-points">5</span></span>
+        <span class="brand-tile"><span>O</span><span class="brand-tile-points">1</span></span>
+        <span class="brand-tile"><span>R</span><span class="brand-tile-points">1</span></span>
+        <span class="brand-tile"><span>D</span><span class="brand-tile-points">3</span></span>
+      </span>
+      <span class="brand-word brand-word-bottom" aria-hidden="true">
+        <span class="brand-spacer"></span>
+        <span class="brand-tile"><span>E</span><span class="brand-tile-points">1</span></span>
+        <span class="brand-tile"><span>F</span><span class="brand-tile-points">5</span></span>
+        <span class="brand-tile"><span>T</span><span class="brand-tile-points">1</span></span>
+        <span class="brand-tile"><span>E</span><span class="brand-tile-points">1</span></span>
+        <span class="brand-tile"><span>R</span><span class="brand-tile-points">1</span></span>
+      </span>
+    </a>
+
+    <section class="content">
+      <h1>Terms of Service</h1>
+      <p>Last updated: June 14, 2026.</p>
+      <p>These terms are intentionally simple. WordWefter is provided as a casual game for people who want to play it.</p>
+
+      <h2>No Payment</h2>
+      <p>WordWefter does not accept payment. There are no paid accounts, subscriptions, purchases, or refunds.</p>
+
+      <h2>No Promises</h2>
+      <p>WordWefter is provided as is and as available. We do not promise that it will always work, that saved games will always be available, that rules or scoring will be error-free, or that service will continue forever.</p>
+
+      <h2>Your Use</h2>
+      <ul>
+        <li>Use the game in a reasonable way.</li>
+        <li>Do not try to break, overload, abuse, or bypass the game or its sign-in checks.</li>
+        <li>Do not use WordWefter for anything unlawful or harmful.</li>
+      </ul>
+
+      <h2>Game Content</h2>
+      <p>Games, words, turns, scores, logs, and invite links are not private. Do not play words or enter names that you need to keep confidential.</p>
+
+      <h2>Accounts</h2>
+      <p>You may sign in with a supported provider and choose a display name. We may remove or rename accounts, games, or data if needed to keep the game working or prevent abuse.</p>
+
+      <h2>Limitation of Liability</h2>
+      <p>To the fullest extent allowed by law, WordWefter and its operator are not liable for lost data, unavailable games, scoring mistakes, service interruptions, or other damages from using or being unable to use the game.</p>
+
+      <h2>Changes</h2>
+      <p>These terms may change when the game changes. Continuing to use WordWefter means you accept the current terms.</p>
+
+      <nav aria-label="Terms links">
+        <a href="./">Back to WordWefter</a>
+        <a href="./privacy.html">Privacy Policy</a>
+      </nav>
+    </section>
+  </main>
+  <footer class="site-footer" aria-label="Site links">
+    <span class="site-footer-links">
+      <a href="./privacy.html">Privacy</a>
+      <a href="./terms.html">Terms</a>
+    </span>
+    <span class="site-footer-copy">Copyright 2026 Will Shaver</span>
+  </footer>
+</body>
+</html>
