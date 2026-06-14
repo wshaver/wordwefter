@@ -2614,6 +2614,7 @@ const rainbowTileAnimationMilliseconds = 7200;
 const rainbowTileAnimationStartedAt = Date.now();
 const gameMessageAnimationMilliseconds = 180;
 let tileEnterQueueAvailableAt = 0;
+let brandEfterAnimated = false;
 
 function isLegacyNameLoginAllowed() {
   return /(^|\.)willshaver\.com$/i.test(window.location.hostname);
@@ -3124,9 +3125,10 @@ function consumeTileAnimationKeyCount(counts, tile) {
   return true;
 }
 
-function animateSequentialTileEnter(tileElements) {
+function animateSequentialTileEnter(tileElements, options = {}) {
   const now = Date.now();
-  let nextDelay = Math.max(0, tileEnterQueueAvailableAt - now);
+  const useQueue = options.useQueue !== false;
+  let nextDelay = useQueue ? Math.max(0, tileEnterQueueAvailableAt - now) : 0;
   const lodashShuffle = globalThis._?.shuffle;
   const variantIndexes = tileElements.map((_, index) => index % tileEnterDurations.length);
   const shuffledVariantIndexes = typeof lodashShuffle === "function"
@@ -3159,7 +3161,35 @@ function animateSequentialTileEnter(tileElements) {
     nextDelay += duration / 2;
   });
 
-  tileEnterQueueAvailableAt = now + nextDelay;
+  if (useQueue) {
+    tileEnterQueueAvailableAt = now + nextDelay;
+  }
+}
+
+function animateBrandEfterTiles() {
+  const efterTiles = Array.from(document.querySelectorAll(".brand-word-bottom .brand-tile"));
+
+  if (
+    brandEfterAnimated ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
+    efterTiles.length === 0
+  ) {
+    return;
+  }
+
+  brandEfterAnimated = true;
+
+  efterTiles.forEach((tileElement) => {
+    tileElement.classList.remove("tile-enter-pending", "tile-enter-1", "tile-enter-2", "tile-enter-3", "tile-enter-4");
+    tileElement.style.removeProperty("--shuffle-x");
+    tileElement.style.removeProperty("--shuffle-y");
+    tileElement.style.removeProperty("--shuffle-delay");
+    tileElement.style.removeProperty("--tile-enter-rotation");
+  });
+
+  window.requestAnimationFrame(() => {
+    animateSequentialTileEnter(efterTiles, { useQueue: false });
+  });
 }
 
 function renderRack(options = {}) {
@@ -6698,6 +6728,7 @@ async function initializeApp() {
   renderPlayerNameInputs(parsePlayerNames());
   bindGameControls();
   updatePlayerRemoveButtons();
+  animateBrandEfterTiles();
   const loadedHashGame = await loadGameFromURLHash();
 
   if (!loadedHashGame) {
