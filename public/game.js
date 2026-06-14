@@ -114,6 +114,8 @@ class WordWefterGameState {
     this.finalTurnsRemaining = null;
     this.pendingFinalRound = false;
     this.gameOver = Boolean(setup.gameOver);
+    this.concededByPlayerNames = this.normalizeConcededPlayerNames(setup);
+    this.concededByPlayerName = this.getLastConcededPlayerName();
     this.dictionary = setup.dictionary || dictionaryWordSet;
     this.players = this.normalizePlayers(playerNames);
     this.history = this.normalizeHistory(setup.history);
@@ -183,6 +185,28 @@ class WordWefterGameState {
     }));
   }
 
+  normalizeConcededPlayerNames(source = {}) {
+    const concededNames = Array.isArray(source.concededByPlayerNames)
+      ? source.concededByPlayerNames
+      : [];
+    const legacyConcededName = normalizePlayerName(source.concededByPlayerName || "");
+    const names = [...concededNames, legacyConcededName]
+      .map(normalizePlayerName)
+      .filter(Boolean);
+    const seenKeys = new Set();
+
+    return names.filter((name) => {
+      const key = normalizeNameKey(name);
+
+      if (!key || seenKeys.has(key)) {
+        return false;
+      }
+
+      seenKeys.add(key);
+      return true;
+    });
+  }
+
   normalizeWordScore(entry) {
     const word = String(entry?.word || "").trim().toUpperCase();
     const score = Number(entry?.score || 0);
@@ -204,7 +228,7 @@ class WordWefterGameState {
 
     const action = String(entry?.action || "").trim().toLowerCase();
 
-    if (words.length === 0 && !["pass", "redraw"].includes(action)) {
+    if (words.length === 0 && !["pass", "redraw", "concede"].includes(action)) {
       return null;
     }
 
@@ -214,7 +238,7 @@ class WordWefterGameState {
       turnIndex: Number.isInteger(turnIndex) ? Math.max(0, turnIndex) : fallbackTurnIndex,
       playerName: String(entry?.playerName || "Player").trim() || "Player",
       words,
-      ...(["pass", "redraw"].includes(action) ? { action } : {})
+      ...(["pass", "redraw", "concede"].includes(action) ? { action } : {})
     };
   }
 
@@ -275,6 +299,18 @@ class WordWefterGameState {
     return entry;
   }
 
+  recordConcedeTurnHistory(playerName) {
+    const entry = {
+      turnIndex: this.turnIndex,
+      playerName: normalizePlayerName(playerName) || this.currentPlayerName,
+      action: "concede",
+      words: []
+    };
+
+    this.history.push(entry);
+    return entry;
+  }
+
   getConsecutivePassCount() {
     let passCount = 0;
 
@@ -294,8 +330,14 @@ class WordWefterGameState {
       return null;
     }
 
-    const highScore = Math.max(...this.players.map((player) => Number(player.score || 0)));
-    const leaders = this.players.filter((player) => Number(player.score || 0) === highScore);
+    const eligiblePlayers = this.getActivePlayers();
+
+    if (eligiblePlayers.length === 0) {
+      return null;
+    }
+
+    const highScore = Math.max(...eligiblePlayers.map((player) => Number(player.score || 0)));
+    const leaders = eligiblePlayers.filter((player) => Number(player.score || 0) === highScore);
 
     return {
       highScore,
@@ -305,6 +347,50 @@ class WordWefterGameState {
 
   get player() {
     return this.players[this.currentPlayerIndex] || this.players[0];
+  }
+
+  getLastConcededPlayerName() {
+    return this.concededByPlayerNames[this.concededByPlayerNames.length - 1] || "";
+  }
+
+  getConcededPlayerNames() {
+    return [...(this.concededByPlayerNames || [])];
+  }
+
+  getConcededPlayerKeys() {
+    return new Set((this.concededByPlayerNames || [])
+      .map(normalizeNameKey)
+      .filter(Boolean));
+  }
+
+  isPlayerNameConceded(playerName) {
+    return this.getConcededPlayerKeys().has(normalizeNameKey(playerName));
+  }
+
+  isPlayerConceded(player) {
+    return this.isPlayerNameConceded(player?.name);
+  }
+
+  getActivePlayers() {
+    const concededPlayerKeys = this.getConcededPlayerKeys();
+
+    return this.players.filter((player) => !concededPlayerKeys.has(normalizeNameKey(player.name)));
+  }
+
+  getNextActivePlayerIndex(startIndex = this.currentPlayerIndex) {
+    if (this.players.length === 0) {
+      return 0;
+    }
+
+    for (let offset = 1; offset <= this.players.length; offset += 1) {
+      const candidateIndex = (startIndex + offset) % this.players.length;
+
+      if (!this.isPlayerConceded(this.players[candidateIndex])) {
+        return candidateIndex;
+      }
+    }
+
+    return Math.max(0, Math.min(startIndex, this.players.length - 1));
   }
 
   set player(player) {
@@ -386,7 +472,14 @@ class WordWefterGameState {
       return result;
     }
 
-    this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
+    if (this.getActivePlayers().length <= 1) {
+      this.gameOver = true;
+      this.pendingFinalRound = false;
+      this.finalTurnsRemaining = null;
+      return result;
+    }
+
+    this.currentPlayerIndex = this.getNextActivePlayerIndex();
 
     if (this.currentRack.length === 0) {
       const drawnTiles = this.drawSevenTiles();
@@ -401,7 +494,7 @@ class WordWefterGameState {
   passTurn() {
     this.recordPassTurnHistory();
 
-    if (this.getConsecutivePassCount() >= this.players.length) {
+    if (this.getConsecutivePassCount() >= this.getActivePlayers().length) {
       this.gameOver = true;
       this.pendingFinalRound = false;
       this.finalTurnsRemaining = null;
@@ -411,6 +504,52 @@ class WordWefterGameState {
     }
 
     return this.advanceTurn();
+  }
+
+  concedeGame(playerName) {
+    const playerKey = normalizeNameKey(playerName);
+    const playerIndex = this.players.findIndex((player) => normalizeNameKey(player.name) === playerKey);
+
+    if (this.gameOver || playerIndex === -1 || this.isPlayerConceded(this.players[playerIndex])) {
+      return false;
+    }
+
+    const wasCurrentPlayer = playerIndex === this.currentPlayerIndex;
+    const concededPlayerName = this.players[playerIndex].name;
+
+    this.concededByPlayerNames.push(concededPlayerName);
+    this.concededByPlayerName = this.getLastConcededPlayerName();
+
+    if (wasCurrentPlayer) {
+      this.resetActivePlacements();
+    }
+
+    this.recordConcedeTurnHistory(concededPlayerName);
+
+    const activePlayers = this.getActivePlayers();
+
+    if (activePlayers.length <= 1) {
+      const remainingPlayerIndex = this.players.findIndex((player) => !this.isPlayerConceded(player));
+
+      if (remainingPlayerIndex !== -1) {
+        this.currentPlayerIndex = remainingPlayerIndex;
+      }
+
+      this.gameOver = true;
+      this.pendingFinalRound = false;
+      this.finalTurnsRemaining = null;
+      return true;
+    }
+
+    if (wasCurrentPlayer) {
+      this.currentPlayerIndex = this.getNextActivePlayerIndex(playerIndex);
+
+      if (this.currentRack.length === 0) {
+        this.drawSevenTiles();
+      }
+    }
+
+    return true;
   }
 
   advanceTurnIndex() {
@@ -862,6 +1001,8 @@ class WordWefterGameState {
     this.finalTurnsRemaining = null;
     this.pendingFinalRound = false;
     this.gameOver = false;
+    this.concededByPlayerNames = [];
+    this.concededByPlayerName = "";
     this.discardedTiles = [];
     this.boardTiles = new Map();
     this.boardBonuses = this.createBoardBonuses();
@@ -1070,6 +1211,10 @@ class WordWefterGameState {
       gameLength: this.gameLength,
       tilesDrawn: this.tilesDrawn,
       ...(this.gameOver ? { gameOver: true } : {}),
+      ...(this.concededByPlayerNames.length > 0 ? {
+        concededByPlayerNames: [...this.concededByPlayerNames],
+        concededByPlayerName: this.getLastConcededPlayerName()
+      } : {}),
       turnIndex: this.turnIndex,
       currentPlayerIndex: this.currentPlayerIndex,
       ...(this.history.length > 0 ? {
@@ -1291,6 +1436,8 @@ class WordWefterGameState {
     this.finalTurnsRemaining = null;
     this.pendingFinalRound = false;
     this.gameOver = Boolean(source.gameOver) || this.tilesRemaining === 0;
+    this.concededByPlayerNames = this.normalizeConcededPlayerNames(source);
+    this.concededByPlayerName = this.getLastConcededPlayerName();
     this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
     this.history = this.normalizeHistory(source.history);
     this.players = (source.players || []).map((player) => {
@@ -1346,6 +1493,9 @@ class WordWefterGameState {
     this.currentPlayerIndex = Number.isInteger(loadedPlayerIndex)
       ? Math.max(0, Math.min(loadedPlayerIndex, this.players.length - 1))
       : 0;
+    if (!this.gameOver && this.isPlayerConceded(this.player) && this.getActivePlayers().length > 0) {
+      this.currentPlayerIndex = this.getNextActivePlayerIndex();
+    }
     this.discardedTiles = (source.discardedTiles || []).map(hydrateTile);
     this.boardTiles = hydrateTileMap(source.boardTiles, false);
     this.pendingMarketplacePurchaseTileIds = new Set();
@@ -2403,6 +2553,7 @@ const oauthStateStorageKey = "wordwefterOAuthState";
 const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
+const maxPlayerSlots = 6;
 let rackSortable = null;
 let marketplaceSortable = null;
 let boardSortables = [];
@@ -2420,6 +2571,7 @@ let renderedMarketplaceTileKeys = [];
 let renderedGameId = "";
 let turnStartGameStateJSON = "";
 let showingPoolView = false;
+let waitingGamesForMenu = [];
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
@@ -3086,6 +3238,26 @@ function updatePlacementControls() {
     shuffleRackButton.hidden = gameState.gameOver;
     shuffleRackButton.disabled = gameState.gameOver || getVisibleRack().length < 2;
   }
+
+  const concedeGameControl = document.querySelector("#concede-game-control");
+  const concedeGameButton = document.querySelector("#concede-game-button");
+  const loggedInPlayer = getLoggedInPlayer();
+  const canConcede = Boolean(loggedInPlayer) &&
+    !gameState.gameOver &&
+    !gameState.isPlayerConceded(loggedInPlayer);
+
+  if (concedeGameControl) {
+    concedeGameControl.hidden = !canConcede;
+  }
+
+  if (concedeGameButton) {
+    concedeGameButton.hidden = !canConcede;
+    concedeGameButton.disabled = !canConcede;
+  }
+
+  if (!canConcede) {
+    setConcedeConfirmationVisible(false);
+  }
 }
 
 function createWordScoreList(words, emptyText = "No words yet") {
@@ -3119,6 +3291,20 @@ function createWordScoreList(words, emptyText = "No words yet") {
   return list;
 }
 
+function getConcessionResultText(victorResult) {
+  const concededNames = gameState.getConcededPlayerNames();
+
+  if (concededNames.length === 0 || !victorResult || victorResult.leaders.length === 0) {
+    return "";
+  }
+
+  const concededText = concededNames.length === 1
+    ? `${concededNames[0]} conceded`
+    : `${concededNames.join(", ")} conceded`;
+
+  return `${concededText}. Winner: ${victorResult.leaders.map((player) => player.name).join(", ")}`;
+}
+
 function renderGameLog(gameLogElement) {
   gameLogElement.replaceChildren();
 
@@ -3140,7 +3326,10 @@ function renderGameLog(gameLogElement) {
     resultElement.className = "game-log-result";
     labelElement.className = "game-log-result-label";
 
-    if (victorResult && victorResult.leaders.length > 0) {
+    if (gameState.getConcededPlayerNames().length > 0 && victorResult && victorResult.leaders.length > 0) {
+      labelElement.textContent = "Conceded";
+      namesElement.textContent = getConcessionResultText(victorResult);
+    } else if (victorResult && victorResult.leaders.length > 0) {
       labelElement.textContent = victorResult.leaders.length === 1 ? "Winner" : "Tie";
       namesElement.textContent = `${victorResult.leaders.map((player) => player.name).join(", ")} - ${victorResult.highScore} points`;
     } else {
@@ -3171,7 +3360,8 @@ function renderGameLog(gameLogElement) {
     const playerElement = document.createElement("strong");
     const actionLabels = {
       pass: "Passed turn",
-      redraw: "Redraw Tiles"
+      redraw: "Redraw Tiles",
+      concede: "Conceded game"
     };
 
     item.className = "game-log-entry";
@@ -3243,13 +3433,15 @@ function renderScore() {
 
     if (winnerBannerLabelElement) {
       winnerBannerLabelElement.textContent = victorResult
-        ? victorResult.leaders.length === 1 ? "Winner" : "Tie Game"
+        ? gameState.getConcededPlayerNames().length > 0 ? "Conceded" : victorResult.leaders.length === 1 ? "Winner" : "Tie Game"
         : "";
     }
 
     if (winnerBannerNamesElement) {
       winnerBannerNamesElement.textContent = victorResult
-        ? `${victorResult.leaders.map((player) => player.name).join(", ")} - ${victorResult.highScore} points`
+        ? gameState.getConcededPlayerNames().length > 0
+          ? getConcessionResultText(victorResult)
+          : `${victorResult.leaders.map((player) => player.name).join(", ")} - ${victorResult.highScore} points`
         : "";
     }
   }
@@ -3287,14 +3479,22 @@ function renderScore() {
       const row = document.createElement("div");
       const nameElement = document.createElement("div");
       const scoreElement = document.createElement("div");
+      const playerConceded = gameState.isPlayerConceded(player);
 
       row.className = "player-score-row";
-      row.classList.toggle("current-turn", !gameState.gameOver && index === gameState.currentPlayerIndex);
+      row.classList.toggle("current-turn", !gameState.gameOver && !playerConceded && index === gameState.currentPlayerIndex);
+      row.classList.toggle("conceded-player", playerConceded);
       nameElement.className = "player-score-name";
       scoreElement.className = "player-score-points";
       nameElement.textContent = player.name;
 
-      if (!gameState.gameOver && index === gameState.currentPlayerIndex) {
+      if (playerConceded) {
+        const badge = document.createElement("span");
+
+        badge.className = "conceded-badge";
+        badge.textContent = "Conceded";
+        nameElement.append(badge);
+      } else if (!gameState.gameOver && index === gameState.currentPlayerIndex) {
         const badge = document.createElement("span");
 
         badge.className = "turn-badge";
@@ -3362,6 +3562,10 @@ function setRedrawConfirmationVisible(isVisible) {
 
 function setPassConfirmationVisible(isVisible) {
   document.body.classList.toggle("confirm-pass", Boolean(isVisible));
+}
+
+function setConcedeConfirmationVisible(isVisible) {
+  document.body.classList.toggle("confirm-concede", Boolean(isVisible));
 }
 
 function getGameIdFromURLHash() {
@@ -3433,7 +3637,9 @@ function normalizeNameKey(name) {
 function isMyTurn() {
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
 
-  return Boolean(storedPlayerKey) && normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey;
+  return Boolean(storedPlayerKey) &&
+    normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey &&
+    !gameState.isPlayerNameConceded(getStoredPlayerName());
 }
 
 function getLoggedInPlayer() {
@@ -3620,7 +3826,8 @@ function getStoredPlayerAuth() {
       provider: String(auth.provider || "name"),
       userId: String(auth.userId || normalizeNameKey(auth.name)),
       name: normalizePlayerName(auth.name),
-      signedInAt: String(auth.signedInAt || "")
+      signedInAt: String(auth.signedInAt || ""),
+      displayNameConfirmed: Boolean(auth.displayNameConfirmed)
     };
   }
 
@@ -3629,7 +3836,8 @@ function getStoredPlayerAuth() {
       provider: "name",
       userId: normalizeNameKey(fallbackName),
       name: fallbackName,
-      signedInAt: ""
+      signedInAt: "",
+      displayNameConfirmed: true
     }
     : null;
 }
@@ -3662,11 +3870,59 @@ function setStoredPlayerAuth(auth) {
     provider: normalizedProvider,
     userId: String(auth?.userId || normalizeNameKey(normalizedName)),
     name: normalizedName,
-    signedInAt: new Date().toISOString()
+    signedInAt: new Date().toISOString(),
+    displayNameConfirmed: auth?.displayNameConfirmed !== false
   };
 
   setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
   return normalizedAuth;
+}
+
+function getConfirmedDisplayNameForOAuth(provider, userId) {
+  const auth = getStoredPlayerAuth();
+
+  if (
+    auth &&
+    auth.provider === provider &&
+    String(auth.userId || "") === String(userId || "") &&
+    auth.displayNameConfirmed
+  ) {
+    return auth.name;
+  }
+
+  return "";
+}
+
+function promptForOAuthDisplayName(provider, suggestedName = "") {
+  const providerLabel = getProviderLabel(provider);
+  const fallbackName = normalizePlayerName(suggestedName || getStoredPlayerName()) || `${providerLabel} Player`;
+
+  return normalizePlayerName(window.prompt(
+    `Choose a WordWefter display name for your ${providerLabel} login.`,
+    fallbackName
+  ));
+}
+
+async function mergeOldStyleSavesForAuth(auth) {
+  if (!auth || auth.provider === "name") {
+    return null;
+  }
+
+  try {
+    return await fetchJSON(`${serverURL}?action=merge_identity`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        playerName: auth.name,
+        authKey: `${auth.provider}:${auth.userId || normalizeNameKey(auth.name)}`,
+        provider: auth.provider
+      })
+    });
+  } catch {
+    return null;
+  }
 }
 
 function getOAuthConfig(provider) {
@@ -3715,20 +3971,19 @@ function startOAuthLogin(provider) {
     return;
   }
 
-  const providerLabel = getProviderLabel(normalizedProvider);
-  const suggestedName = getStoredPlayerName();
-  const name = normalizePlayerName(window.prompt(`${providerLabel} sign-in name`, suggestedName));
+  const name = promptForOAuthDisplayName(normalizedProvider, getStoredPlayerName());
 
   if (!name) {
     return;
   }
 
-  setStoredPlayerAuth({
+  const auth = setStoredPlayerAuth({
     provider: normalizedProvider,
     userId: normalizeNameKey(`${normalizedProvider}:${name}`),
-    name
+    name,
+    displayNameConfirmed: true
   });
-  finishIdentitySignIn();
+  void finishIdentitySignIn({ mergeAuth: auth });
 }
 
 async function fetchOAuthProfile(provider, accessToken) {
@@ -3770,18 +4025,39 @@ async function completeOAuthRedirectIfPresent() {
     profile = null;
   }
 
-  setStoredPlayerAuth({
-    provider: savedState.provider,
-    userId: profile?.userId || state,
-    name: profile?.name || `${getProviderLabel(savedState.provider)} Player`
-  });
+  const provider = savedState.provider;
+  const userId = profile?.userId || state;
+  const confirmedName = getConfirmedDisplayNameForOAuth(provider, userId);
+  const displayName = confirmedName || promptForOAuthDisplayName(provider, profile?.name);
+
   window.history.replaceState(null, "", savedState.returnHash || "#gamelist");
+
+  if (!displayName) {
+    setGameMessage("Choose a display name to finish signing in.");
+    return true;
+  }
+
+  const auth = setStoredPlayerAuth({
+    provider,
+    userId,
+    name: displayName,
+    displayNameConfirmed: true
+  });
+  await finishIdentitySignIn({ mergeAuth: auth });
   return true;
 }
 
-function finishIdentitySignIn() {
+async function finishIdentitySignIn(options = {}) {
   updateIdentityUI();
   setGameMessage("");
+
+  if (options.mergeAuth) {
+    const mergeResult = await mergeOldStyleSavesForAuth(options.mergeAuth);
+
+    if (mergeResult?.merged > 0) {
+      setGameMessage(`Merged ${mergeResult.merged} saved game${mergeResult.merged === 1 ? "" : "s"} for ${options.mergeAuth.name}.`);
+    }
+  }
 
   const nextAction = pendingIdentityAction;
   pendingIdentityAction = null;
@@ -3888,11 +4164,25 @@ function getCurrentInviteLink() {
   return `${window.location.origin}${window.location.pathname}#${gameState.id}`;
 }
 
+function hasOpenPlayerSpots(game = gameState) {
+  return (game.players || []).some((player) => (
+    player.open ||
+    player.claimed === false ||
+    /^open spot \d+$/i.test(String(player.name || ""))
+  ));
+}
+
 function updateInviteLinkUI() {
+  const inviteLinkPanel = document.querySelector("#invite-link-panel");
   const inviteLinkValue = document.querySelector("#invite-link-value");
+  const shouldShowInviteLink = hasOpenPlayerSpots();
+
+  if (inviteLinkPanel) {
+    inviteLinkPanel.hidden = !shouldShowInviteLink;
+  }
 
   if (inviteLinkValue) {
-    inviteLinkValue.textContent = getCurrentInviteLink();
+    inviteLinkValue.textContent = shouldShowInviteLink ? getCurrentInviteLink() : "";
   }
 }
 
@@ -4034,14 +4324,19 @@ function getPlayerNameInputs() {
 
 function updatePlayerRemoveButtons() {
   const rows = Array.from(document.querySelectorAll("#player-name-list .player-name-row"));
+  const addPlayerButton = document.querySelector("#add-player-button");
 
   rows.forEach((row, index) => {
     const button = row.querySelector(".player-name-remove");
 
     if (button) {
-      button.disabled = index === 0 || rows.length <= 1;
+      button.disabled = index === 0 || rows.length <= 2;
     }
   });
+
+  if (addPlayerButton) {
+    addPlayerButton.disabled = rows.length >= maxPlayerSlots;
+  }
 }
 
 function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, options = {}) {
@@ -4052,29 +4347,35 @@ function createPlayerNameRow(name = "", index = getPlayerNameInputs().length, op
   const playerNumber = index + 1;
   const inputId = `player-name-input-${playerNumber}`;
   const isLocked = Boolean(options.locked);
+  const isGuest = options.guest === true || normalizePlayerName(name).toLowerCase() === "guest";
 
   row.className = "player-name-row";
   row.classList.toggle("locked", isLocked);
+  row.classList.toggle("guest", isGuest);
+  row.dataset.friendKey = options.friendKey || "";
+  row.dataset.friendProvider = options.friendProvider || "";
+  row.dataset.slotType = isLocked ? "host" : options.friendKey ? "friend" : "guest";
   label.className = "sr-only";
   label.htmlFor = inputId;
-  label.textContent = `Player ${playerNumber} name`;
+  label.textContent = `Player ${playerNumber} slot`;
   input.className = "player-name-input";
   input.id = inputId;
   input.type = "text";
-  input.value = name;
-  input.placeholder = `Player ${playerNumber}`;
-  input.setAttribute("aria-label", `Player ${playerNumber} name`);
-  input.readOnly = isLocked;
+  input.value = name || (isLocked ? "" : "Guest");
+  input.placeholder = isLocked ? `Player ${playerNumber}` : "Guest";
+  input.setAttribute("aria-label", `Player ${playerNumber} slot`);
+  input.readOnly = true;
   removeButton.className = "game-button secondary player-name-remove";
   removeButton.type = "button";
   removeButton.textContent = "-";
   removeButton.setAttribute("aria-label", "Remove player");
   removeButton.addEventListener("click", () => {
-    if (getPlayerNameInputs().length <= 1) {
+    if (getPlayerNameInputs().length <= 2) {
       return;
     }
 
     row.remove();
+    syncSelectedFriendSlots();
     updatePlayerRemoveButtons();
   });
 
@@ -4094,9 +4395,15 @@ function addPlayerNameInput(name = "") {
     return null;
   }
 
-  const row = createPlayerNameRow(name, getPlayerNameInputs().length);
+  if (getPlayerNameInputs().length >= maxPlayerSlots) {
+    updatePlayerRemoveButtons();
+    return null;
+  }
+
+  const row = createPlayerNameRow(name || "Guest", getPlayerNameInputs().length, { guest: !name || name === "Guest" });
 
   playerNameList.append(row);
+  syncSelectedFriendSlots();
   updatePlayerRemoveButtons();
 
   return row.querySelector(".player-name-input");
@@ -4107,7 +4414,7 @@ function renderPlayerNameInputs(playerNames) {
   const storedPlayerName = getStoredPlayerName();
   const names = [
     storedPlayerName || playerNames[0] || "Player 1",
-    ...playerNames.slice(1)
+    ...(playerNames.slice(1).length > 0 ? playerNames.slice(1) : ["Guest"])
   ];
 
   if (!playerNameList || playerNameList.contains(document.activeElement)) {
@@ -4115,25 +4422,14 @@ function renderPlayerNameInputs(playerNames) {
   }
 
   playerNameList.replaceChildren();
-  (names.length > 0 ? names : ["Player 1"]).forEach((name, index) => {
-    playerNameList.append(createPlayerNameRow(name, index, { locked: index === 0 }));
+  (names.length >= 2 ? names : [names[0] || "Player 1", "Guest"]).forEach((name, index) => {
+    playerNameList.append(createPlayerNameRow(name || "Guest", index, {
+      locked: index === 0,
+      guest: index > 0 && normalizePlayerName(name).toLowerCase() === "guest"
+    }));
   });
+  syncSelectedFriendSlots();
   updatePlayerRemoveButtons();
-}
-
-function getSelectedPlayerCount() {
-  const input = document.querySelector("#player-count-input");
-  const count = Number(input?.value || 2);
-
-  return Math.max(1, Math.min(8, Number.isFinite(count) ? Math.round(count) : 2));
-}
-
-function setSelectedPlayerCount(count) {
-  const input = document.querySelector("#player-count-input");
-
-  if (input) {
-    input.value = Math.max(1, Math.min(8, Math.round(Number(count) || 2)));
-  }
 }
 
 function formatFriendRecency(lastPlayedAt) {
@@ -4183,6 +4479,7 @@ function renderFriendInviteOptions() {
     checkbox.value = friend.key;
     checkbox.dataset.friendName = friend.name;
     checkbox.dataset.friendProvider = friend.provider;
+    checkbox.addEventListener("change", syncSelectedFriendSlots);
     name.className = "friend-invite-name";
     name.textContent = friend.name;
     recency.className = "friend-invite-recency";
@@ -4202,6 +4499,99 @@ function getSelectedFriendInvites() {
     .filter((friend) => friend.name);
 }
 
+function getSetupSlotRows() {
+  return Array.from(document.querySelectorAll("#player-name-list .player-name-row"));
+}
+
+function setSlotRowToGuest(row, index) {
+  const input = row?.querySelector(".player-name-input");
+
+  if (!row || !input || index === 0) {
+    return;
+  }
+
+  row.dataset.friendKey = "";
+  row.dataset.friendProvider = "";
+  row.dataset.slotType = "guest";
+  row.classList.add("guest");
+  input.value = "Guest";
+}
+
+function setSlotRowToFriend(row, friend) {
+  const input = row?.querySelector(".player-name-input");
+
+  if (!row || !input) {
+    return;
+  }
+
+  row.dataset.friendKey = friend.key;
+  row.dataset.friendProvider = friend.provider;
+  row.dataset.slotType = "friend";
+  row.classList.remove("guest");
+  input.value = friend.name;
+}
+
+function syncSelectedFriendSlots() {
+  const playerNameList = document.querySelector("#player-name-list");
+
+  if (!playerNameList) {
+    return;
+  }
+
+  const selectedFriends = getSelectedFriendInvites();
+  const selectedFriendByKey = new Map(selectedFriends.map((friend) => [friend.key, friend]));
+  const assignedFriendKeys = new Set();
+
+  while (getSetupSlotRows().length < Math.min(maxPlayerSlots, Math.max(2, selectedFriends.length + 1))) {
+    playerNameList.append(createPlayerNameRow("Guest", getSetupSlotRows().length, { guest: true }));
+  }
+
+  let rows = getSetupSlotRows();
+
+  rows.slice(1).forEach((row, index) => {
+    const friendKey = String(row.dataset.friendKey || "");
+    const selectedFriend = selectedFriendByKey.get(friendKey);
+
+    if (!friendKey) {
+      return;
+    }
+
+    if (selectedFriend && !assignedFriendKeys.has(friendKey)) {
+      setSlotRowToFriend(row, selectedFriend);
+      assignedFriendKeys.add(friendKey);
+    } else {
+      setSlotRowToGuest(row, index + 1);
+    }
+  });
+
+  selectedFriends
+    .filter((friend) => !assignedFriendKeys.has(friend.key))
+    .forEach((friend) => {
+      rows = getSetupSlotRows();
+      let guestRow = rows.slice(1).find((row) => !row.dataset.friendKey);
+
+      if (!guestRow && getSetupSlotRows().length < maxPlayerSlots) {
+        guestRow = createPlayerNameRow("Guest", rows.length, { guest: true });
+        playerNameList.append(guestRow);
+      }
+
+      if (!guestRow) {
+        const checkbox = Array.from(document.querySelectorAll("#friend-invite-list .friend-invite-checkbox"))
+          .find((candidate) => candidate.value === friend.key);
+
+        if (checkbox) {
+          checkbox.checked = false;
+        }
+        return;
+      }
+
+      setSlotRowToFriend(guestRow, friend);
+      assignedFriendKeys.add(friend.key);
+    });
+
+  updatePlayerRemoveButtons();
+}
+
 function createOpenPlayerSlot(index) {
   return {
     name: `Open Spot ${index + 1}`,
@@ -4213,8 +4603,7 @@ function createOpenPlayerSlot(index) {
 function createPlayerSetupEntries() {
   const auth = getStoredPlayerAuth();
   const hostName = getStoredPlayerName() || "Player 1";
-  const playerCount = getSelectedPlayerCount();
-  const selectedFriends = getSelectedFriendInvites().slice(0, Math.max(0, playerCount - 1));
+  const rows = getSetupSlotRows();
   const entries = [
     {
       name: hostName,
@@ -4222,18 +4611,29 @@ function createPlayerSetupEntries() {
       provider: auth?.provider || "name",
       claimed: true,
       open: false
-    },
-    ...selectedFriends.map((friend) => ({
-      name: friend.name,
-      invitedName: friend.name,
-      authKey: friend.key,
-      provider: friend.provider,
-      claimed: false,
-      open: true
-    }))
+    }
   ];
 
-  while (entries.length < playerCount) {
+  rows.slice(1, maxPlayerSlots).forEach((row) => {
+    const input = row.querySelector(".player-name-input");
+    const friendKey = String(row.dataset.friendKey || "");
+    const name = normalizePlayerName(input?.value);
+
+    if (friendKey && name) {
+      entries.push({
+        name,
+        authKey: friendKey,
+        provider: String(row.dataset.friendProvider || ""),
+        claimed: true,
+        open: false
+      });
+      return;
+    }
+
+    entries.push(createOpenPlayerSlot(entries.length));
+  });
+
+  while (entries.length < 2) {
     entries.push(createOpenPlayerSlot(entries.length));
   }
 
@@ -4295,6 +4695,7 @@ function setScreen(screenName, options = {}) {
 
   if (screenName !== "play") {
     document.body.classList.remove("game-over");
+    setConcedeConfirmationVisible(false);
   }
 
   if (screenName !== "play" && shouldClearGameURL) {
@@ -4316,14 +4717,16 @@ function showRules(options = {}) {
 
 function showNewGameSetup(options = {}) {
   requirePlayerName(() => {
-    const otherPlayerNames = gameState.players.slice(1).map((player) => player.name);
+    const otherPlayerNames = gameState.players.slice(1)
+      .map((player) => player.name)
+      .filter((name) => !/^player \d+$/i.test(normalizePlayerName(name)));
 
     renderPlayerNameInputs([
       getStoredPlayerName(),
-      ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Player 2"])
+      ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Guest"])
     ]);
-    setSelectedPlayerCount(Math.max(2, gameState.players.length || 2));
     renderFriendInviteOptions();
+    syncSelectedFriendSlots();
     setGameMessage("");
     setScreen("setup", { clearGameURL: false });
 
@@ -4359,7 +4762,7 @@ function saveIdentityFromInput() {
     return;
   }
 
-  finishIdentitySignIn();
+  void finishIdentitySignIn();
 }
 
 function logoutPlayer() {
@@ -4368,6 +4771,7 @@ function logoutPlayer() {
   removeLocalStorageItem(playerAuthStorageKey);
   pendingIdentityAction = null;
   closeIdentityMenu();
+  setWaitingGamesForMenu([]);
   setScreen("welcome");
   setGameMessage("");
   updateIdentityUI();
@@ -4448,9 +4852,18 @@ async function pollActiveGameState() {
   }
 
   try {
+    const params = new URLSearchParams({
+      action: "load",
+      id: gameState.id,
+      turnIndex: String(gameState.turnIndex),
+      playerName: getStoredPlayerName(),
+      authKey: getStoredPlayerAuthKey()
+    });
     const payload = await fetchJSON(
-      `${serverURL}?action=load&id=${encodeURIComponent(gameState.id)}&turnIndex=${encodeURIComponent(gameState.turnIndex)}`
+      `${serverURL}?${params.toString()}`
     );
+
+    setWaitingGamesForMenu(payload.waitingGames || [], { trusted: true });
 
     if (payload.changed === false) {
       updateTurnPolling();
@@ -4577,8 +4990,23 @@ function getGameListPlayerSummaries(game) {
   }));
 }
 
-function getGameListVictorResult(players) {
-  const scoredPlayers = (players || []).filter((player) => Number.isFinite(Number(player.score)));
+function getGameListConcededPlayerKeys(game) {
+  const concededNames = [
+    ...(Array.isArray(game?.concededByPlayerNames) ? game.concededByPlayerNames : []),
+    game?.concededByPlayerName || ""
+  ];
+
+  return new Set(concededNames.map(normalizeNameKey).filter(Boolean));
+}
+
+function getGameListVictorResult(players, concededByPlayerName = "", concededByPlayerNames = []) {
+  const concededPlayerKeys = new Set([
+    ...(Array.isArray(concededByPlayerNames) ? concededByPlayerNames : []),
+    concededByPlayerName
+  ].map(normalizeNameKey).filter(Boolean));
+  const scoredPlayers = (players || [])
+    .filter((player) => !concededPlayerKeys.has(normalizeNameKey(player.name)))
+    .filter((player) => Number.isFinite(Number(player.score)));
 
   if (scoredPlayers.length === 0) {
     return null;
@@ -4612,6 +5040,128 @@ function getGameListPoolRemaining(game) {
   } catch (error) {
     return null;
   }
+}
+
+function gameBelongsToStoredPlayer(game) {
+  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+  const authKey = getStoredPlayerAuthKey();
+
+  if (!storedPlayerKey && !authKey) {
+    return false;
+  }
+
+  return (game.players || []).some((player) => (
+    player.claimed !== false &&
+    !player.open &&
+    (
+      normalizeNameKey(player.name) === storedPlayerKey ||
+      (authKey && String(player.authKey || "") === authKey)
+    )
+  )) || (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey);
+}
+
+function gameIsWaitingForStoredPlayer(game) {
+  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+  const concededPlayerKeys = getGameListConcededPlayerKeys(game);
+
+  return Boolean(
+    storedPlayerKey &&
+    !concededPlayerKeys.has(storedPlayerKey) &&
+    !game.gameOver &&
+    normalizeNameKey(game.currentPlayerName) === storedPlayerKey &&
+    gameBelongsToStoredPlayer(game)
+  );
+}
+
+function setWaitingGamesForMenu(games, options = {}) {
+  waitingGamesForMenu = (Array.isArray(games) ? games : [])
+    .filter((game) => options.trusted === true || gameIsWaitingForStoredPlayer(game))
+    .sort((firstGame, secondGame) => getGameListTouchedTime(secondGame) - getGameListTouchedTime(firstGame))
+    .slice(0, 5);
+  renderWaitingGamesMenu();
+}
+
+async function refreshWaitingGamesForMenu() {
+  const playerName = getStoredPlayerName();
+
+  if (!playerName) {
+    setWaitingGamesForMenu([]);
+    return;
+  }
+
+  try {
+    if (/^[A-Z0-9]{5}$/.test(gameState.id)) {
+      const params = new URLSearchParams({
+        action: "load",
+        id: gameState.id,
+        turnIndex: String(gameState.turnIndex),
+        playerName,
+        authKey: getStoredPlayerAuthKey()
+      });
+      const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
+
+      setWaitingGamesForMenu(payload.waitingGames || [], { trusted: true });
+      return;
+    }
+
+    const payload = await fetchJSON(`${serverURL}?action=list`);
+
+    setWaitingGamesForMenu(payload.games || []);
+  } catch {
+    // Keep the last successful badge state instead of flashing it away on a transient refresh failure.
+  }
+}
+
+function renderWaitingGamesMenu() {
+  const menuButton = document.querySelector("#identity-menu-button");
+  const notificationCount = document.querySelector("#menu-notification-count");
+  const waitingGamesElement = document.querySelector("#menu-waiting-games");
+  const count = waitingGamesForMenu.length;
+
+  if (menuButton) {
+    menuButton.classList.toggle("has-notifications", count > 0);
+  }
+
+  if (notificationCount) {
+    notificationCount.textContent = count > 0 ? "!" : "";
+  }
+
+  if (!waitingGamesElement) {
+    return;
+  }
+
+  waitingGamesElement.replaceChildren();
+  waitingGamesElement.classList.toggle("has-games", count > 0);
+
+  if (count === 0) {
+    return;
+  }
+
+  const title = document.createElement("p");
+
+  title.className = "menu-waiting-title";
+  title.textContent = "Your Turn";
+  waitingGamesElement.append(title);
+
+  waitingGamesForMenu.forEach((game) => {
+    const button = document.createElement("button");
+    const idElement = document.createElement("span");
+    const turnElement = document.createElement("span");
+
+    button.className = "game-button secondary menu-waiting-game";
+    button.type = "button";
+    button.dataset.gameId = game.id;
+    idElement.className = "menu-waiting-game-id";
+    idElement.textContent = game.id;
+    turnElement.className = "menu-waiting-game-turn";
+    turnElement.textContent = `Turn ${getTurnDisplayNumber(game.turnIndex)}`;
+    button.append(idElement, turnElement);
+    button.addEventListener("click", () => {
+      closeIdentityMenu();
+      resumeGame(game.id);
+    });
+    waitingGamesElement.append(button);
+  });
 }
 
 function claimGameSpot(sourceGameState, auth) {
@@ -4656,7 +5206,6 @@ function claimGameSpot(sourceGameState, auth) {
 async function loadActiveGames() {
   const activeGamesList = document.querySelector("#active-games-list");
   const storedPlayerName = getStoredPlayerName();
-  const storedPlayerKey = normalizeNameKey(storedPlayerName);
 
   if (!activeGamesList) {
     return;
@@ -4664,20 +5213,19 @@ async function loadActiveGames() {
 
   if (!storedPlayerName) {
     activeGamesList.textContent = "";
+    setWaitingGamesForMenu([]);
     return;
   }
 
   try {
     const payload = await fetchJSON(`${serverURL}?action=list`);
     (payload.games || []).forEach((game) => rememberFriendsFromGame(game));
+    setWaitingGamesForMenu(payload.games || []);
     const matchingGames = (payload.games || [])
-      .filter((game) => (
-        (game.playerNames || []).some((name) => normalizeNameKey(name) === storedPlayerKey) ||
-        (game.players || []).some((player) => String(player.authKey || "") === getStoredPlayerAuthKey())
-      ))
+      .filter(gameBelongsToStoredPlayer)
       .map((game) => ({
         ...game,
-        isWaitingForStoredPlayer: !game.gameOver && normalizeNameKey(game.currentPlayerName) === storedPlayerKey
+        isWaitingForStoredPlayer: gameIsWaitingForStoredPlayer(game)
       }))
       .sort((firstGame, secondGame) => {
         if (Boolean(firstGame.gameOver) !== Boolean(secondGame.gameOver)) {
@@ -4747,7 +5295,8 @@ async function loadActiveGames() {
         const resumeButton = document.createElement("button");
         const playerSummaries = getGameListPlayerSummaries(game);
         const poolRemaining = getGameListPoolRemaining(game);
-        const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries) : null;
+        const concededPlayerKeys = getGameListConcededPlayerKeys(game);
+        const victorResult = game.gameOver ? getGameListVictorResult(playerSummaries, game.concededByPlayerName, game.concededByPlayerNames) : null;
         const victorNameKeys = new Set((victorResult?.leaders || []).map((player) => normalizeNameKey(player.name)));
 
         row.className = "active-game-row";
@@ -4771,6 +5320,7 @@ async function loadActiveGames() {
           playerElement.className = "active-game-player-score";
           playerElement.classList.toggle("current-player", !game.gameOver && normalizeNameKey(player.name) === normalizeNameKey(game.currentPlayerName));
           playerElement.classList.toggle("winner-player", Boolean(game.gameOver && victorNameKeys.has(normalizeNameKey(player.name))));
+          playerElement.classList.toggle("conceded-player", concededPlayerKeys.has(normalizeNameKey(player.name)));
           playerNameElement.className = "active-game-player-name";
           playerNameElement.textContent = player.name;
           playerElement.append(playerNameElement);
@@ -4808,7 +5358,13 @@ async function loadGameById(gameId) {
     throw new Error("Game ID must be a 5 character letter/number string.");
   }
 
-  const payload = await fetchJSON(`${serverURL}?action=load&id=${encodeURIComponent(normalizedGameId)}`);
+  const params = new URLSearchParams({
+    action: "load",
+    id: normalizedGameId,
+    playerName: getStoredPlayerName(),
+    authKey: getStoredPlayerAuthKey()
+  });
+  const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
   const auth = getStoredPlayerAuth();
   const authKey = getStoredPlayerAuthKey();
@@ -4834,6 +5390,7 @@ async function loadGameById(gameId) {
   setGameURLGameId(gameState.id);
   setGameMessage("");
   renderGame();
+  setWaitingGamesForMenu(payload.waitingGames || [], { trusted: true });
 
   if (!canPlayGame) {
     await saveGameState();
@@ -4976,6 +5533,7 @@ async function redrawTilesAndSkipTurn() {
 
   setGameMessage("");
   setPassConfirmationVisible(false);
+  setConcedeConfirmationVisible(false);
   setRedrawConfirmationVisible(true);
 }
 
@@ -5029,6 +5587,7 @@ async function passTurn() {
 
   setGameMessage("");
   setRedrawConfirmationVisible(false);
+  setConcedeConfirmationVisible(false);
   setPassConfirmationVisible(true);
 }
 
@@ -5067,12 +5626,53 @@ async function confirmPassTurn() {
   }
 }
 
+function concedeGame() {
+  if (!document.body.classList.contains("screen-play") || gameState.gameOver || !getLoggedInPlayer()) {
+    return;
+  }
+
+  setRedrawConfirmationVisible(false);
+  setPassConfirmationVisible(false);
+  setConcedeConfirmationVisible(true);
+}
+
+async function confirmConcedeGame() {
+  const playerName = getStoredPlayerName();
+
+  if (!document.body.classList.contains("screen-play") || gameState.gameOver || !getLoggedInPlayer()) {
+    setConcedeConfirmationVisible(false);
+    return;
+  }
+
+  if (!gameState.concedeGame(playerName)) {
+    setConcedeConfirmationVisible(false);
+    return;
+  }
+
+  gameState.advanceTurnIndex();
+  captureTurnStartGameState();
+  setConcedeConfirmationVisible(false);
+  setGameMessage("");
+  renderGame();
+
+  try {
+    await saveGameState();
+    await loadActiveGames();
+  } catch (error) {
+    setGameMessage(`Game conceded, but could not save: ${error.message}`);
+  }
+}
+
 function cancelRedrawTiles() {
   setRedrawConfirmationVisible(false);
 }
 
 function cancelPassTurn() {
   setPassConfirmationVisible(false);
+}
+
+function cancelConcedeGame() {
+  setConcedeConfirmationVisible(false);
 }
 
 async function shuffleRackTiles() {
@@ -5160,6 +5760,29 @@ function toggleIdentityMenu() {
   if (identityMenuButton) {
     identityMenuButton.setAttribute("aria-expanded", String(isOpen));
   }
+
+  if (isOpen) {
+    refreshWaitingGamesForMenu();
+  }
+}
+
+function closeIdentityMenuOnOutsideClick(event) {
+  if (!document.body.classList.contains("menu-open")) {
+    return;
+  }
+
+  const identityMenu = document.querySelector("#identity-menu");
+  const identityMenuButton = document.querySelector("#identity-menu-button");
+  const target = event.target;
+
+  if (
+    identityMenu?.contains(target) ||
+    identityMenuButton?.contains(target)
+  ) {
+    return;
+  }
+
+  closeIdentityMenu();
 }
 
 function destroySortables() {
@@ -5368,7 +5991,6 @@ function bindGameControls() {
   const createGameFromListButton = document.querySelector("#create-game-from-list-button");
   const createGameButton = document.querySelector("#create-game-button");
   const addPlayerButton = document.querySelector("#add-player-button");
-  const playerCountInput = document.querySelector("#player-count-input");
   const copyInviteLinkButton = document.querySelector("#copy-invite-link-button");
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
   const redrawTilesButton = document.querySelector("#redraw-tiles-button");
@@ -5378,6 +6000,9 @@ function bindGameControls() {
   const cancelRedrawButton = document.querySelector("#cancel-redraw-button");
   const confirmPassButton = document.querySelector("#confirm-pass-button");
   const cancelPassButton = document.querySelector("#cancel-pass-button");
+  const concedeGameButton = document.querySelector("#concede-game-button");
+  const confirmConcedeButton = document.querySelector("#confirm-concede-button");
+  const cancelConcedeButton = document.querySelector("#cancel-concede-button");
   const finishPlacementButton = document.querySelector("#finish-placement-button");
   const resetPlacementButton = document.querySelector("#reset-placement-button");
 
@@ -5408,6 +6033,8 @@ function bindGameControls() {
   if (identityMenuButton) {
     identityMenuButton.addEventListener("click", toggleIdentityMenu);
   }
+
+  document.addEventListener("click", closeIdentityMenuOnOutsideClick);
 
   if (showNewGameButton) {
     showNewGameButton.addEventListener("click", () => {
@@ -5447,16 +6074,9 @@ function bindGameControls() {
 
   if (addPlayerButton) {
     addPlayerButton.addEventListener("click", () => {
-      const input = addPlayerNameInput(`Player ${getPlayerNameInputs().length + 1}`);
+      const input = addPlayerNameInput("Guest");
 
-      setSelectedPlayerCount(getSelectedPlayerCount() + 1);
       input?.focus();
-    });
-  }
-
-  if (playerCountInput) {
-    playerCountInput.addEventListener("change", () => {
-      setSelectedPlayerCount(getSelectedPlayerCount());
     });
   }
 
@@ -5493,6 +6113,18 @@ function bindGameControls() {
 
   if (cancelPassButton) {
     cancelPassButton.addEventListener("click", cancelPassTurn);
+  }
+
+  if (concedeGameButton) {
+    concedeGameButton.addEventListener("click", concedeGame);
+  }
+
+  if (confirmConcedeButton) {
+    confirmConcedeButton.addEventListener("click", confirmConcedeGame);
+  }
+
+  if (cancelConcedeButton) {
+    cancelConcedeButton.addEventListener("click", cancelConcedeGame);
   }
 
   if (shuffleRackButton) {
@@ -5549,6 +6181,8 @@ window.shuffleWordWefterRack = shuffleRackTiles;
 window.redrawWordWefterTiles = redrawTilesAndSkipTurn;
 window.passWordWefterTurn = passTurn;
 window.confirmWordWefterPass = confirmPassTurn;
+window.concedeWordWefterGame = concedeGame;
+window.confirmWordWefterConcede = confirmConcedeGame;
 window.finishWordWefterPlacement = finishPlacement;
 window.resetWordWefterPlacement = resetPlacement;
 

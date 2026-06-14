@@ -155,27 +155,71 @@
     }
 
     .oauth-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
+      display: grid;
+      justify-items: stretch;
       gap: 0.55rem;
+      width: min(82vw, 22rem);
     }
 
-    .oauth-button.google {
-      border-color: #4285f4;
+    .oauth-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.62rem;
+      width: 100%;
     }
 
-    .oauth-button.facebook {
-      border-color: #1877f2;
+    .oauth-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 1.35rem;
+      height: 1.35rem;
+      flex: 0 0 auto;
+      font: 900 1rem/1 Arial, sans-serif;
+    }
+
+    .oauth-button.google .oauth-icon svg {
+      display: block;
+      width: 1.2rem;
+      height: 1.2rem;
+    }
+
+    .oauth-button.facebook .oauth-icon svg {
+      display: block;
+      width: 1.2rem;
+      height: 1.2rem;
+      fill: #1877f2;
     }
 
     .menu-button {
+      position: relative;
       width: 2.75rem;
       min-width: 2.75rem;
       height: 2.75rem;
       display: grid;
       place-items: center;
       line-height: 1;
+    }
+
+    .menu-notification-count {
+      position: absolute;
+      top: -0.35rem;
+      right: -0.35rem;
+      display: none;
+      min-width: 1.3rem;
+      height: 1.3rem;
+      place-items: center;
+      padding-inline: 0.28rem;
+      border: 2px solid #ffffff;
+      border-radius: 999px;
+      background: #d62828;
+      color: #ffffff;
+      font: 900 0.72rem/1 system-ui, sans-serif;
+      box-shadow: 0.08rem 0.08rem 0 rgba(23, 32, 42, 0.25);
+    }
+
+    .menu-button.has-notifications .menu-notification-count {
+      display: grid;
     }
 
     .game-button.menu-button {
@@ -247,6 +291,52 @@
       opacity: 0.58;
     }
 
+    .menu-waiting-games {
+      display: none;
+      width: 100%;
+      gap: 0.35rem;
+      padding-top: 0.45rem;
+      border-top: 2px solid rgba(23, 32, 42, 0.12);
+    }
+
+    .menu-waiting-games.has-games {
+      display: grid;
+    }
+
+    .menu-waiting-title {
+      margin: 0;
+      color: rgba(23, 32, 42, 0.62);
+      font: 900 0.68rem/1 system-ui, sans-serif;
+      letter-spacing: 0.08em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    .menu-waiting-game {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.55rem;
+      width: 100%;
+      min-height: 2.45rem;
+      padding: 0.48rem 0.58rem;
+      text-align: left;
+    }
+
+    .menu-waiting-game-id {
+      overflow: hidden;
+      color: var(--accent);
+      font-weight: 900;
+      text-overflow: ellipsis;
+    }
+
+    .menu-waiting-game-turn {
+      color: rgba(23, 32, 42, 0.62);
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
     .player-setup {
       display: none;
       justify-items: center;
@@ -267,25 +357,6 @@
       width: min(82vw, 32rem);
       font: 700 0.9rem/1.35 system-ui, sans-serif;
       text-align: left;
-    }
-
-    .player-count-control {
-      display: inline-grid;
-      grid-template-columns: auto 5rem;
-      justify-self: center;
-      align-items: center;
-      gap: 0.55rem;
-      font-weight: 900;
-    }
-
-    .player-count-control input {
-      min-height: 2.55rem;
-      border: 2px solid var(--ink);
-      border-radius: 8px;
-      padding: 0.45rem 0.6rem;
-      background: rgba(255, 255, 255, 0.72);
-      color: var(--ink);
-      font: 800 1rem/1 system-ui, sans-serif;
     }
 
     .friend-invite-panel {
@@ -361,6 +432,11 @@
 
     body.screen-play .invite-link-panel {
       display: grid;
+    }
+
+    body.screen-play .invite-link-panel[hidden],
+    .invite-link-panel[hidden] {
+      display: none;
     }
 
     .invite-link-actions {
@@ -654,6 +730,13 @@
       box-shadow: 0.1rem 0.1rem 0 rgba(217, 79, 112, 0.2);
     }
 
+    .active-game-player-score.conceded-player {
+      color: rgba(23, 32, 42, 0.5);
+      border-color: rgba(23, 32, 42, 0.12);
+      background: rgba(23, 32, 42, 0.06);
+      text-decoration: line-through;
+    }
+
     .active-game-player-score.winner-player::before {
       content: "workspace_premium";
       color: var(--warm);
@@ -815,10 +898,6 @@
       display: grid;
     }
 
-    body.screen-setup .player-name-list {
-      display: none;
-    }
-
     body.screen-list .active-games {
       display: grid;
     }
@@ -837,7 +916,7 @@
       grid-template-rows: repeat(9, minmax(0, 1fr));
       width: var(--play-width);
       aspect-ratio: 1;
-      border: 3px solid var(--ink);
+      border: 2px solid rgba(23, 32, 42, 0.55);
       background: var(--board-line);
       gap: 1px;
       padding: 1px;
@@ -941,7 +1020,7 @@
       grid-auto-rows: minmax(0, 1fr);
       gap: clamp(0.35rem, 1.8vw, 0.75rem);
       padding: calc(clamp(0.45rem, 1.8vw, 0.75rem) + 0.42rem) clamp(0.45rem, 1.8vw, 0.75rem) clamp(0.45rem, 1.8vw, 0.75rem);
-      border: 3px solid var(--ink);
+      border: 2px solid rgba(23, 32, 42, 0.55);
       border-radius: 8px;
       background: rgba(23, 32, 42, 0.08);
     }
@@ -1243,8 +1322,8 @@
 
     .rack::before {
       content: "Your Tiles";
-      border: 3px solid var(--ink);
-      background: #ebe9df;
+      border: 2px solid rgba(23, 32, 42, 0.55);
+      background: #fbfaf6;
     }
 
     .marketplace::before {
@@ -2001,25 +2080,33 @@
     }
 
     .redraw-tiles-button,
-    .pass-turn-button {
+    .pass-turn-button,
+    .concede-game-button {
       display: none;
     }
 
     body.screen-play .redraw-tiles-button,
-    body.screen-play .pass-turn-button {
+    body.screen-play .pass-turn-button,
+    body.screen-play .concede-game-button {
       display: inline-block;
+    }
+
+    .concede-game-button[hidden] {
+      display: none;
     }
 
     body.game-over .rack,
     body.game-over .rack-shuffle-button,
     body.game-over .rack-controls,
     body.game-over .redraw-confirm,
-    body.game-over .pass-confirm {
+    body.game-over .pass-confirm,
+    body.game-over .concede-confirm {
       display: none;
     }
 
     body.game-over .redraw-tiles-button,
-    body.game-over .pass-turn-button {
+    body.game-over .pass-turn-button,
+    body.game-over .concede-game-button {
       display: none;
     }
 
@@ -2069,6 +2156,7 @@
 
     #redraw-tiles-button,
     #pass-turn-button,
+    #concede-game-button,
     #reset-placement-button {
       justify-self: start;
     }
@@ -2078,7 +2166,8 @@
     }
 
     .redraw-confirm,
-    .pass-confirm {
+    .pass-confirm,
+    .concede-confirm {
       display: none;
       width: 100%;
       max-width: 24rem;
@@ -2101,18 +2190,44 @@
       display: grid;
     }
 
+    body.confirm-concede .concede-confirm {
+      display: grid;
+    }
+
     .redraw-confirm-actions,
-    .pass-confirm-actions {
+    .pass-confirm-actions,
+    .concede-confirm-actions {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 0.55rem;
     }
 
+    .concede-game-control {
+      display: grid;
+      width: var(--play-width);
+      justify-self: center;
+      justify-items: start;
+      gap: 0.55rem;
+    }
+
+    .concede-game-control[hidden] {
+      display: none;
+    }
+
+    body.game-over .concede-game-control {
+      display: none;
+    }
+
     body.confirm-redraw #redraw-tiles-button,
     body.confirm-pass #redraw-tiles-button,
     body.confirm-pass #pass-turn-button,
-    body.confirm-redraw #pass-turn-button {
+    body.confirm-redraw #pass-turn-button,
+    body.confirm-concede #redraw-tiles-button,
+    body.confirm-concede #pass-turn-button,
+    body.confirm-redraw #concede-game-button,
+    body.confirm-pass #concede-game-button,
+    body.confirm-concede #concede-game-button {
       display: none;
     }
 
@@ -2245,8 +2360,27 @@
       background: rgba(15, 139, 141, 0.12);
     }
 
+    .player-score-row.conceded-player {
+      border-color: rgba(23, 32, 42, 0.1);
+      background: rgba(23, 32, 42, 0.06);
+      color: rgba(23, 32, 42, 0.58);
+    }
+
     .player-score-name {
       overflow-wrap: anywhere;
+    }
+
+    .conceded-badge {
+      display: inline-grid;
+      place-items: center;
+      margin-left: 0.45rem;
+      padding: 0.14rem 0.42rem;
+      border-radius: 999px;
+      background: rgba(23, 32, 42, 0.12);
+      color: rgba(23, 32, 42, 0.68);
+      font: 800 0.68rem/1 system-ui, sans-serif;
+      text-transform: uppercase;
+      vertical-align: middle;
     }
 
     .turn-badge {
@@ -2501,8 +2635,26 @@
           <input class="player-name-input" id="identity-name-input" type="text" aria-label="Your name" placeholder="Your name">
           <button class="game-button" type="button" id="save-identity-button">Continue</button>
           <div class="oauth-buttons" aria-label="OAuth sign in">
-            <button class="game-button secondary oauth-button google" type="button" id="google-login-button">Google</button>
-            <button class="game-button secondary oauth-button facebook" type="button" id="facebook-login-button">Facebook</button>
+            <button class="game-button secondary oauth-button google" type="button" id="google-login-button">
+              <span class="oauth-icon" aria-hidden="true">
+                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" focusable="false">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                  <path fill="none" d="M0 0h48v48H0z"></path>
+                </svg>
+              </span>
+              <span>Continue with Google</span>
+            </button>
+            <button class="game-button secondary oauth-button facebook" type="button" id="facebook-login-button">
+              <span class="oauth-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" focusable="false">
+                  <path d="M40,0H10C4.486,0,0,4.486,0,10v30c0,5.514,4.486,10,10,10h30c5.514,0,10-4.486,10-10V10C50,4.486,45.514,0,40,0z M39,17h-3 c-2.145,0-3,0.504-3,2v3h6l-1,6h-5v20h-7V28h-3v-6h3v-3c0-4.677,1.581-8,7-8c2.902,0,6,1,6,1V17z"></path>
+                </svg>
+              </span>
+              <span>Continue with Facebook</span>
+            </button>
           </div>
         </div>
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
@@ -2513,6 +2665,7 @@
           </span>
           <button class="game-button secondary menu-button" type="button" id="identity-menu-button" aria-label="Menu" aria-expanded="false">
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+            <span class="menu-notification-count" id="menu-notification-count" aria-label="Games waiting"></span>
           </button>
           <div class="identity-menu" id="identity-menu" aria-label="Player menu">
             <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
@@ -2523,33 +2676,12 @@
               <span>Alerts</span>
             </label>
             <button class="game-button secondary" type="button" id="logout-button">Logout</button>
+            <div class="menu-waiting-games" id="menu-waiting-games" aria-label="Games waiting for you"></div>
           </div>
         </div>
         <div class="player-setup" id="player-setup" aria-label="Player setup">
           <div class="page-hero">
             <h2 class="section-title">New Game</h2>
-          </div>
-          <div class="player-name-list" id="player-name-list">
-            <div class="player-name-row locked">
-              <label class="sr-only" for="player-name-input-1">Player 1 name</label>
-              <input class="player-name-input" id="player-name-input-1" type="text" value="Player 1" aria-label="Player 1 name" readonly>
-            </div>
-            <div class="player-name-row">
-              <label class="sr-only" for="player-name-input-2">Player 2 name</label>
-              <input class="player-name-input" id="player-name-input-2" type="text" value="Player 2" aria-label="Player 2 name">
-              <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
-            </div>
-          </div>
-          <div class="invite-setup" aria-label="Invite setup">
-            <label class="player-count-control" for="player-count-input">
-              <span>Players</span>
-              <input id="player-count-input" type="number" min="1" max="8" step="1" value="2">
-            </label>
-            <div class="friend-invite-panel" id="friend-invite-panel">
-              <h3>Invite Friends</h3>
-              <div class="friend-invite-list" id="friend-invite-list"></div>
-            </div>
-            <p class="invite-copy">After creating the game, copy the game link and send it to players so they can log in and claim a spot.</p>
           </div>
           <fieldset class="game-length-control">
             <legend>Game length</legend>
@@ -2577,9 +2709,27 @@
               </label>
             </div>
           </fieldset>
+          <div class="player-name-list" id="player-name-list">
+            <div class="player-name-row locked">
+              <label class="sr-only" for="player-name-input-1">Player 1 name</label>
+              <input class="player-name-input" id="player-name-input-1" type="text" value="Player 1" aria-label="Player 1 name" readonly>
+            </div>
+            <div class="player-name-row">
+              <label class="sr-only" for="player-name-input-2">Player 2 name</label>
+              <input class="player-name-input" id="player-name-input-2" type="text" value="Guest" aria-label="Player 2 name" readonly>
+              <button class="game-button secondary player-name-remove" type="button" aria-label="Remove player">-</button>
+            </div>
+          </div>
           <div class="game-controls">
             <button class="game-button secondary" type="button" id="add-player-button">Add Player</button>
             <button class="game-button" type="button" id="create-game-button">Create Game</button>
+          </div>
+          <div class="invite-setup" aria-label="Invite setup">
+            <div class="friend-invite-panel" id="friend-invite-panel">
+              <h3>Invite Friends</h3>
+              <div class="friend-invite-list" id="friend-invite-list"></div>
+            </div>
+            <p class="invite-copy">Selected friends are added to the game immediately. Send the game link for any open spots.</p>
           </div>
         </div>
       </div>
@@ -2816,6 +2966,16 @@
           <div class="player-score-list" id="player-score-list"></div>
           <div class="game-log" id="game-log" aria-label="Game log"></div>
         </div>
+        <div class="concede-game-control" id="concede-game-control">
+          <button class="game-button secondary concede-game-button" type="button" id="concede-game-button">Concede Game</button>
+          <div class="concede-confirm" id="concede-confirm" role="status" aria-live="polite">
+            <span>Concede this game? You will leave the game and remaining players may continue.</span>
+            <div class="concede-confirm-actions">
+              <button class="game-button" type="button" id="confirm-concede-button">Concede</button>
+              <button class="game-button secondary" type="button" id="cancel-concede-button">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -2823,6 +2983,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=oauth-invites"></script>
+  <script type="module" src="./game.js?v=oauth-display-name-merge"></script>
 </body>
 </html>
