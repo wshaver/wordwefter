@@ -208,6 +208,11 @@ function request_allows_legacy_name_login(): bool
     return preg_match('/(^|\.)willshaver\.com$/i', request_host()) === 1;
 }
 
+function request_enforces_strict_auth(): bool
+{
+    return preg_match('/(^|\.)wordwefter\.com$/i', request_host()) === 1;
+}
+
 function request_is_local_http(): bool
 {
     $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
@@ -386,7 +391,6 @@ function public_user_login_entry(array $entry, string $sessionToken = ''): array
         'provider' => (string) ($entry['provider'] ?? ''),
         'userId' => (string) ($entry['userId'] ?? ''),
         'username' => (string) ($entry['username'] ?? ''),
-        'email' => (string) ($entry['email'] ?? ''),
         'updatedAt' => (string) ($entry['updatedAt'] ?? '')
     ];
 
@@ -397,7 +401,7 @@ function public_user_login_entry(array $entry, string $sessionToken = ''): array
     return $publicEntry;
 }
 
-function save_user_login(string $userLoginFile, string $provider, string $userId, string $playerName, string $accessToken, string $email = ''): ?array
+function save_user_login(string $userLoginFile, string $provider, string $userId, string $playerName, string $accessToken): ?array
 {
     $normalizedProvider = normalize_provider($provider);
     $normalizedUserId = normalize_provider_user_id($userId);
@@ -414,7 +418,6 @@ function save_user_login(string $userLoginFile, string $provider, string $userId
         'provider' => $normalizedProvider,
         'userId' => $normalizedUserId,
         'username' => $normalizedPlayerName,
-        'email' => trim($email),
         'sessionTokenHash' => hash_session_token($sessionToken),
         'sessionIssuedAt' => gmdate('c'),
         'updatedAt' => gmdate('c')
@@ -812,8 +815,7 @@ if ($action === 'save_user_login') {
         (string) ($payload['provider'] ?? ''),
         (string) ($payload['userId'] ?? ''),
         (string) ($payload['username'] ?? ''),
-        (string) ($payload['accessToken'] ?? ''),
-        (string) ($payload['email'] ?? '')
+        (string) ($payload['accessToken'] ?? '')
     );
 
     if ($entry === null) {
@@ -876,21 +878,24 @@ if ($action === 'save') {
     $isLegacyNameLogin = is_legacy_name_auth_key($requestAuthKey);
     $registeredLogin = get_user_login_by_auth_key($userLoginFile, $requestAuthKey);
     $requestSessionToken = trim((string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''));
+    $strictAuth = request_enforces_strict_auth();
 
-    if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
-        send_json(['ok' => false, 'error' => 'Save rejected because this login token is not registered on the server.'], 403);
-    }
+    if ($strictAuth) {
+        if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
+            send_json(['ok' => false, 'error' => 'Save rejected because this login token is not registered on the server.'], 403);
+        }
 
-    if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
-        send_json(['ok' => false, 'error' => 'Save rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
-    }
+        if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
+            send_json(['ok' => false, 'error' => 'Save rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
+        }
 
-    if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, $requestSessionToken)) {
-        send_json(['ok' => false, 'error' => 'Save rejected because this login session is not valid.'], 403);
+        if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, $requestSessionToken)) {
+            send_json(['ok' => false, 'error' => 'Save rejected because this login session is not valid.'], 403);
+        }
     }
 
     if ($isNewGame) {
-        if (!state_has_claimed_player_with_auth_key($state, $requestAuthKey)) {
+        if ($strictAuth && !state_has_claimed_player_with_auth_key($state, $requestAuthKey)) {
             send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in the new game.'], 403);
         }
 
@@ -908,11 +913,11 @@ if ($action === 'save') {
         $isExistingPlayerSave = state_has_claimed_player_with_auth_key($currentState, $requestAuthKey);
         $isNewPlayerClaim = !$isExistingPlayerSave && state_is_valid_new_player_claim($currentState, $state, $requestAuthKey);
 
-        if (!$isExistingPlayerSave && !$isNewPlayerClaim) {
+        if ($strictAuth && !$isExistingPlayerSave && !$isNewPlayerClaim) {
             send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in this game.'], 403);
         }
 
-        if (!state_preserves_existing_claimed_auth_keys($currentState, $state)) {
+        if ($strictAuth && !state_preserves_existing_claimed_auth_keys($currentState, $state)) {
             send_json(['ok' => false, 'error' => 'Save rejected because it changes an existing player login token.'], 403);
         }
 

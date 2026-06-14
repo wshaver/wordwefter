@@ -3941,8 +3941,7 @@ function getStoredPlayerAuth() {
       signedInAt: String(auth.signedInAt || ""),
       displayNameConfirmed: Boolean(auth.displayNameConfirmed),
       sessionToken: String(auth.sessionToken || ""),
-      accessToken: String(auth.accessToken || ""),
-      email: String(auth.email || "")
+      accessToken: String(auth.accessToken || "")
     };
   }
 
@@ -4070,8 +4069,7 @@ function setStoredPlayerAuth(auth) {
     signedInAt: new Date().toISOString(),
     displayNameConfirmed: auth?.displayNameConfirmed !== false,
     ...(auth?.sessionToken ? { sessionToken: String(auth.sessionToken) } : {}),
-    ...(auth?.accessToken ? { accessToken: String(auth.accessToken) } : {}),
-    ...(auth?.email ? { email: String(auth.email) } : {})
+    ...(auth?.accessToken ? { accessToken: String(auth.accessToken) } : {})
   };
 
   setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
@@ -4095,7 +4093,6 @@ function normalizePendingOAuthDisplayAuth(auth) {
     userId,
     suggestedName: normalizePlayerName(auth.suggestedName || ""),
     accessToken: String(auth.accessToken || ""),
-    email: String(auth.email || ""),
     returnHash: String(auth.returnHash || "#gamelist")
   };
 }
@@ -4181,8 +4178,7 @@ async function lookupStoredOAuthUserLogin(provider, userId) {
 
     return payload.found && username
       ? {
-        username,
-        email: String(payload.user?.email || "")
+        username
       }
       : null;
   } catch {
@@ -4205,8 +4201,7 @@ async function saveStoredOAuthUserLogin(auth) {
         provider: auth.provider,
         userId: auth.userId,
         username: auth.name,
-        accessToken: auth.accessToken || "",
-        email: auth.email || ""
+        accessToken: auth.accessToken || ""
       })
     });
   } catch {
@@ -4272,13 +4267,19 @@ function createOAuthState(provider) {
 function buildOAuthURL(provider, config) {
   const state = createOAuthState(provider);
   const redirectURI = getOAuthRedirectURI();
+  const scope = typeof config.scope === "string"
+    ? config.scope.trim()
+    : (provider === "google" ? "openid" : "");
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: redirectURI,
     response_type: "token",
-    scope: config.scope || (provider === "google" ? "openid profile email" : "public_profile,email"),
     state
   });
+
+  if (scope) {
+    params.set("scope", scope);
+  }
 
   if (provider === "google") {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
@@ -4312,7 +4313,6 @@ async function startOAuthLogin(provider) {
       userId,
       name: storedName,
       accessToken: "",
-      email: storedLogin?.email || "",
       displayNameConfirmed: true
     });
     await finishIdentitySignIn({ mergeAuth: auth });
@@ -4332,7 +4332,7 @@ async function startOAuthLogin(provider) {
 async function fetchOAuthProfile(provider, accessToken) {
   const endpoint = provider === "google"
     ? "https://www.googleapis.com/oauth2/v3/userinfo"
-    : `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`;
+    : `https://graph.facebook.com/me?fields=id&access_token=${encodeURIComponent(accessToken)}`;
   const response = await fetch(endpoint, provider === "google"
     ? { headers: { Authorization: `Bearer ${accessToken}` } }
     : {});
@@ -4345,8 +4345,7 @@ async function fetchOAuthProfile(provider, accessToken) {
 
   return {
     userId: String(profile.sub || profile.id || ""),
-    name: normalizePlayerName(profile.name),
-    email: String(profile.email || "")
+    name: ""
   };
 }
 
@@ -4382,7 +4381,6 @@ async function completeOAuthRedirectIfPresent() {
       userId,
       name: confirmedName,
       accessToken,
-      email: profile?.email || storedLogin?.email || "",
       displayNameConfirmed: true
     });
     await finishIdentitySignIn({ mergeAuth: auth });
@@ -4394,7 +4392,6 @@ async function completeOAuthRedirectIfPresent() {
     userId,
     suggestedName: "",
     accessToken,
-    email: profile?.email || "",
     returnHash: savedState.returnHash || "#gamelist"
   }));
   return true;
@@ -4744,7 +4741,6 @@ async function saveOAuthDisplayName() {
     userId: pendingAuth.userId,
     name: displayName,
     accessToken: pendingAuth.accessToken,
-    email: pendingAuth.email || "",
     displayNameConfirmed: true
   });
   const returnHash = pendingAuth.returnHash || "#gamelist";

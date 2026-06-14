@@ -1,10 +1,10 @@
 {
   "google": {
     "clientId": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
-    "scope": "openid profile email"
+    "scope": "openid"
   },
   "facebook": {
     "clientId": "YOUR_FACEBOOK_APP_ID",
-    "scope": "public_profile,email"
+    "scope": ""
   }
 }
