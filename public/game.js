@@ -5478,20 +5478,6 @@ async function refreshWaitingGamesForMenu() {
   }
 
   try {
-    if (/^[A-Z0-9]{5}$/.test(gameState.id)) {
-      const params = new URLSearchParams({
-        action: "load",
-        id: gameState.id,
-        turnIndex: String(gameState.turnIndex),
-        playerName,
-        authKey: getStoredPlayerAuthKey()
-      });
-      const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
-
-      setWaitingGamesForMenu(payload.waitingGames || [], { trusted: true });
-      return;
-    }
-
     const payload = await fetchJSON(`${serverURL}?action=list`);
 
     setWaitingGamesForMenu(payload.games || []);
