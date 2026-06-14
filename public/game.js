@@ -2577,6 +2577,7 @@ let renderedGameId = "";
 let turnStartGameStateJSON = "";
 let showingPoolView = false;
 let waitingGamesForMenu = [];
+let serverOAuthConfig = null;
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
@@ -4081,7 +4082,24 @@ async function saveStoredOAuthUserLogin(auth) {
 }
 
 function getOAuthConfig(provider) {
-  return globalThis.wordWefterOAuth?.[provider] || {};
+  return serverOAuthConfig?.[provider] || globalThis.wordWefterOAuth?.[provider] || {};
+}
+
+async function loadOAuthConfig() {
+  if (serverOAuthConfig) {
+    return serverOAuthConfig;
+  }
+
+  try {
+    const payload = await fetchJSON(`${serverURL}?action=oauth_config`);
+    serverOAuthConfig = payload.oauth && typeof payload.oauth === "object"
+      ? payload.oauth
+      : {};
+  } catch {
+    serverOAuthConfig = {};
+  }
+
+  return serverOAuthConfig;
 }
 
 function getOAuthRedirectURI() {
@@ -4119,6 +4137,7 @@ function buildOAuthURL(provider, config) {
 
 async function startOAuthLogin(provider) {
   const normalizedProvider = String(provider || "").toLowerCase();
+  await loadOAuthConfig();
   const config = getOAuthConfig(normalizedProvider);
 
   if (config.clientId) {

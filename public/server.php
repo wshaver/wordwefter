@@ -8,6 +8,7 @@ header('Pragma: no-cache');
 
 $saveDirectory = realpath(__DIR__ . '/saved-games');
 $userLoginFile = __DIR__ . '/../server-data/user-logins.json';
+$oauthConfigFile = __DIR__ . '/../server-data/oauth-config.json';
 
 if ($saveDirectory === false) {
     $saveDirectory = __DIR__ . '/saved-games';
@@ -25,6 +26,54 @@ function send_json(array $payload, int $status = 200): void
     http_response_code($status);
     print(json_encode($payload, JSON_PRETTY_PRINT));
     exit;
+}
+
+function env_value(string $key): string
+{
+    $value = getenv($key);
+
+    return is_string($value) ? trim($value) : '';
+}
+
+function public_oauth_provider_config(array $config, string $envPrefix): array
+{
+    $clientId = trim((string) ($config['clientId'] ?? env_value($envPrefix . '_CLIENT_ID')));
+    $scope = trim((string) ($config['scope'] ?? env_value($envPrefix . '_SCOPE')));
+    $publicConfig = [];
+
+    if ($clientId !== '') {
+        $publicConfig['clientId'] = $clientId;
+    }
+
+    if ($scope !== '') {
+        $publicConfig['scope'] = $scope;
+    }
+
+    return $publicConfig;
+}
+
+function read_public_oauth_config(string $oauthConfigFile): array
+{
+    $fileConfig = [];
+
+    if (is_file($oauthConfigFile)) {
+        $decodedConfig = json_decode((string) file_get_contents($oauthConfigFile), true);
+
+        if (is_array($decodedConfig)) {
+            $fileConfig = $decodedConfig;
+        }
+    }
+
+    return [
+        'google' => public_oauth_provider_config(
+            is_array($fileConfig['google'] ?? null) ? $fileConfig['google'] : [],
+            'WORDWEFTER_GOOGLE'
+        ),
+        'facebook' => public_oauth_provider_config(
+            is_array($fileConfig['facebook'] ?? null) ? $fileConfig['facebook'] : [],
+            'WORDWEFTER_FACEBOOK'
+        )
+    ];
 }
 
 function game_path(string $saveDirectory, string $id): string
@@ -645,6 +694,13 @@ if ($action === 'list') {
     }
 
     send_json(['ok' => true, 'games' => $games]);
+}
+
+if ($action === 'oauth_config') {
+    send_json([
+        'ok' => true,
+        'oauth' => read_public_oauth_config($oauthConfigFile)
+    ]);
 }
 
 if ($action === 'load') {
