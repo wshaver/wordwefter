@@ -2550,6 +2550,8 @@ const playerNameStorageKey = "wordwefterPlayerName";
 const playerAuthStorageKey = "wordwefterPlayerAuth";
 const friendsStorageKey = "wordwefterFriends";
 const oauthStateStorageKey = "wordwefterOAuthState";
+const oauthDisplayNameStorageKey = "wordwefterOAuthDisplayName";
+const localOAuthUserIdsStorageKey = "wordwefterLocalOAuthUserIds";
 const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
@@ -2558,9 +2560,12 @@ let rackSortable = null;
 let marketplaceSortable = null;
 let boardSortables = [];
 let pendingIdentityAction = null;
+let pendingOAuthDisplayAuth = null;
 let turnPollTimer = null;
 let turnPollTimerMilliseconds = 0;
 let immediateTurnRefreshTimer = null;
+let gameMessageClearTimer = null;
+let gameMessageExitTimer = null;
 let lastTurnNotificationKey = "";
 let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
@@ -2577,7 +2582,13 @@ const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
 const rainbowTileAnimationMilliseconds = 7200;
 const rainbowTileAnimationStartedAt = Date.now();
+const gameMessageAnimationMilliseconds = 180;
 let tileEnterQueueAvailableAt = 0;
+
+function isLocalNameLoginAllowed() {
+  return window.location.protocol === "http:" &&
+    /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i.test(window.location.hostname);
+}
 
 function createPoolSnapshotForTesting(game = gameState) {
   return {
@@ -3548,11 +3559,42 @@ function renderGame(options = {}) {
   updateTurnPolling();
 }
 
-function setGameMessage(message) {
+function setGameMessage(message, options = {}) {
   const messageElement = document.querySelector("#game-message");
+  const clearAfterMs = Math.max(0, Number(options.clearAfterMs || 0));
+
+  window.clearTimeout(gameMessageClearTimer);
+  window.clearTimeout(gameMessageExitTimer);
+  gameMessageClearTimer = null;
+  gameMessageExitTimer = null;
 
   if (messageElement) {
+    if (!message) {
+      if (!messageElement.textContent) {
+        messageElement.classList.remove("has-message", "message-exiting");
+        return;
+      }
+
+      messageElement.classList.add("message-exiting");
+      messageElement.classList.remove("has-message");
+      gameMessageExitTimer = window.setTimeout(() => {
+        messageElement.textContent = "";
+        messageElement.classList.remove("message-exiting");
+      }, gameMessageAnimationMilliseconds);
+      return;
+    }
+
     messageElement.textContent = message;
+    messageElement.classList.remove("message-exiting");
+    messageElement.classList.add("has-message");
+
+    if (clearAfterMs > 0) {
+      gameMessageClearTimer = window.setTimeout(() => {
+        if (messageElement.textContent === message) {
+          setGameMessage("");
+        }
+      }, clearAfterMs);
+    }
   }
 }
 
@@ -3827,7 +3869,9 @@ function getStoredPlayerAuth() {
       userId: String(auth.userId || normalizeNameKey(auth.name)),
       name: normalizePlayerName(auth.name),
       signedInAt: String(auth.signedInAt || ""),
-      displayNameConfirmed: Boolean(auth.displayNameConfirmed)
+      displayNameConfirmed: Boolean(auth.displayNameConfirmed),
+      sessionToken: String(auth.sessionToken || ""),
+      accessToken: String(auth.accessToken || "")
     };
   }
 
@@ -3858,6 +3902,33 @@ function getProviderLabel(provider) {
   return labels[String(provider || "").toLowerCase()] || "Account";
 }
 
+function isRealOAuthAuth(auth) {
+  const provider = String(auth?.provider || "").toLowerCase();
+  const userId = String(auth?.userId || "").trim();
+  const isLocalFallback = userId.startsWith("local-");
+
+  return ["google", "facebook"].includes(provider) &&
+    userId &&
+    userId.toLowerCase() !== "null" &&
+    (!isLocalFallback || isLocalNameLoginAllowed());
+}
+
+function getLocalOAuthUserId(provider) {
+  const normalizedProvider = String(provider || "").toLowerCase();
+  const storedIds = parseJSONStorageItem(localOAuthUserIdsStorageKey, {});
+
+  if (storedIds && typeof storedIds === "object" && String(storedIds[normalizedProvider] || "").startsWith(`local-${normalizedProvider}-`)) {
+    return String(storedIds[normalizedProvider]);
+  }
+
+  const userId = `local-${normalizedProvider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  setJSONStorageItem(localOAuthUserIdsStorageKey, {
+    ...(storedIds && typeof storedIds === "object" ? storedIds : {}),
+    [normalizedProvider]: userId
+  });
+  return userId;
+}
+
 function setStoredPlayerAuth(auth) {
   const normalizedName = setStoredPlayerName(auth?.name);
 
@@ -3871,11 +3942,62 @@ function setStoredPlayerAuth(auth) {
     userId: String(auth?.userId || normalizeNameKey(normalizedName)),
     name: normalizedName,
     signedInAt: new Date().toISOString(),
-    displayNameConfirmed: auth?.displayNameConfirmed !== false
+    displayNameConfirmed: auth?.displayNameConfirmed !== false,
+    ...(auth?.sessionToken ? { sessionToken: String(auth.sessionToken) } : {}),
+    ...(auth?.accessToken ? { accessToken: String(auth.accessToken) } : {})
   };
 
   setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
   return normalizedAuth;
+}
+
+function normalizePendingOAuthDisplayAuth(auth) {
+  if (!auth || typeof auth !== "object") {
+    return null;
+  }
+
+  const provider = String(auth.provider || "").toLowerCase();
+  const userId = String(auth.userId || "");
+
+  if (!provider || !userId) {
+    return null;
+  }
+
+  return {
+    provider,
+    userId,
+    suggestedName: normalizePlayerName(auth.suggestedName || ""),
+    accessToken: String(auth.accessToken || ""),
+    returnHash: String(auth.returnHash || "#gamelist")
+  };
+}
+
+function setPendingOAuthDisplayAuth(auth) {
+  pendingOAuthDisplayAuth = normalizePendingOAuthDisplayAuth(auth);
+
+  if (pendingOAuthDisplayAuth) {
+    setJSONStorageItem(oauthDisplayNameStorageKey, pendingOAuthDisplayAuth);
+  } else {
+    removeLocalStorageItem(oauthDisplayNameStorageKey);
+  }
+
+  return pendingOAuthDisplayAuth;
+}
+
+function getPendingOAuthDisplayAuth() {
+  if (pendingOAuthDisplayAuth) {
+    return pendingOAuthDisplayAuth;
+  }
+
+  pendingOAuthDisplayAuth = normalizePendingOAuthDisplayAuth(
+    parseJSONStorageItem(oauthDisplayNameStorageKey, null)
+  );
+  return pendingOAuthDisplayAuth;
+}
+
+function clearPendingOAuthDisplayAuth() {
+  pendingOAuthDisplayAuth = null;
+  removeLocalStorageItem(oauthDisplayNameStorageKey);
 }
 
 function getConfirmedDisplayNameForOAuth(provider, userId) {
@@ -3893,16 +4015,6 @@ function getConfirmedDisplayNameForOAuth(provider, userId) {
   return "";
 }
 
-function promptForOAuthDisplayName(provider, suggestedName = "") {
-  const providerLabel = getProviderLabel(provider);
-  const fallbackName = normalizePlayerName(suggestedName || getStoredPlayerName()) || `${providerLabel} Player`;
-
-  return normalizePlayerName(window.prompt(
-    `Choose a WordWefter display name for your ${providerLabel} login.`,
-    fallbackName
-  ));
-}
-
 async function mergeOldStyleSavesForAuth(auth) {
   if (!auth || auth.provider === "name") {
     return null;
@@ -3918,6 +4030,49 @@ async function mergeOldStyleSavesForAuth(auth) {
         playerName: auth.name,
         authKey: `${auth.provider}:${auth.userId || normalizeNameKey(auth.name)}`,
         provider: auth.provider
+      })
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function lookupStoredOAuthUserLogin(provider, userId) {
+  if (!isRealOAuthAuth({ provider, userId })) {
+    return null;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      action: "user_login",
+      provider,
+      userId
+    });
+    const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
+    const username = normalizePlayerName(payload.user?.username || payload.user?.name || "");
+
+    return payload.found && username ? username : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveStoredOAuthUserLogin(auth) {
+  if (!isRealOAuthAuth(auth)) {
+    return null;
+  }
+
+  try {
+    return await fetchJSON(`${serverURL}?action=save_user_login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        provider: auth.provider,
+        userId: auth.userId,
+        username: auth.name,
+        accessToken: auth.accessToken || ""
       })
     });
   } catch {
@@ -3962,7 +4117,7 @@ function buildOAuthURL(provider, config) {
   return `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
 }
 
-function startOAuthLogin(provider) {
+async function startOAuthLogin(provider) {
   const normalizedProvider = String(provider || "").toLowerCase();
   const config = getOAuthConfig(normalizedProvider);
 
@@ -3971,19 +4126,34 @@ function startOAuthLogin(provider) {
     return;
   }
 
-  const name = promptForOAuthDisplayName(normalizedProvider, getStoredPlayerName());
-
-  if (!name) {
+  if (!isLocalNameLoginAllowed()) {
+    setGameMessage(`${getProviderLabel(normalizedProvider)} sign-in is not configured.`);
     return;
   }
 
-  const auth = setStoredPlayerAuth({
+  const userId = getLocalOAuthUserId(normalizedProvider);
+  const storedName = await lookupStoredOAuthUserLogin(normalizedProvider, userId);
+
+  if (storedName) {
+    const auth = setStoredPlayerAuth({
+      provider: normalizedProvider,
+      userId,
+      name: storedName,
+      accessToken: "",
+      displayNameConfirmed: true
+    });
+    await finishIdentitySignIn({ mergeAuth: auth });
+    return;
+  }
+
+  const pendingAuth = setPendingOAuthDisplayAuth({
     provider: normalizedProvider,
-    userId: normalizeNameKey(`${normalizedProvider}:${name}`),
-    name,
-    displayNameConfirmed: true
+    userId,
+    suggestedName: "",
+    accessToken: "",
+    returnHash: window.location.hash || "#gamelist"
   });
-  void finishIdentitySignIn({ mergeAuth: auth });
+  showOAuthDisplayNamePage(pendingAuth);
 }
 
 async function fetchOAuthProfile(provider, accessToken) {
@@ -4027,23 +4197,29 @@ async function completeOAuthRedirectIfPresent() {
 
   const provider = savedState.provider;
   const userId = profile?.userId || state;
-  const confirmedName = getConfirmedDisplayNameForOAuth(provider, userId);
-  const displayName = confirmedName || promptForOAuthDisplayName(provider, profile?.name);
-
+  const confirmedName = getConfirmedDisplayNameForOAuth(provider, userId) ||
+    await lookupStoredOAuthUserLogin(provider, userId);
   window.history.replaceState(null, "", savedState.returnHash || "#gamelist");
 
-  if (!displayName) {
-    setGameMessage("Choose a display name to finish signing in.");
+  if (confirmedName) {
+    const auth = setStoredPlayerAuth({
+      provider,
+      userId,
+      name: confirmedName,
+      accessToken,
+      displayNameConfirmed: true
+    });
+    await finishIdentitySignIn({ mergeAuth: auth });
     return true;
   }
 
-  const auth = setStoredPlayerAuth({
+  showOAuthDisplayNamePage(setPendingOAuthDisplayAuth({
     provider,
     userId,
-    name: displayName,
-    displayNameConfirmed: true
-  });
-  await finishIdentitySignIn({ mergeAuth: auth });
+    suggestedName: "",
+    accessToken,
+    returnHash: savedState.returnHash || "#gamelist"
+  }));
   return true;
 }
 
@@ -4052,6 +4228,15 @@ async function finishIdentitySignIn(options = {}) {
   setGameMessage("");
 
   if (options.mergeAuth) {
+    const loginSaveResult = await saveStoredOAuthUserLogin(options.mergeAuth);
+
+    if (loginSaveResult?.user?.sessionToken) {
+      options.mergeAuth = setStoredPlayerAuth({
+        ...options.mergeAuth,
+        accessToken: "",
+        sessionToken: loginSaveResult.user.sessionToken
+      });
+    }
     const mergeResult = await mergeOldStyleSavesForAuth(options.mergeAuth);
 
     if (mergeResult?.merged > 0) {
@@ -4195,9 +4380,9 @@ async function copyInviteLink() {
 
   try {
     await navigator.clipboard.writeText(inviteLink);
-    setGameMessage("Invite link copied.");
+    setGameMessage("Invite link copied.", { clearAfterMs: 2000 });
   } catch {
-    setGameMessage(inviteLink);
+    setGameMessage(inviteLink, { clearAfterMs: 2000 });
   }
 }
 
@@ -4285,6 +4470,7 @@ function updateIdentityUI() {
   const identityProviderDisplay = document.querySelector("#identity-provider-display");
 
   document.body.classList.toggle("has-player", Boolean(playerName));
+  document.documentElement.classList.toggle("local-name-login-allowed", isLocalNameLoginAllowed());
 
   if (identityNameDisplay) {
     identityNameDisplay.textContent = playerName;
@@ -4315,7 +4501,76 @@ function requirePlayerName(action, options = {}) {
   setGameMessage("");
   setScreen("welcome", { clearGameURL: options.clearGameURL !== false });
   updateIdentityUI();
-  document.querySelector("#identity-name-input")?.focus();
+  if (isLocalNameLoginAllowed()) {
+    document.querySelector("#identity-name-input")?.focus();
+  } else {
+    document.querySelector("#google-login-button")?.focus();
+  }
+}
+
+function showOAuthDisplayNamePage(auth = getPendingOAuthDisplayAuth()) {
+  const pendingAuth = setPendingOAuthDisplayAuth(auth);
+  const displayNameInput = document.querySelector("#oauth-display-name-input");
+  const providerNameElement = document.querySelector("#oauth-display-provider-name");
+  const providerCopyElement = document.querySelector("#oauth-display-provider-copy");
+
+  if (!pendingAuth) {
+    setScreen("welcome");
+    setGameMessage("Could not finish sign-in. Try again.");
+    return;
+  }
+
+  const providerLabel = getProviderLabel(pendingAuth.provider);
+
+  if (providerNameElement) {
+    providerNameElement.textContent = providerLabel;
+  }
+
+  if (providerCopyElement) {
+    providerCopyElement.textContent = `Choose the name other players will see for your ${providerLabel} login.`;
+  }
+
+  if (displayNameInput) {
+    displayNameInput.value = pendingAuth.suggestedName || getStoredPlayerName() || "";
+  }
+
+  setGameMessage("");
+  setScreen("display-name", { clearGameURL: false });
+  displayNameInput?.focus();
+  displayNameInput?.select();
+}
+
+async function saveOAuthDisplayName() {
+  const pendingAuth = getPendingOAuthDisplayAuth();
+  const displayNameInput = document.querySelector("#oauth-display-name-input");
+  const displayName = normalizePlayerName(displayNameInput?.value);
+
+  if (!pendingAuth) {
+    setScreen("welcome");
+    setGameMessage("Could not finish sign-in. Try again.");
+    return;
+  }
+
+  if (!displayName) {
+    setGameMessage("Enter a display name.");
+    displayNameInput?.focus();
+    return;
+  }
+
+  const auth = setStoredPlayerAuth({
+    provider: pendingAuth.provider,
+    userId: pendingAuth.userId,
+    name: displayName,
+    accessToken: pendingAuth.accessToken,
+    displayNameConfirmed: true
+  });
+  const returnHash = pendingAuth.returnHash || "#gamelist";
+
+  clearPendingOAuthDisplayAuth();
+  if (returnHash && window.location.hash !== returnHash) {
+    window.history.replaceState(null, "", returnHash);
+  }
+  await finishIdentitySignIn({ mergeAuth: auth });
 }
 
 function getPlayerNameInputs() {
@@ -4690,7 +4945,7 @@ function validatePlayerSetupEntries(entries) {
 function setScreen(screenName, options = {}) {
   const shouldClearGameURL = options.clearGameURL !== false;
 
-  document.body.classList.remove("screen-welcome", "screen-setup", "screen-list", "screen-play", "screen-rules");
+  document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-play", "screen-rules");
   document.body.classList.add(`screen-${screenName}`);
 
   if (screenName !== "play") {
@@ -4750,6 +5005,11 @@ async function showGameList(options = {}) {
 }
 
 function saveIdentityFromInput() {
+  if (!isLocalNameLoginAllowed()) {
+    setGameMessage("Use Google or Facebook to sign in.");
+    return;
+  }
+
   const identityNameInput = document.querySelector("#identity-name-input");
   const playerName = setStoredPlayerAuth({
     provider: "name",
@@ -4812,7 +5072,13 @@ async function fetchJSON(url, options = {}) {
 }
 
 async function saveGameState() {
-  const payload = await fetchJSON(serverURL, {
+  const auth = getStoredPlayerAuth();
+  const params = new URLSearchParams({
+    action: "save",
+    authKey: getStoredPlayerAuthKey(),
+    sessionToken: auth?.sessionToken || ""
+  });
+  const payload = await fetchJSON(`${serverURL}?${params.toString()}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -5982,6 +6248,8 @@ function bindGameControls() {
   const googleLoginButton = document.querySelector("#google-login-button");
   const facebookLoginButton = document.querySelector("#facebook-login-button");
   const identityNameInput = document.querySelector("#identity-name-input");
+  const oauthDisplayNameInput = document.querySelector("#oauth-display-name-input");
+  const saveOAuthDisplayNameButton = document.querySelector("#save-oauth-display-name-button");
   const identityMenuButton = document.querySelector("#identity-menu-button");
   const logoutButton = document.querySelector("#logout-button");
   const showNewGameButton = document.querySelector("#show-new-game-button");
@@ -6011,17 +6279,34 @@ function bindGameControls() {
   }
 
   if (googleLoginButton) {
-    googleLoginButton.addEventListener("click", () => startOAuthLogin("google"));
+    googleLoginButton.addEventListener("click", () => {
+      void startOAuthLogin("google");
+    });
   }
 
   if (facebookLoginButton) {
-    facebookLoginButton.addEventListener("click", () => startOAuthLogin("facebook"));
+    facebookLoginButton.addEventListener("click", () => {
+      void startOAuthLogin("facebook");
+    });
   }
 
   if (identityNameInput) {
     identityNameInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         saveIdentityFromInput();
+      }
+    });
+  }
+
+  if (saveOAuthDisplayNameButton) {
+    saveOAuthDisplayNameButton.addEventListener("click", saveOAuthDisplayName);
+  }
+
+  if (oauthDisplayNameInput) {
+    oauthDisplayNameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void saveOAuthDisplayName();
       }
     });
   }
@@ -6143,6 +6428,11 @@ function bindGameControls() {
 
 async function initializeApp() {
   await completeOAuthRedirectIfPresent();
+  if (getPendingOAuthDisplayAuth()) {
+    showOAuthDisplayNamePage();
+    bindGameControls();
+    return;
+  }
   updateIdentityUI();
   renderPlayerNameInputs(parsePlayerNames());
   bindGameControls();

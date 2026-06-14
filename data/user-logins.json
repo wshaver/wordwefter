@@ -1,0 +1,8 @@
+{
+    "google:codex-oauth-test": {
+        "provider": "google",
+        "userId": "codex-oauth-test",
+        "username": "Codex OAuth User",
+        "updatedAt": "2026-06-14T19:33:37+00:00"
+    }
+}

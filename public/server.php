@@ -7,10 +7,17 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
 $saveDirectory = realpath(__DIR__ . '/saved-games');
+$userLoginFile = __DIR__ . '/../server-data/user-logins.json';
 
 if ($saveDirectory === false) {
     $saveDirectory = __DIR__ . '/saved-games';
     mkdir($saveDirectory, 0775, true);
+}
+
+$userLoginDirectory = dirname($userLoginFile);
+
+if (!is_dir($userLoginDirectory)) {
+    mkdir($userLoginDirectory, 0775, true);
 }
 
 function send_json(array $payload, int $status = 200): void
@@ -115,6 +122,308 @@ function player_summaries(array $state): array
 function normalize_name_key(string $name): string
 {
     return strtolower(trim($name));
+}
+
+function normalize_provider(string $provider): string
+{
+    $normalizedProvider = strtolower(trim($provider));
+
+    return in_array($normalizedProvider, ['google', 'facebook'], true) ? $normalizedProvider : '';
+}
+
+function normalize_provider_user_id(string $userId): string
+{
+    $normalizedUserId = trim($userId);
+
+    if ($normalizedUserId === '' || strtolower($normalizedUserId) === 'null') {
+        return '';
+    }
+
+    return $normalizedUserId;
+}
+
+function request_is_local_http(): bool
+{
+    $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+    $scheme = strtolower((string) ($_SERVER['REQUEST_SCHEME'] ?? ''));
+    $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+    $host = preg_replace('/:\d+$/', '', $host) ?? $host;
+    $isHttps = $https === 'on' || $https === '1' || $scheme === 'https' || $forwardedProto === 'https';
+    $isLocalHost = preg_match('/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i', $host) === 1;
+
+    return !$isHttps && $isLocalHost;
+}
+
+function is_local_fallback_user_id(string $userId): bool
+{
+    return strncmp($userId, 'local-', 6) === 0;
+}
+
+function user_login_key(string $provider, string $userId): string
+{
+    $normalizedProvider = normalize_provider($provider);
+    $normalizedUserId = normalize_provider_user_id($userId);
+
+    return $normalizedProvider !== '' && $normalizedUserId !== ''
+        ? $normalizedProvider . ':' . $normalizedUserId
+        : '';
+}
+
+function normalize_auth_key(string $authKey): string
+{
+    $parts = explode(':', trim($authKey), 2);
+
+    if (count($parts) !== 2) {
+        return '';
+    }
+
+    return user_login_key($parts[0], $parts[1]);
+}
+
+function read_user_logins(string $userLoginFile): array
+{
+    if (!is_file($userLoginFile)) {
+        return [];
+    }
+
+    $logins = json_decode((string) file_get_contents($userLoginFile), true);
+
+    return is_array($logins) ? $logins : [];
+}
+
+function create_session_token(): string
+{
+    return bin2hex(random_bytes(32));
+}
+
+function hash_session_token(string $sessionToken): string
+{
+    return hash('sha256', $sessionToken);
+}
+
+function session_token_matches(?array $entry, string $sessionToken): bool
+{
+    $sessionHash = (string) ($entry['sessionTokenHash'] ?? '');
+
+    return $sessionHash !== '' &&
+        $sessionToken !== '' &&
+        hash_equals($sessionHash, hash_session_token($sessionToken));
+}
+
+function write_user_logins(string $userLoginFile, array $logins): bool
+{
+    $encodedLogins = json_encode($logins, JSON_PRETTY_PRINT);
+
+    return $encodedLogins !== false && file_put_contents($userLoginFile, $encodedLogins, LOCK_EX) !== false;
+}
+
+function get_user_login(string $userLoginFile, string $provider, string $userId): ?array
+{
+    $key = user_login_key($provider, $userId);
+
+    if ($key === '') {
+        return null;
+    }
+
+    $logins = read_user_logins($userLoginFile);
+    $entry = $logins[$key] ?? null;
+
+    return is_array($entry) ? $entry : null;
+}
+
+function get_user_login_by_auth_key(string $userLoginFile, string $authKey): ?array
+{
+    $key = normalize_auth_key($authKey);
+
+    if ($key === '') {
+        return null;
+    }
+
+    $logins = read_user_logins($userLoginFile);
+    $entry = $logins[$key] ?? null;
+
+    return is_array($entry) ? $entry : null;
+}
+
+function fetch_json_url(string $url, array $headers = []): ?array
+{
+    $headerLines = array_merge(['Accept: application/json'], $headers);
+    $context = stream_context_create([
+        'http' => [
+            'header' => implode("\r\n", $headerLines),
+            'ignore_errors' => true,
+            'timeout' => 8
+        ]
+    ]);
+    $rawBody = @file_get_contents($url, false, $context);
+
+    if ($rawBody === false) {
+        return null;
+    }
+
+    $payload = json_decode((string) $rawBody, true);
+
+    return is_array($payload) ? $payload : null;
+}
+
+function validate_provider_access_token(string $provider, string $userId, string $accessToken): bool
+{
+    if ($accessToken === '') {
+        return false;
+    }
+
+    if ($provider === 'google') {
+        $payload = fetch_json_url(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            ['Authorization: Bearer ' . $accessToken]
+        );
+
+        return is_array($payload) && hash_equals($userId, (string) ($payload['sub'] ?? ''));
+    }
+
+    if ($provider === 'facebook') {
+        $payload = fetch_json_url(
+            'https://graph.facebook.com/me?fields=id&access_token=' . rawurlencode($accessToken)
+        );
+
+        return is_array($payload) && hash_equals($userId, (string) ($payload['id'] ?? ''));
+    }
+
+    return false;
+}
+
+function user_login_can_be_saved(string $provider, string $userId, string $accessToken): bool
+{
+    if (is_local_fallback_user_id($userId)) {
+        return request_is_local_http();
+    }
+
+    return validate_provider_access_token($provider, $userId, $accessToken);
+}
+
+function public_user_login_entry(array $entry, string $sessionToken = ''): array
+{
+    $publicEntry = [
+        'provider' => (string) ($entry['provider'] ?? ''),
+        'userId' => (string) ($entry['userId'] ?? ''),
+        'username' => (string) ($entry['username'] ?? ''),
+        'updatedAt' => (string) ($entry['updatedAt'] ?? '')
+    ];
+
+    if ($sessionToken !== '') {
+        $publicEntry['sessionToken'] = $sessionToken;
+    }
+
+    return $publicEntry;
+}
+
+function save_user_login(string $userLoginFile, string $provider, string $userId, string $playerName, string $accessToken): ?array
+{
+    $normalizedProvider = normalize_provider($provider);
+    $normalizedUserId = normalize_provider_user_id($userId);
+    $normalizedPlayerName = trim($playerName);
+    $key = user_login_key($normalizedProvider, $normalizedUserId);
+
+    if ($key === '' || $normalizedPlayerName === '' || !user_login_can_be_saved($normalizedProvider, $normalizedUserId, $accessToken)) {
+        return null;
+    }
+
+    $logins = read_user_logins($userLoginFile);
+    $sessionToken = create_session_token();
+    $entry = [
+        'provider' => $normalizedProvider,
+        'userId' => $normalizedUserId,
+        'username' => $normalizedPlayerName,
+        'sessionTokenHash' => hash_session_token($sessionToken),
+        'sessionIssuedAt' => gmdate('c'),
+        'updatedAt' => gmdate('c')
+    ];
+    $logins[$key] = $entry;
+
+    return write_user_logins($userLoginFile, $logins)
+        ? public_user_login_entry($entry, $sessionToken)
+        : null;
+}
+
+function player_auth_key(array $player): string
+{
+    return normalize_auth_key((string) ($player['authKey'] ?? ''));
+}
+
+function player_is_claimed(array $player): bool
+{
+    return (!isset($player['claimed']) || $player['claimed'] !== false) && empty($player['open']);
+}
+
+function player_is_open_slot(array $player): bool
+{
+    return !empty($player['open']) ||
+        (isset($player['claimed']) && $player['claimed'] === false) ||
+        preg_match('/^open spot \d+$/i', (string) ($player['name'] ?? '')) === 1;
+}
+
+function player_has_auth_key(array $player, string $authKey): bool
+{
+    return $authKey !== '' && player_auth_key($player) === $authKey;
+}
+
+function state_has_claimed_player_with_auth_key(array $state, string $authKey): bool
+{
+    foreach (($state['players'] ?? []) as $player) {
+        if (is_array($player) && player_is_claimed($player) && player_has_auth_key($player, $authKey)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function state_preserves_existing_claimed_auth_keys(array $currentState, array $incomingState): bool
+{
+    $currentPlayers = array_values(array_filter($currentState['players'] ?? [], 'is_array'));
+    $incomingPlayers = array_values(array_filter($incomingState['players'] ?? [], 'is_array'));
+
+    foreach ($currentPlayers as $index => $currentPlayer) {
+        if (!player_is_claimed($currentPlayer)) {
+            continue;
+        }
+
+        $currentAuthKey = player_auth_key($currentPlayer);
+
+        if ($currentAuthKey === '') {
+            continue;
+        }
+
+        $incomingPlayer = $incomingPlayers[$index] ?? null;
+
+        if (!is_array($incomingPlayer) || !player_is_claimed($incomingPlayer) || player_auth_key($incomingPlayer) !== $currentAuthKey) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function state_is_valid_new_player_claim(array $currentState, array $incomingState, string $authKey): bool
+{
+    $currentPlayers = array_values(array_filter($currentState['players'] ?? [], 'is_array'));
+    $incomingPlayers = array_values(array_filter($incomingState['players'] ?? [], 'is_array'));
+    $claimCount = 0;
+
+    foreach ($currentPlayers as $index => $currentPlayer) {
+        $incomingPlayer = $incomingPlayers[$index] ?? null;
+
+        if (!is_array($incomingPlayer)) {
+            continue;
+        }
+
+        if (player_is_open_slot($currentPlayer) && player_is_claimed($incomingPlayer) && player_has_auth_key($incomingPlayer, $authKey)) {
+            $claimCount += 1;
+        }
+    }
+
+    return $claimCount === 1;
 }
 
 function conceded_player_names(array $state): array
@@ -374,6 +683,61 @@ if ($action === 'load') {
     send_json(['ok' => true, 'gameState' => $state, 'waitingGames' => $waitingGames]);
 }
 
+if ($action === 'user_login') {
+    $provider = (string) ($_GET['provider'] ?? '');
+    $userId = normalize_provider_user_id((string) ($_GET['userId'] ?? ''));
+
+    if (is_local_fallback_user_id($userId) && !request_is_local_http()) {
+        send_json([
+            'ok' => true,
+            'found' => false,
+            'user' => null
+        ]);
+    }
+
+    $entry = get_user_login(
+        $userLoginFile,
+        $provider,
+        $userId
+    );
+
+    send_json([
+        'ok' => true,
+        'found' => $entry !== null,
+        'user' => $entry !== null ? public_user_login_entry($entry) : null
+    ]);
+}
+
+if ($action === 'save_user_login') {
+    if ($requestMethod !== 'POST') {
+        send_json(['ok' => false, 'error' => 'User login save requests must use POST.'], 405);
+    }
+
+    $rawBody = (string) file_get_contents('php://input');
+    $payload = json_decode($rawBody, true);
+
+    if (!is_array($payload)) {
+        send_json(['ok' => false, 'error' => 'Request body must be a JSON object.'], 400);
+    }
+
+    $entry = save_user_login(
+        $userLoginFile,
+        (string) ($payload['provider'] ?? ''),
+        (string) ($payload['userId'] ?? ''),
+        (string) ($payload['username'] ?? ''),
+        (string) ($payload['accessToken'] ?? '')
+    );
+
+    if ($entry === null) {
+        send_json(['ok' => false, 'error' => 'A valid Google or Facebook login and username are required.'], 400);
+    }
+
+    send_json([
+        'ok' => true,
+        'user' => $entry
+    ]);
+}
+
 if ($action === 'merge_identity') {
     if ($requestMethod !== 'POST') {
         send_json(['ok' => false, 'error' => 'Merge requests must use POST.'], 405);
@@ -420,8 +784,27 @@ if ($action === 'save') {
     $file = game_path($saveDirectory, $id);
     $incomingTurnIndex = turn_index($state);
     $isNewGame = !is_file($file);
+    $requestAuthKey = normalize_auth_key((string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''));
+    $registeredLogin = get_user_login_by_auth_key($userLoginFile, $requestAuthKey);
+    $requestSessionToken = trim((string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''));
+
+    if ($requestAuthKey === '' || $registeredLogin === null) {
+        send_json(['ok' => false, 'error' => 'Save rejected because this login token is not registered on the server.'], 403);
+    }
+
+    if (is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
+        send_json(['ok' => false, 'error' => 'Save rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
+    }
+
+    if (!session_token_matches($registeredLogin, $requestSessionToken)) {
+        send_json(['ok' => false, 'error' => 'Save rejected because this login session is not valid.'], 403);
+    }
 
     if ($isNewGame) {
+        if (!state_has_claimed_player_with_auth_key($state, $requestAuthKey)) {
+            send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in the new game.'], 403);
+        }
+
         cleanup_saved_games($saveDirectory);
     }
 
@@ -433,6 +816,16 @@ if ($action === 'save') {
         }
 
         $currentTurnIndex = turn_index($currentState);
+        $isExistingPlayerSave = state_has_claimed_player_with_auth_key($currentState, $requestAuthKey);
+        $isNewPlayerClaim = !$isExistingPlayerSave && state_is_valid_new_player_claim($currentState, $state, $requestAuthKey);
+
+        if (!$isExistingPlayerSave && !$isNewPlayerClaim) {
+            send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in this game.'], 403);
+        }
+
+        if (!state_preserves_existing_claimed_auth_keys($currentState, $state)) {
+            send_json(['ok' => false, 'error' => 'Save rejected because it changes an existing player login token.'], 403);
+        }
 
         if ($incomingTurnIndex < $currentTurnIndex) {
             send_json([
