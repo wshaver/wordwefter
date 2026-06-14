@@ -1425,6 +1425,27 @@ class WordWefterGameState {
 
       return tileMap;
     };
+    const needsInitialRackRepair = () => (
+      !this.gameOver &&
+      this.turnIndex === 0 &&
+      this.tilesDrawn === 0 &&
+      this.history.length === 0 &&
+      this.players.length > 0 &&
+      this.players.every((player) => (player.rack || []).length === 0) &&
+      !Array.isArray(source.boardTiles) &&
+      !Array.isArray(source.activePlacements) &&
+      !Array.isArray(source.discardedTiles) &&
+      !Array.isArray(source.marketplaceTiles)
+    );
+    const repairInitialEmptyRacks = () => {
+      const loadedPlayerIndex = this.currentPlayerIndex;
+
+      this.players.forEach((_, index) => {
+        this.currentPlayerIndex = index;
+        this.drawSevenTiles({ ensureRainbow: true });
+      });
+      this.currentPlayerIndex = loadedPlayerIndex;
+    };
 
     this.id = String(source.id || "").toUpperCase();
     this.startDate = String(source.startDate || "");
@@ -1496,6 +1517,11 @@ class WordWefterGameState {
     if (!this.gameOver && this.isPlayerConceded(this.player) && this.getActivePlayers().length > 0) {
       this.currentPlayerIndex = this.getNextActivePlayerIndex();
     }
+
+    if (needsInitialRackRepair()) {
+      repairInitialEmptyRacks();
+    }
+
     this.discardedTiles = (source.discardedTiles || []).map(hydrateTile);
     this.boardTiles = hydrateTileMap(source.boardTiles, false);
     this.pendingMarketplacePurchaseTileIds = new Set();
@@ -3885,7 +3911,8 @@ function getStoredPlayerAuth() {
       signedInAt: String(auth.signedInAt || ""),
       displayNameConfirmed: Boolean(auth.displayNameConfirmed),
       sessionToken: String(auth.sessionToken || ""),
-      accessToken: String(auth.accessToken || "")
+      accessToken: String(auth.accessToken || ""),
+      email: String(auth.email || "")
     };
   }
 
@@ -3914,6 +3941,56 @@ function getProviderLabel(provider) {
   };
 
   return labels[String(provider || "").toLowerCase()] || "Account";
+}
+
+function createIdentityTooltipLine(label, value) {
+  const line = document.createElement("span");
+  const labelElement = document.createElement("span");
+  const valueElement = document.createElement("span");
+
+  line.className = "identity-tooltip-line";
+  labelElement.className = "identity-tooltip-label";
+  labelElement.textContent = `${label}: `;
+  valueElement.textContent = value;
+  line.append(labelElement, valueElement);
+  return line;
+}
+
+function updateIdentityAccountTooltip(auth) {
+  const identityCurrent = document.querySelector(".identity-current");
+  const identityNameDisplay = document.querySelector("#identity-name-display");
+  const tooltip = document.querySelector("#identity-account-tooltip");
+  const provider = String(auth?.provider || "");
+  const providerLabel = getProviderLabel(provider);
+  const userId = String(auth?.userId || "");
+  const email = String(auth?.email || "");
+
+  if (!identityNameDisplay || !tooltip || !auth?.name) {
+    identityCurrent?.classList.remove("tooltip-open");
+    identityNameDisplay?.removeAttribute("aria-label");
+    tooltip?.replaceChildren();
+    tooltip?.setAttribute("hidden", "");
+    return;
+  }
+
+  const details = [
+    createIdentityTooltipLine("Signed in with", providerLabel),
+    createIdentityTooltipLine("Display name", auth.name)
+  ];
+
+  if (email) {
+    details.push(createIdentityTooltipLine("Email", email));
+  }
+
+  if (provider !== "name" && userId) {
+    details.push(createIdentityTooltipLine(`${providerLabel} ID`, userId));
+  } else if (provider === "name") {
+    details.push(createIdentityTooltipLine("Login", "Local name login"));
+  }
+
+  tooltip.replaceChildren(...details);
+  tooltip.removeAttribute("hidden");
+  identityNameDisplay.setAttribute("aria-label", `Account details for ${auth.name}`);
 }
 
 function isRealOAuthAuth(auth) {
@@ -3963,7 +4040,8 @@ function setStoredPlayerAuth(auth) {
     signedInAt: new Date().toISOString(),
     displayNameConfirmed: auth?.displayNameConfirmed !== false,
     ...(auth?.sessionToken ? { sessionToken: String(auth.sessionToken) } : {}),
-    ...(auth?.accessToken ? { accessToken: String(auth.accessToken) } : {})
+    ...(auth?.accessToken ? { accessToken: String(auth.accessToken) } : {}),
+    ...(auth?.email ? { email: String(auth.email) } : {})
   };
 
   setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
@@ -3987,6 +4065,7 @@ function normalizePendingOAuthDisplayAuth(auth) {
     userId,
     suggestedName: normalizePlayerName(auth.suggestedName || ""),
     accessToken: String(auth.accessToken || ""),
+    email: String(auth.email || ""),
     returnHash: String(auth.returnHash || "#gamelist")
   };
 }
@@ -4070,7 +4149,12 @@ async function lookupStoredOAuthUserLogin(provider, userId) {
     const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
     const username = normalizePlayerName(payload.user?.username || payload.user?.name || "");
 
-    return payload.found && username ? username : null;
+    return payload.found && username
+      ? {
+        username,
+        email: String(payload.user?.email || "")
+      }
+      : null;
   } catch {
     return null;
   }
@@ -4091,7 +4175,8 @@ async function saveStoredOAuthUserLogin(auth) {
         provider: auth.provider,
         userId: auth.userId,
         username: auth.name,
-        accessToken: auth.accessToken || ""
+        accessToken: auth.accessToken || "",
+        email: auth.email || ""
       })
     });
   } catch {
@@ -4188,7 +4273,8 @@ async function startOAuthLogin(provider) {
   }
 
   const userId = getLocalOAuthUserId(normalizedProvider);
-  const storedName = await lookupStoredOAuthUserLogin(normalizedProvider, userId);
+  const storedLogin = await lookupStoredOAuthUserLogin(normalizedProvider, userId);
+  const storedName = storedLogin?.username || "";
 
   if (storedName) {
     const auth = setStoredPlayerAuth({
@@ -4196,6 +4282,7 @@ async function startOAuthLogin(provider) {
       userId,
       name: storedName,
       accessToken: "",
+      email: storedLogin?.email || "",
       displayNameConfirmed: true
     });
     await finishIdentitySignIn({ mergeAuth: auth });
@@ -4215,7 +4302,7 @@ async function startOAuthLogin(provider) {
 async function fetchOAuthProfile(provider, accessToken) {
   const endpoint = provider === "google"
     ? "https://www.googleapis.com/oauth2/v3/userinfo"
-    : `https://graph.facebook.com/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`;
+    : `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`;
   const response = await fetch(endpoint, provider === "google"
     ? { headers: { Authorization: `Bearer ${accessToken}` } }
     : {});
@@ -4228,7 +4315,8 @@ async function fetchOAuthProfile(provider, accessToken) {
 
   return {
     userId: String(profile.sub || profile.id || ""),
-    name: normalizePlayerName(profile.name)
+    name: normalizePlayerName(profile.name),
+    email: String(profile.email || "")
   };
 }
 
@@ -4253,8 +4341,9 @@ async function completeOAuthRedirectIfPresent() {
 
   const provider = savedState.provider;
   const userId = profile?.userId || state;
+  const storedLogin = await lookupStoredOAuthUserLogin(provider, userId);
   const confirmedName = getConfirmedDisplayNameForOAuth(provider, userId) ||
-    await lookupStoredOAuthUserLogin(provider, userId);
+    storedLogin?.username || "";
   window.history.replaceState(null, "", savedState.returnHash || "#gamelist");
 
   if (confirmedName) {
@@ -4263,6 +4352,7 @@ async function completeOAuthRedirectIfPresent() {
       userId,
       name: confirmedName,
       accessToken,
+      email: profile?.email || storedLogin?.email || "",
       displayNameConfirmed: true
     });
     await finishIdentitySignIn({ mergeAuth: auth });
@@ -4274,6 +4364,7 @@ async function completeOAuthRedirectIfPresent() {
     userId,
     suggestedName: "",
     accessToken,
+    email: profile?.email || "",
     returnHash: savedState.returnHash || "#gamelist"
   }));
   return true;
@@ -4539,6 +4630,8 @@ function updateIdentityUI() {
       : "";
   }
 
+  updateIdentityAccountTooltip(auth);
+
   if (identityNameInput && document.activeElement !== identityNameInput) {
     identityNameInput.value = playerName;
   }
@@ -4621,6 +4714,7 @@ async function saveOAuthDisplayName() {
     userId: pendingAuth.userId,
     name: displayName,
     accessToken: pendingAuth.accessToken,
+    email: pendingAuth.email || "",
     displayNameConfirmed: true
   });
   const returnHash = pendingAuth.returnHash || "#gamelist";
@@ -6167,6 +6261,43 @@ function closeIdentityMenuOnOutsideClick(event) {
   closeIdentityMenu();
 }
 
+function closeIdentityTooltip() {
+  document.querySelector(".identity-current")?.classList.remove("tooltip-open");
+}
+
+function toggleIdentityTooltip(event) {
+  const identityCurrent = document.querySelector(".identity-current");
+  const tooltip = document.querySelector("#identity-account-tooltip");
+
+  if (!identityCurrent || !tooltip || tooltip.hasAttribute("hidden")) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  identityCurrent.classList.toggle("tooltip-open");
+}
+
+function closeIdentityTooltipOnOutsideClick(event) {
+  const identityCurrent = document.querySelector(".identity-current");
+
+  if (!identityCurrent?.classList.contains("tooltip-open")) {
+    return;
+  }
+
+  if (identityCurrent.contains(event.target)) {
+    return;
+  }
+
+  closeIdentityTooltip();
+}
+
+function closeIdentityTooltipOnEscape(event) {
+  if (event.key === "Escape") {
+    closeIdentityTooltip();
+  }
+}
+
 function destroySortables() {
   if (rackSortable) {
     rackSortable.destroy();
@@ -6364,6 +6495,7 @@ function bindGameControls() {
   const googleLoginButton = document.querySelector("#google-login-button");
   const facebookLoginButton = document.querySelector("#facebook-login-button");
   const identityNameInput = document.querySelector("#identity-name-input");
+  const identityNameDisplay = document.querySelector("#identity-name-display");
   const oauthDisplayNameInput = document.querySelector("#oauth-display-name-input");
   const saveOAuthDisplayNameButton = document.querySelector("#save-oauth-display-name-button");
   const identityMenuButton = document.querySelector("#identity-menu-button");
@@ -6414,6 +6546,15 @@ function bindGameControls() {
     });
   }
 
+  if (identityNameDisplay) {
+    identityNameDisplay.addEventListener("click", toggleIdentityTooltip);
+    identityNameDisplay.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        toggleIdentityTooltip(event);
+      }
+    });
+  }
+
   if (saveOAuthDisplayNameButton) {
     saveOAuthDisplayNameButton.addEventListener("click", saveOAuthDisplayName);
   }
@@ -6436,6 +6577,8 @@ function bindGameControls() {
   }
 
   document.addEventListener("click", closeIdentityMenuOnOutsideClick);
+  document.addEventListener("click", closeIdentityTooltipOnOutsideClick);
+  document.addEventListener("keydown", closeIdentityTooltipOnEscape);
 
   if (showNewGameButton) {
     showNewGameButton.addEventListener("click", () => {

@@ -386,6 +386,7 @@ function public_user_login_entry(array $entry, string $sessionToken = ''): array
         'provider' => (string) ($entry['provider'] ?? ''),
         'userId' => (string) ($entry['userId'] ?? ''),
         'username' => (string) ($entry['username'] ?? ''),
+        'email' => (string) ($entry['email'] ?? ''),
         'updatedAt' => (string) ($entry['updatedAt'] ?? '')
     ];
 
@@ -396,7 +397,7 @@ function public_user_login_entry(array $entry, string $sessionToken = ''): array
     return $publicEntry;
 }
 
-function save_user_login(string $userLoginFile, string $provider, string $userId, string $playerName, string $accessToken): ?array
+function save_user_login(string $userLoginFile, string $provider, string $userId, string $playerName, string $accessToken, string $email = ''): ?array
 {
     $normalizedProvider = normalize_provider($provider);
     $normalizedUserId = normalize_provider_user_id($userId);
@@ -413,6 +414,7 @@ function save_user_login(string $userLoginFile, string $provider, string $userId
         'provider' => $normalizedProvider,
         'userId' => $normalizedUserId,
         'username' => $normalizedPlayerName,
+        'email' => trim($email),
         'sessionTokenHash' => hash_session_token($sessionToken),
         'sessionIssuedAt' => gmdate('c'),
         'updatedAt' => gmdate('c')
@@ -810,7 +812,8 @@ if ($action === 'save_user_login') {
         (string) ($payload['provider'] ?? ''),
         (string) ($payload['userId'] ?? ''),
         (string) ($payload['username'] ?? ''),
-        (string) ($payload['accessToken'] ?? '')
+        (string) ($payload['accessToken'] ?? ''),
+        (string) ($payload['email'] ?? '')
     );
 
     if ($entry === null) {

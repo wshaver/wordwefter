@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WordWefter</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="./favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
@@ -64,40 +66,105 @@
     }
 
     .brand {
+      --brand-tile-size: clamp(2.65rem, 8.7vw, 5.85rem);
+      --brand-overlap-y: calc(var(--brand-tile-size) * -0.28);
+      --brand-bottom-offset: calc(var(--brand-tile-size) * 0.16);
       position: relative;
-      display: block;
+      display: grid;
       justify-self: start;
+      width: max-content;
+      max-width: 100%;
       margin: 0;
-      font-size: clamp(3rem, 13vw, 8rem);
-      line-height: 0.92;
-      letter-spacing: 0;
-      text-transform: none;
-      text-wrap: balance;
+      padding-right: var(--brand-bottom-offset);
+      padding-bottom: calc(var(--brand-tile-size) * 0.12);
       color: var(--ink);
-      text-shadow:
-        0.04em 0.04em 0 var(--warm),
-        -0.03em 0.07em 0 rgba(15, 139, 141, 0.7);
+      font: inherit;
+      letter-spacing: 0;
     }
 
-    .brand::before,
-    .brand::after {
-      content: "";
+    .brand-word {
+      display: grid;
+      grid-template-columns: repeat(4, var(--brand-tile-size));
+      gap: clamp(0.14rem, 0.55vw, 0.34rem);
+      justify-content: start;
+      width: max-content;
+    }
+
+    .brand-word-bottom {
+      position: relative;
+      grid-template-columns: repeat(6, var(--brand-tile-size));
+      left: var(--brand-bottom-offset);
+      top: calc(var(--brand-bottom-offset) * -1);
+      margin-top: var(--brand-overlap-y);
+      opacity: 0.9;
+    }
+
+    .brand-spacer {
+      width: var(--brand-tile-size);
+      height: var(--brand-tile-size);
+    }
+
+    .brand-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: var(--brand-tile-size);
+      aspect-ratio: 1;
+      border: max(2px, calc(var(--brand-tile-size) * 0.035)) solid var(--tile-edge);
+      border-radius: 9px;
+      background:
+        linear-gradient(145deg, #ffe8ad, var(--tile));
+      box-shadow:
+        inset 0 0 0 max(1px, calc(var(--brand-tile-size) * 0.018)) rgba(255, 255, 255, 0.42),
+        inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08);
+      color: var(--ink);
+      font: 900 calc(var(--brand-tile-size) * 0.58)/1 Georgia, "Times New Roman", serif;
+    }
+
+    .brand-word-bottom .brand-tile {
+      outline: max(2px, calc(var(--brand-tile-size) * 0.035)) solid var(--accent);
+      outline-offset: calc(var(--brand-tile-size) * -0.052);
+      box-shadow:
+        inset 0 0 0 max(1px, calc(var(--brand-tile-size) * 0.018)) rgba(255, 255, 255, 0.42),
+        inset 0 -0.25rem 0 rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(15, 139, 141, 0.24);
+    }
+
+    .brand-tile-rainbow {
+      background: linear-gradient(
+        120deg,
+        #ff6b6b,
+        #f2b134,
+        #7fc96f,
+        #42b8c7,
+        #7b61ff,
+        #d94f70,
+        #ff6b6b
+      );
+      background-clip: padding-box;
+      background-origin: border-box;
+      background-repeat: no-repeat;
+      background-size: 400% 400%;
+      animation: rainbow-tile-flow 7200ms ease-in-out infinite;
+      animation-delay: var(--rainbow-animation-delay, 0ms);
+      color: #17202a;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+
+    .brand-tile-rainbow .brand-tile-points {
+      color: #17202a;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .brand-tile-letter {
+      transform: translateY(-0.03em);
+    }
+
+    .brand-tile-points {
       position: absolute;
-      left: 50%;
-      width: 64%;
-      height: 0.12em;
-      border-radius: 999px;
-      transform: translateX(-50%);
-      background: linear-gradient(90deg, var(--accent), var(--rose), var(--warm));
-    }
-
-    .brand::before {
-      top: -0.2em;
-    }
-
-    .brand::after {
-      bottom: -0.24em;
-      width: 42%;
+      right: calc(var(--brand-tile-size) * 0.11);
+      bottom: calc(var(--brand-tile-size) * 0.08);
+      font: 900 calc(var(--brand-tile-size) * 0.19)/1 system-ui, sans-serif;
     }
 
     .game-controls {
@@ -130,6 +197,7 @@
     }
 
     .identity-current {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
@@ -145,13 +213,79 @@
       color: var(--accent);
       font-weight: 800;
       overflow-wrap: anywhere;
+      cursor: help;
+    }
+
+    .identity-name:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 4px;
     }
 
     .identity-provider {
+      display: none;
       color: rgba(23, 32, 42, 0.58);
       font: 800 0.68rem/1 system-ui, sans-serif;
       letter-spacing: 0.06em;
       text-transform: uppercase;
+    }
+
+    .identity-account-tooltip {
+      position: absolute;
+      z-index: 30;
+      top: calc(100% + 0.45rem);
+      right: 0;
+      display: grid;
+      gap: 0.2rem;
+      width: max-content;
+      max-width: min(18rem, calc(100vw - 1rem));
+      padding: 0.55rem 0.65rem;
+      border: 2px solid rgba(23, 32, 42, 0.8);
+      border-radius: 6px;
+      background: rgba(255, 252, 244, 0.98);
+      color: var(--ink);
+      box-shadow: 0.14rem 0.14rem 0 var(--warm);
+      text-align: left;
+      font: 700 0.78rem/1.25 system-ui, sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-0.2rem);
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    .identity-account-tooltip[hidden] {
+      display: none;
+    }
+
+    .identity-account-tooltip::before {
+      content: "";
+      position: absolute;
+      top: -0.45rem;
+      right: 1rem;
+      width: 0.7rem;
+      height: 0.7rem;
+      border-top: 2px solid rgba(23, 32, 42, 0.8);
+      border-left: 2px solid rgba(23, 32, 42, 0.8);
+      background: rgba(255, 252, 244, 0.98);
+      transform: rotate(45deg);
+    }
+
+    .identity-current.tooltip-open .identity-account-tooltip,
+    .identity-name:hover ~ .identity-account-tooltip,
+    .identity-name:focus ~ .identity-account-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .identity-tooltip-line {
+      overflow-wrap: anywhere;
+    }
+
+    .identity-tooltip-label {
+      color: rgba(23, 32, 42, 0.58);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .name-login-control {
@@ -221,7 +355,7 @@
     .menu-notification-count {
       position: absolute;
       top: -0.35rem;
-      right: -0.35rem;
+      left: -0.35rem;
       display: none;
       min-width: 1.3rem;
       height: 1.3rem;
@@ -2142,7 +2276,7 @@
 
     html.has-stored-player body .brand,
     body.has-player .brand {
-      font-size: 2.2rem;
+      --brand-tile-size: 3rem;
       margin-bottom: 0;
     }
 
@@ -2655,11 +2789,67 @@
       font: 800 0.9rem/1 system-ui, sans-serif;
     }
 
-    @media (max-width: 520px) {
+    @media (max-width: 640px) {
+      :root {
+        --play-width: min(72vh, calc(100vw - 0.5rem), 560px);
+      }
+
       main {
         width: 100%;
-        padding-inline: 0.5rem;
+        padding-inline: 0.1875rem;
       }
+
+      html.has-stored-player body .masthead,
+      body.has-player .masthead {
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 0.45rem;
+      }
+
+      html.has-stored-player body .brand,
+      body.has-player .brand {
+        justify-self: start;
+        --brand-tile-size: clamp(2.25rem, 8.8vw, 2.65rem);
+      }
+
+      html.has-stored-player body .game-controls,
+      body.has-player .game-controls {
+        justify-self: end;
+        gap: 0.35rem;
+      }
+
+      html.has-stored-player body .identity-current,
+      body.has-player .identity-current {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+          "icon name"
+          "icon provider";
+        align-items: center;
+        gap: 0 0.35rem;
+        text-align: left;
+      }
+
+      html.has-stored-player body .identity-current .material-symbols-outlined,
+      body.has-player .identity-current .material-symbols-outlined {
+        grid-area: icon;
+      }
+
+      html.has-stored-player body .identity-name,
+      body.has-player .identity-name {
+        grid-area: name;
+        min-width: 0;
+        line-height: 1.05;
+      }
+
+      html.has-stored-player body .identity-provider,
+      body.has-player .identity-provider {
+        grid-area: provider;
+        min-width: 0;
+        line-height: 1.05;
+      }
+    }
+
+    @media (max-width: 520px) {
 
       .masthead {
         grid-template-columns: 1fr;
@@ -2672,23 +2862,25 @@
       }
 
       .brand {
-        font-size: clamp(2.7rem, 17vw, 4.6rem);
+        --brand-tile-size: clamp(2.15rem, 13vw, 3.2rem);
       }
 
       html.has-stored-player body .masthead,
       body.has-player .masthead {
         grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 0.45rem;
       }
 
       html.has-stored-player body .brand,
       body.has-player .brand {
         justify-self: start;
-        font-size: 2.2rem;
+        --brand-tile-size: clamp(2.25rem, 8.8vw, 2.65rem);
       }
 
       html.has-stored-player body .game-controls,
       body.has-player .game-controls {
         justify-self: end;
+        gap: 0.35rem;
       }
 
       body.screen-setup.has-player .identity-bar {
@@ -2703,6 +2895,18 @@
         min-height: 3.8rem;
       }
 
+    }
+
+    @media (max-width: 400px) {
+      html.has-stored-player body .brand,
+      body.has-player .brand {
+        --brand-tile-size: clamp(2.05rem, 8.8vw, 2.25rem);
+      }
+
+      html.has-stored-player body .masthead,
+      body.has-player .masthead {
+        column-gap: 0.3rem;
+      }
     }
   </style>
   <script>
@@ -2742,7 +2946,22 @@
 <body class="screen-welcome">
   <main aria-label="WordWefter home">
     <header class="masthead">
-      <h1 class="brand">WordWefter</h1>
+      <h1 class="brand" aria-label="WordWefter">
+        <span class="brand-word brand-word-top" aria-hidden="true">
+          <span class="brand-tile brand-tile-rainbow"><span class="brand-tile-letter">W</span><span class="brand-tile-points">5</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">O</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">D</span><span class="brand-tile-points">3</span></span>
+        </span>
+        <span class="brand-word brand-word-bottom" aria-hidden="true">
+          <span class="brand-spacer"></span>
+          <span class="brand-tile"><span class="brand-tile-letter">E</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">F</span><span class="brand-tile-points">5</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">T</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">E</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">1</span></span>
+        </span>
+      </h1>
       <div class="game-controls" aria-label="Game controls">
         <div class="identity-panel" id="identity-panel" aria-label="Player identity">
           <label class="sr-only" for="identity-name-input">Your name</label>
@@ -2774,8 +2993,9 @@
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
           <span class="identity-current">
             <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
-            <span class="identity-name" id="identity-name-display"></span>
+            <span class="identity-name" id="identity-name-display" role="button" tabindex="0" aria-describedby="identity-account-tooltip"></span>
             <span class="identity-provider" id="identity-provider-display"></span>
+            <span class="identity-account-tooltip" id="identity-account-tooltip" role="tooltip" hidden></span>
           </span>
           <button class="game-button secondary menu-button" type="button" id="identity-menu-button" aria-label="Menu" aria-expanded="false">
             <span class="material-symbols-outlined" aria-hidden="true">menu</span>
@@ -3111,6 +3331,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=menu-list-only-refresh"></script>
+  <script type="module" src="./game.js?v=identity-account-tooltip"></script>
 </body>
 </html>
