@@ -45,8 +45,13 @@ const gameLengthSettings = {
 
 const wildcardLetter = "?";
 const playableLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const vowelLetters = new Set(["A", "E", "I", "O", "U"]);
 const wildcardPoolFrequency = 14;
 const rackRainbowProbability = 1 / 14;
+
+function isVowelLetter(letter) {
+  return vowelLetters.has(String(letter || "").toUpperCase());
+}
 
 function normalizeGameLength(gameLength) {
   const normalizedLength = String(gameLength || "").trim().toLowerCase();
@@ -568,7 +573,13 @@ class WordWefterGameState {
         drawnTiles.length === tileCount - 1 &&
         !drawnTiles.some((drawnTile) => !drawnTile.wildcard) &&
         this.hasAvailableMarketplaceLetters();
-      const tile = this.drawTile({ excludeWildcards: shouldForceNonWildcard });
+      const tile = this.drawTile({
+        excludeWildcards: shouldForceNonWildcard,
+        rackBalanceTiles: [
+          ...this.currentRack,
+          ...drawnTiles
+        ]
+      });
 
       if (tile) {
         drawnTiles.push(this.prepareRackDrawnTile(tile, {
@@ -635,6 +646,68 @@ class WordWefterGameState {
 
   hasAvailableMarketplaceLetters() {
     return playableLetters.some((letter) => Math.max(0, Number(this.lettersAvailable[letter] || 0)) > 0);
+  }
+
+  hasAvailableVowels(weightedLetters) {
+    return weightedLetters.some(([letter]) => isVowelLetter(letter));
+  }
+
+  hasAvailableNonVowels(weightedLetters) {
+    return weightedLetters.some(([letter]) => (
+      playableLetters.includes(letter) &&
+      !isVowelLetter(letter)
+    ));
+  }
+
+  getRackVowelBalance(tiles = []) {
+    return tiles.reduce((balance, tile) => {
+      const letter = String(tile?.sourceLetter || tile?.letter || "").toUpperCase();
+
+      if (!playableLetters.includes(letter)) {
+        return balance;
+      }
+
+      if (isVowelLetter(letter)) {
+        balance.vowels += 1;
+      } else {
+        balance.nonVowels += 1;
+      }
+
+      return balance;
+    }, {
+      vowels: 0,
+      nonVowels: 0
+    });
+  }
+
+  getRackBalanceDrawMultiplier(letter, rackBalance, weightedLetters) {
+    if (!rackBalance || letter === wildcardLetter || !playableLetters.includes(letter)) {
+      return 1;
+    }
+
+    const vowelCount = Math.max(0, Number(rackBalance.vowels || 0));
+    const nonVowelCount = Math.max(0, Number(rackBalance.nonVowels || 0));
+
+    if (vowelCount === nonVowelCount) {
+      return 1;
+    }
+
+    const shouldFavorVowel = nonVowelCount > vowelCount;
+    const favoredCategoryAvailable = shouldFavorVowel
+      ? this.hasAvailableVowels(weightedLetters)
+      : this.hasAvailableNonVowels(weightedLetters);
+
+    if (!favoredCategoryAvailable) {
+      return 1;
+    }
+
+    const isFavoredLetter = shouldFavorVowel
+      ? isVowelLetter(letter)
+      : !isVowelLetter(letter);
+
+    return isFavoredLetter
+      ? 1 + (Math.abs(nonVowelCount - vowelCount) * 0.1)
+      : 1;
   }
 
   prepareRackDrawnTile(tile, options = {}) {
@@ -945,16 +1018,23 @@ class WordWefterGameState {
         count > 0 &&
         (!options.excludeWildcards || letter !== wildcardLetter)
       ));
-    const totalWeight = weightedLetters.reduce((total, [, count]) => total + count, 0);
+    const rackBalance = Array.isArray(options.rackBalanceTiles)
+      ? this.getRackVowelBalance(options.rackBalanceTiles)
+      : null;
+    const weightedDrawEntries = weightedLetters.map(([letter, count]) => [
+      letter,
+      Math.max(0, Number(count || 0)) * this.getRackBalanceDrawMultiplier(letter, rackBalance, weightedLetters)
+    ]);
+    const totalWeight = weightedDrawEntries.reduce((total, [, weight]) => total + weight, 0);
 
     if (totalWeight === 0) {
       return null;
     }
 
-    let drawIndex = Math.floor(Math.random() * totalWeight);
+    let drawIndex = Math.random() * totalWeight;
 
-    for (const [letter, count] of weightedLetters) {
-      if (drawIndex < count) {
+    for (const [letter, weight] of weightedDrawEntries) {
+      if (drawIndex < weight) {
         this.lettersAvailable[letter] -= 1;
         this.tilesDrawn += 1;
 
@@ -972,7 +1052,7 @@ class WordWefterGameState {
         };
       }
 
-      drawIndex -= count;
+      drawIndex -= weight;
     }
 
     return null;
@@ -2636,6 +2716,101 @@ function createPoolSnapshotForTesting(game = gameState) {
   };
 }
 
+function createRackBalanceTestPool(overrides = {}) {
+  return [wildcardLetter, ...playableLetters].reduce((pool, letter) => {
+    pool[letter] = Math.max(0, Number(overrides[letter] || 0));
+    return pool;
+  }, {});
+}
+
+function createRackBalanceTestTiles(letters) {
+  return String(letters || "").split("").map((letter, index) => ({
+    id: `balance-test-${index}`,
+    letter: letter.toUpperCase(),
+    points: letter_points[String(letter || "").toUpperCase()] || 0
+  }));
+}
+
+function withTemporaryRandom(randomValue, callback) {
+  const originalRandom = Math.random;
+
+  Math.random = () => randomValue;
+
+  try {
+    return callback();
+  } finally {
+    Math.random = originalRandom;
+  }
+}
+
+function runRackBalanceDrawCase({ pool, rack, randomValue }) {
+  const testPool = createRackBalanceTestPool(pool);
+  const testGame = new WordWefterGameState({
+    playerNames: ["Test Player", "Test Opponent"],
+    startingLettersAvailable: testPool,
+    lettersAvailable: testPool
+  });
+
+  return withTemporaryRandom(randomValue, () => testGame.drawTile({
+    rackBalanceTiles: createRackBalanceTestTiles(rack)
+  })?.letter || null);
+}
+
+function runRackBalanceDrawCheck() {
+  const balancedTestPool = createRackBalanceTestPool({ A: 1, B: 1 });
+  const balancedTestGame = new WordWefterGameState({
+    playerNames: ["Test Player", "Test Opponent"],
+    startingLettersAvailable: balancedTestPool,
+    lettersAvailable: balancedTestPool
+  });
+  const balancedRack = createRackBalanceTestTiles("AAABBB");
+  const balancedRackBalance = balancedTestGame.getRackVowelBalance(balancedRack);
+  const balancedWeightedLetters = Object.entries(balancedTestGame.lettersAvailable)
+    .filter(([, count]) => count > 0);
+  const balancedMultipliers = balancedWeightedLetters.reduce((multipliers, [letter]) => {
+    multipliers[letter] = balancedTestGame.getRackBalanceDrawMultiplier(
+      letter,
+      balancedRackBalance,
+      balancedWeightedLetters
+    );
+    return multipliers;
+  }, {});
+  const cases = {
+    extraNonVowelFavorsVowel: runRackBalanceDrawCase({
+      pool: { A: 1, B: 1 },
+      rack: "WRA",
+      randomValue: 0.52
+    }),
+    extraVowelsFavorNonVowel: runRackBalanceDrawCase({
+      pool: { A: 1, B: 1 },
+      rack: "AAA",
+      randomValue: 0.5
+    }),
+    balancedRackMultipliers: balancedMultipliers,
+    unavailableVowelsFallbackToRemaining: runRackBalanceDrawCase({
+      pool: { B: 1 },
+      rack: "BBB",
+      randomValue: 0.99
+    }),
+    unavailableNonVowelsFallbackToRemaining: runRackBalanceDrawCase({
+      pool: { A: 1 },
+      rack: "AAA",
+      randomValue: 0.99
+    })
+  };
+
+  return {
+    cases,
+    passed:
+      cases.extraNonVowelFavorsVowel === "A" &&
+      cases.extraVowelsFavorNonVowel === "B" &&
+      cases.balancedRackMultipliers.A === 1 &&
+      cases.balancedRackMultipliers.B === 1 &&
+      cases.unavailableVowelsFallbackToRemaining === "B" &&
+      cases.unavailableNonVowelsFallbackToRemaining === "A"
+  };
+}
+
 function runRedrawPoolAccountingCheck(setup = {}) {
   const testGame = new WordWefterGameState({
     playerNames: ["Test Player", "Test Opponent"],
@@ -2783,6 +2958,7 @@ function exposeWordWefterTestingGlobals() {
     createGameState: (setup = {}) => new WordWefterGameState(setup),
     getGameState: () => gameState,
     getPoolSnapshot: (game = gameState) => createPoolSnapshotForTesting(game),
+    runRackBalanceDrawCheck,
     runRedrawPoolAccountingCheck,
     runWildcardPivotResolutionCheck,
     isWord: (word) => gameState.isRealWord(word)
@@ -2805,6 +2981,9 @@ function exposeWordWefterTestingGlobals() {
   ].join(",");
   document.documentElement.dataset.wordWefterRedrawPoolAccountingCheck = JSON.stringify(
     runRedrawPoolAccountingCheck()
+  );
+  document.documentElement.dataset.wordWefterRackBalanceDrawCheck = JSON.stringify(
+    runRackBalanceDrawCheck()
   );
   document.documentElement.dataset.wordWefterWildcardPivotResolutionCheck = JSON.stringify(
     runWildcardPivotResolutionCheck()
