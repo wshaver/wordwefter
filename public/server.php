@@ -9,6 +9,7 @@ header('Pragma: no-cache');
 $saveDirectory = realpath(__DIR__ . '/saved-games');
 $userLoginFile = __DIR__ . '/../server-data/user-logins.json';
 $oauthConfigFile = __DIR__ . '/../server-data/oauth-config.json';
+$leaderboardFile = __DIR__ . '/../data/leaderboard.json';
 
 if ($saveDirectory === false) {
     $saveDirectory = __DIR__ . '/saved-games';
@@ -132,7 +133,7 @@ function game_summary_timestamp(array $summary): int
     return $timestamp === false ? (int) ($summary['turnIndex'] ?? 0) : $timestamp;
 }
 
-function cleanup_saved_games(string $saveDirectory): int
+function cleanup_saved_games(string $saveDirectory, string $leaderboardFile): int
 {
     $now = time();
     $completedMaxAge = 31 * 24 * 60 * 60;
@@ -149,7 +150,11 @@ function cleanup_saved_games(string $saveDirectory): int
         $age = $now - state_timestamp($state, $file);
         $maxAge = !empty($state['gameOver']) ? $completedMaxAge : $incompleteMaxAge;
 
-        if ($age > $maxAge && is_file($file) && unlink($file)) {
+        if ($age <= $maxAge || !is_file($file)) {
+            continue;
+        }
+
+        if (archive_leaderboard_game($leaderboardFile, $state, $file) && unlink($file)) {
             $deletedCount += 1;
         }
     }
@@ -646,6 +651,220 @@ function game_summary(array $state, string $file): array
     ];
 }
 
+function empty_archived_leaderboard_stats(): array
+{
+    return [
+        'totalGamesPlayed' => 0,
+        'archivedGameIds' => [],
+        'players' => []
+    ];
+}
+
+function read_archived_leaderboard_stats(string $leaderboardFile): array
+{
+    if (!is_file($leaderboardFile)) {
+        return empty_archived_leaderboard_stats();
+    }
+
+    $payload = json_decode((string) file_get_contents($leaderboardFile), true);
+
+    if (!is_array($payload) || !isset($payload['archivedStats']) || !is_array($payload['archivedStats'])) {
+        return empty_archived_leaderboard_stats();
+    }
+
+    $archivedStats = $payload['archivedStats'];
+    $players = [];
+
+    foreach (($archivedStats['players'] ?? []) as $player) {
+        if (!is_array($player)) {
+            continue;
+        }
+
+        $name = trim((string) ($player['name'] ?? ''));
+        $key = normalize_name_key($name);
+
+        if ($name === '' || $key === '') {
+            continue;
+        }
+
+        $players[$key] = [
+            'name' => $name,
+            'totalScore' => (int) ($player['totalScore'] ?? 0),
+            'games' => (int) ($player['games'] ?? 0)
+        ];
+    }
+
+    return [
+        'totalGamesPlayed' => max(0, (int) ($archivedStats['totalGamesPlayed'] ?? 0)),
+        'archivedGameIds' => array_values(array_unique(array_map(
+            static fn($id): string => strtoupper(trim((string) $id)),
+            is_array($archivedStats['archivedGameIds'] ?? null) ? $archivedStats['archivedGameIds'] : []
+        ))),
+        'players' => $players
+    ];
+}
+
+function add_game_to_archived_leaderboard_stats(array $archivedStats, array $state, string $file): array
+{
+    $gameId = strtoupper((string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)));
+
+    if ($gameId !== '' && in_array($gameId, $archivedStats['archivedGameIds'], true)) {
+        return $archivedStats;
+    }
+
+    $archivedStats['totalGamesPlayed'] += 1;
+
+    if ($gameId !== '') {
+        $archivedStats['archivedGameIds'][] = $gameId;
+    }
+
+    foreach (player_summaries($state) as $player) {
+        $name = trim((string) ($player['name'] ?? ''));
+        $key = normalize_name_key($name);
+
+        if ($name === '' || $key === '' || empty($player['claimed']) || !empty($player['open'])) {
+            continue;
+        }
+
+        if (!isset($archivedStats['players'][$key])) {
+            $archivedStats['players'][$key] = [
+                'name' => $name,
+                'totalScore' => 0,
+                'games' => 0
+            ];
+        }
+
+        $archivedStats['players'][$key]['name'] = $name;
+        $archivedStats['players'][$key]['totalScore'] += (int) ($player['score'] ?? 0);
+        $archivedStats['players'][$key]['games'] += 1;
+    }
+
+    return $archivedStats;
+}
+
+function archive_leaderboard_game(string $leaderboardFile, array $state, string $file): bool
+{
+    $archivedStats = add_game_to_archived_leaderboard_stats(
+        read_archived_leaderboard_stats($leaderboardFile),
+        $state,
+        $file
+    );
+
+    return write_leaderboard($leaderboardFile, build_leaderboard(dirname($file), $leaderboardFile, $archivedStats));
+}
+
+function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?array $archivedStats = null): array
+{
+    $players = [];
+    $archivedStats = $archivedStats ?? read_archived_leaderboard_stats($leaderboardFile);
+    $archivedGameIds = array_fill_keys($archivedStats['archivedGameIds'], true);
+    $totalGamesPlayed = (int) ($archivedStats['totalGamesPlayed'] ?? 0);
+    $totalActiveGames = 0;
+
+    foreach (($archivedStats['players'] ?? []) as $key => $player) {
+        if (!is_array($player)) {
+            continue;
+        }
+
+        $name = trim((string) ($player['name'] ?? ''));
+        $playerKey = normalize_name_key($name ?: (string) $key);
+
+        if ($playerKey === '') {
+            continue;
+        }
+
+        $players[$playerKey] = [
+            'name' => $name !== '' ? $name : (string) $key,
+            'totalScore' => (int) ($player['totalScore'] ?? 0),
+            'games' => (int) ($player['games'] ?? 0),
+            'activeGames' => 0
+        ];
+    }
+
+    foreach (glob($saveDirectory . DIRECTORY_SEPARATOR . '*.json') ?: [] as $file) {
+        $state = json_decode((string) file_get_contents($file), true);
+
+        if (!is_array($state)) {
+            continue;
+        }
+
+        $gameId = strtoupper((string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)));
+
+        if ($gameId !== '' && isset($archivedGameIds[$gameId])) {
+            continue;
+        }
+
+        $totalGamesPlayed += 1;
+        $isActiveGame = empty($state['gameOver']);
+
+        if ($isActiveGame) {
+            $totalActiveGames += 1;
+        }
+
+        foreach (player_summaries($state) as $player) {
+            $name = trim((string) ($player['name'] ?? ''));
+            $key = normalize_name_key($name);
+
+            if ($name === '' || $key === '' || empty($player['claimed']) || !empty($player['open'])) {
+                continue;
+            }
+
+            if (!isset($players[$key])) {
+                $players[$key] = [
+                    'name' => $name,
+                    'totalScore' => 0,
+                    'games' => 0,
+                    'activeGames' => 0
+                ];
+            }
+
+            $players[$key]['name'] = $name;
+            $players[$key]['totalScore'] += (int) ($player['score'] ?? 0);
+            $players[$key]['games'] += 1;
+
+            if ($isActiveGame) {
+                $players[$key]['activeGames'] += 1;
+            }
+        }
+    }
+
+    $playerRows = array_values($players);
+
+    usort(
+        $playerRows,
+        static fn(array $first, array $second): int =>
+            ($second['totalScore'] <=> $first['totalScore']) ?:
+            ($second['games'] <=> $first['games']) ?:
+            strcasecmp((string) $first['name'], (string) $second['name'])
+    );
+
+    return [
+        'version' => 2,
+        'generatedAt' => gmdate('c'),
+        'totalGamesPlayed' => $totalGamesPlayed,
+        'totalActiveGames' => $totalActiveGames,
+        'players' => $playerRows,
+        'archivedStats' => [
+            'totalGamesPlayed' => (int) ($archivedStats['totalGamesPlayed'] ?? 0),
+            'archivedGameIds' => array_values($archivedStats['archivedGameIds'] ?? []),
+            'players' => array_values($archivedStats['players'] ?? [])
+        ]
+    ];
+}
+
+function write_leaderboard(string $leaderboardFile, array $leaderboard): bool
+{
+    $leaderboardDirectory = dirname($leaderboardFile);
+
+    if (!is_dir($leaderboardDirectory)) {
+        mkdir($leaderboardDirectory, 0775, true);
+    }
+
+    $encodedLeaderboard = json_encode($leaderboard, JSON_PRETTY_PRINT);
+
+    return $encodedLeaderboard !== false && file_put_contents($leaderboardFile, $encodedLeaderboard) !== false;
+}
+
 function waiting_games_for_player(string $saveDirectory, string $playerName, string $authKey, int $limit = 5): array
 {
     $playerKey = normalize_name_key($playerName);
@@ -778,6 +997,16 @@ if ($action === 'list') {
     }
 
     send_json(['ok' => true, 'games' => $games]);
+}
+
+if ($action === 'leaderboard') {
+    $leaderboard = build_leaderboard($saveDirectory, $leaderboardFile);
+
+    if (!write_leaderboard($leaderboardFile, $leaderboard)) {
+        send_json(['ok' => false, 'error' => 'Could not write leaderboard stats.'], 500);
+    }
+
+    send_json(['ok' => true, 'leaderboard' => $leaderboard]);
 }
 
 if ($action === 'oauth_config') {
@@ -957,7 +1186,7 @@ if ($action === 'save') {
             send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in the new game.'], 403);
         }
 
-        cleanup_saved_games($saveDirectory);
+        cleanup_saved_games($saveDirectory, $leaderboardFile);
     }
 
     if (!$isNewGame) {
@@ -999,6 +1228,8 @@ if ($action === 'save') {
     if ($encodedState === false || file_put_contents($file, $encodedState) === false) {
         send_json(['ok' => false, 'error' => 'Could not save game.'], 500);
     }
+
+    write_leaderboard($leaderboardFile, build_leaderboard($saveDirectory, $leaderboardFile));
 
     send_json([
         'ok' => true,

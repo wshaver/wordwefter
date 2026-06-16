@@ -728,7 +728,8 @@ body.screen-play .invite-link-panel[hidden],
   background: #f4f1e7;
 }
 
-.active-games {
+.active-games,
+.leaderboard-page {
   grid-column: 1 / -1;
   clear: both;
   justify-self: center;
@@ -796,6 +797,89 @@ body.screen-play .invite-link-panel[hidden],
 .active-games-list {
   display: grid;
   gap: 0.8rem;
+}
+
+.leaderboard-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.leaderboard-summary-item {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 2px solid rgba(23, 32, 42, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.leaderboard-summary-value {
+  color: var(--accent);
+  font: 950 1.3rem/1 system-ui, sans-serif;
+}
+
+.leaderboard-summary-label {
+  color: rgba(23, 32, 42, 0.62);
+  font: 900 0.68rem/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.leaderboard-table {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 3.3rem minmax(0, 1fr) minmax(5.4rem, auto) minmax(4.2rem, auto) minmax(4.2rem, auto);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.9rem;
+  padding: 0.5rem 0.65rem;
+  border: 2px solid rgba(23, 32, 42, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+  font: 400 0.92rem/1.15 system-ui, sans-serif;
+}
+
+.leaderboard-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row span:nth-child(1),
+.leaderboard-row span:nth-child(n + 3) {
+  text-align: right;
+}
+
+.leaderboard-row span:nth-child(2) {
+  color: var(--ink);
+  text-align: left;
+}
+
+.leaderboard-header {
+  min-height: 2.2rem;
+  background: transparent;
+  color: rgba(23, 32, 42, 0.58);
+  font: 950 0.66rem/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.leaderboard-empty {
+  display: grid;
+  min-height: 4.5rem;
+  place-items: center;
+  border: 2px dashed rgba(23, 32, 42, 0.24);
+  border-radius: 8px;
+  color: rgba(23, 32, 42, 0.62);
+  font: 400 0.95rem/1.25 system-ui, sans-serif;
 }
 
 .active-games-actions {
@@ -1147,7 +1231,8 @@ body.screen-setup .player-setup {
   display: grid;
 }
 
-body.screen-list .active-games {
+body.screen-list .active-games,
+body.screen-leaderboard .leaderboard-page {
   display: grid;
 }
 

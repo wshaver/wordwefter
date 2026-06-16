@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=extracted-css-1">
+  <link rel="stylesheet" href="./styles.css?v=leaderboard-weight-1">
   <script>
     let hasStoredPlayerName = false;
     let allowsLegacyNameLogin = false;
@@ -112,6 +112,7 @@
           <div class="identity-menu" id="identity-menu" aria-label="Player menu">
             <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
             <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
+            <button class="game-button secondary" type="button" id="show-leaderboard-button">Leaderboard</button>
             <button class="game-button secondary" type="button" id="show-rules-button">Rules</button>
             <label class="game-button secondary identity-menu-checkbox" id="notification-toggle-item" hidden>
               <input type="checkbox" id="notification-toggle-checkbox">
@@ -185,6 +186,14 @@
           <a class="game-button new-game-disabled-link" href="https://wordwefter.com/">Create games at WordWefter.com</a>
         </div>
         <div id="active-games-list" class="active-games-list"></div>
+      </section>
+
+      <section class="leaderboard-page" aria-label="Leaderboard">
+        <div class="page-hero">
+          <h2 class="section-title">Leaderboard</h2>
+        </div>
+        <div class="leaderboard-summary" id="leaderboard-summary" aria-label="Leaderboard totals"></div>
+        <div class="leaderboard-table" id="leaderboard-table" aria-label="Top players"></div>
       </section>
     </header>
 
@@ -456,6 +465,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=invite-oauth-return-1"></script>
+  <script type="module" src="./game.js?v=leaderboard-1"></script>
 </body>
 </html>

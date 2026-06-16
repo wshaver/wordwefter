@@ -9,6 +9,7 @@ Review notes for future Codex runs:
 
 - The New Game route is `http://wordwefter/#newgame`. `#new` is not a valid route and can leave only the header visible.
 - The Game List route is `http://wordwefter/#gamelist`. `#list` is not a valid route and can leave the app on the welcome screen.
+- The Leaderboard route is `http://wordwefter/#leaderboard`; after editing `public/game.js`, use a full reload such as `http://wordwefter/?refresh=leaderboard#leaderboard` to avoid reused ES modules.
 - The app may reuse already-loaded ES modules when only the hash changes. After editing `public/game.js`, force a full page reload with a temporary page query string such as `http://wordwefter/?refresh=<reason>#newgame`, and update the `game.js` query token in `public/index.html` when users need browsers to pick up the new module reliably.
 - The player setup rows are rendered both as static HTML in `public/index.html` and dynamically by `createPlayerNameRow()` / `renderPlayerNameInputs()` in `public/game.js`. Review both paths when changing the setup form.
 - Browser verification should use the in-app browser against the Apache URL above. If coordinate clicks are needed, first inspect a viewport screenshot; the Browser `cua.click` helper expects viewport `{ x, y }` coordinates. Do not use coordinates taken from a full-page screenshot; scroll the target into view first, take a viewport screenshot, then click.
@@ -24,6 +25,7 @@ Review notes for future Codex runs:
 - Legacy username-only `name:*` auth and the username login prompt are intentionally allowed on the legacy host and local `http://wordwefter/`; `wordwefter.com` is OAuth-only.
 - Turn polling must only run on `screen-play`; list/rules/setup routes clear pending immediate poll timers to avoid stale `server.php?action=load&id=...&turnIndex=...` requests from a previously viewed game.
 - Game-list auto-refresh is a separate 10-second `action=list` timer that runs only on `screen-list`; keep it independent from active-game turn polling.
+- Leaderboard stats combine current saved games with archived totals in `data/leaderboard.json`; cleanup archives a save's total score/game-count contribution before deleting the old save file, while active-game counts remain based on current save files only.
 - Malformed initial saves with turn 0, no history, no board/marketplace/discard state, `tilesDrawn: 0`, and all racks empty are repaired narrowly by `loadFromJSON()` dealing initial racks at load time.
 - App test hooks live on `wordWefterTest` in `public/test-hooks.js` and are published onto `globalThis`, `window`, `document`, and `document.documentElement` when the browser allows it. Serializable readiness/config/check markers are mirrored onto `document.documentElement.dataset` for in-app browser checks; prefer those dataset markers when page-scope globals read as unavailable.
 - Test hooks and debug globals are implemented in `public/test-hooks.js` and are dynamically loaded by `public/game.js` only outside hosted `wordwefter.com`.

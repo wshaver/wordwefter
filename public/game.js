@@ -3753,6 +3753,10 @@ function isRulesURLHash() {
   return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "rules";
 }
 
+function isLeaderboardURLHash() {
+  return window.location.hash.replace(/^#/, "").trim().toLowerCase() === "leaderboard";
+}
+
 function setURLHash(hash, options = {}) {
   if (window.location.hash === hash) {
     return;
@@ -3783,6 +3787,10 @@ function setNewGameURLHash(options = {}) {
 
 function setRulesURLHash(options = {}) {
   setURLHash("#rules", options);
+}
+
+function setLeaderboardURLHash(options = {}) {
+  setURLHash("#leaderboard", options);
 }
 
 function clearGameURLGameId() {
@@ -5233,7 +5241,7 @@ function setScreen(screenName, options = {}) {
     immediateTurnRefreshTimer = null;
   }
 
-  document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-play", "screen-rules");
+  document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-leaderboard", "screen-play", "screen-rules");
   document.body.classList.add(`screen-${screenName}`);
 
   if (screenName !== "play") {
@@ -5298,6 +5306,110 @@ async function showGameList(options = {}) {
 
     await loadActiveGames();
   });
+}
+
+function formatLeaderboardNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function renderLeaderboard(leaderboard) {
+  const summaryElement = document.querySelector("#leaderboard-summary");
+  const tableElement = document.querySelector("#leaderboard-table");
+  const players = (Array.isArray(leaderboard?.players) ? leaderboard.players : []).slice(0, 20);
+
+  if (!summaryElement || !tableElement) {
+    return;
+  }
+
+  summaryElement.replaceChildren();
+  tableElement.replaceChildren();
+
+  [
+    ["Games Played", leaderboard?.totalGamesPlayed],
+    ["Active Games", leaderboard?.totalActiveGames],
+    ["Players", Array.isArray(leaderboard?.players) ? leaderboard.players.length : 0]
+  ].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const valueElement = document.createElement("span");
+    const labelElement = document.createElement("span");
+
+    item.className = "leaderboard-summary-item";
+    valueElement.className = "leaderboard-summary-value";
+    valueElement.textContent = formatLeaderboardNumber(value);
+    labelElement.className = "leaderboard-summary-label";
+    labelElement.textContent = label;
+    item.append(valueElement, labelElement);
+    summaryElement.append(item);
+  });
+
+  if (players.length === 0) {
+    const emptyElement = document.createElement("div");
+
+    emptyElement.className = "leaderboard-empty";
+    emptyElement.textContent = "No player stats yet.";
+    tableElement.append(emptyElement);
+    return;
+  }
+
+  const header = document.createElement("div");
+
+  header.className = "leaderboard-row leaderboard-header";
+  ["Rank", "Player", "Total Score", "Games", "Active"].forEach((label) => {
+    const cell = document.createElement("span");
+
+    cell.textContent = label;
+    header.append(cell);
+  });
+  tableElement.append(header);
+
+  players.forEach((player, index) => {
+    const row = document.createElement("div");
+    const values = [
+      `#${index + 1}`,
+      String(player?.name || "Player"),
+      formatLeaderboardNumber(player?.totalScore),
+      formatLeaderboardNumber(player?.games),
+      formatLeaderboardNumber(player?.activeGames)
+    ];
+
+    row.className = "leaderboard-row";
+    values.forEach((value) => {
+      const cell = document.createElement("span");
+
+      cell.textContent = value;
+      row.append(cell);
+    });
+    tableElement.append(row);
+  });
+}
+
+async function loadLeaderboard() {
+  const tableElement = document.querySelector("#leaderboard-table");
+
+  if (tableElement) {
+    tableElement.textContent = "Loading leaderboard...";
+  }
+
+  try {
+    const payload = await fetchJSON(`${serverURL}?action=leaderboard`);
+
+    renderLeaderboard(payload.leaderboard || {});
+  } catch (error) {
+    if (tableElement) {
+      tableElement.textContent = `Could not load leaderboard: ${error.message}`;
+    }
+  }
+}
+
+async function showLeaderboard(options = {}) {
+  setGameMessage("");
+  setScreen("leaderboard", { clearGameURL: false });
+
+  if (options.updateURL !== false) {
+    setLeaderboardURLHash({ replace: options.replaceURL === true });
+  }
+
+  await loadLeaderboard();
 }
 
 function saveIdentityFromInput() {
@@ -6080,6 +6192,11 @@ async function loadGameFromURLHash() {
     return true;
   }
 
+  if (isLeaderboardURLHash()) {
+    await showLeaderboard({ updateURL: false });
+    return true;
+  }
+
   if (!gameId) {
     setScreen("welcome");
     clearGameURLGameId();
@@ -6667,6 +6784,7 @@ function bindGameControls() {
   const logoutButton = document.querySelector("#logout-button");
   const showNewGameButton = document.querySelector("#show-new-game-button");
   const showGameListButton = document.querySelector("#show-game-list-button");
+  const showLeaderboardButton = document.querySelector("#show-leaderboard-button");
   const showRulesButton = document.querySelector("#show-rules-button");
   const notificationToggleCheckbox = document.querySelector("#notification-toggle-checkbox");
   const createGameFromListButton = document.querySelector("#create-game-from-list-button");
@@ -6756,6 +6874,13 @@ function bindGameControls() {
     showGameListButton.addEventListener("click", () => {
       closeIdentityMenu();
       showGameList();
+    });
+  }
+
+  if (showLeaderboardButton) {
+    showLeaderboardButton.addEventListener("click", () => {
+      closeIdentityMenu();
+      void showLeaderboard();
     });
   }
 
