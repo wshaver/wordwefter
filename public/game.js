@@ -4492,6 +4492,8 @@ async function finishIdentitySignIn(options = {}) {
 
   if (nextAction) {
     nextAction();
+  } else if (window.location.hash && await loadGameFromURLHash()) {
+    return;
   } else {
     showGameList();
   }
