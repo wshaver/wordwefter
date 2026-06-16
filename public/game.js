@@ -2764,6 +2764,7 @@ let gameListRefreshTimer = null;
 let loadingActiveGames = false;
 let gameMessageClearTimer = null;
 let gameMessageExitTimer = null;
+let gameMessageToken = 0;
 let lastTurnNotificationKey = "";
 let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
@@ -3674,38 +3675,47 @@ function renderGame(options = {}) {
 
 function setGameMessage(message, options = {}) {
   const messageElement = document.querySelector("#game-message");
-  const clearAfterMs = Object.hasOwn(options, "clearAfterMs")
+  const clearAfterMs = Object.prototype.hasOwnProperty.call(options, "clearAfterMs")
     ? Math.max(0, Number(options.clearAfterMs || 0))
     : defaultGameMessageClearMilliseconds;
+  const messageToken = String(gameMessageToken + 1);
 
   window.clearTimeout(gameMessageClearTimer);
   window.clearTimeout(gameMessageExitTimer);
   gameMessageClearTimer = null;
   gameMessageExitTimer = null;
+  gameMessageToken += 1;
 
   if (messageElement) {
     if (!message) {
+      const clearingToken = String(gameMessageToken);
+
       if (!messageElement.textContent) {
+        messageElement.dataset.messageToken = clearingToken;
         messageElement.classList.remove("has-message", "message-exiting");
         return;
       }
 
+      messageElement.dataset.messageToken = clearingToken;
       messageElement.classList.add("message-exiting");
       messageElement.classList.remove("has-message");
       gameMessageExitTimer = window.setTimeout(() => {
-        messageElement.textContent = "";
-        messageElement.classList.remove("message-exiting");
+        if (messageElement.dataset.messageToken === clearingToken) {
+          messageElement.textContent = "";
+          messageElement.classList.remove("message-exiting");
+        }
       }, gameMessageAnimationMilliseconds);
       return;
     }
 
+    messageElement.dataset.messageToken = messageToken;
     messageElement.textContent = message;
     messageElement.classList.remove("message-exiting");
     messageElement.classList.add("has-message");
 
     if (clearAfterMs > 0) {
       gameMessageClearTimer = window.setTimeout(() => {
-        if (messageElement.textContent === message) {
+        if (messageElement.dataset.messageToken === messageToken) {
           setGameMessage("");
         }
       }, clearAfterMs);
