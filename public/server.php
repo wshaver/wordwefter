@@ -499,6 +499,40 @@ function state_preserves_existing_claimed_auth_keys(array $currentState, array $
     return true;
 }
 
+function merge_existing_claimed_players_into_incoming(array $currentState, array &$incomingState, string $requestAuthKey): bool
+{
+    $currentPlayers = array_values(array_filter($currentState['players'] ?? [], 'is_array'));
+    $incomingPlayers = array_values(array_filter($incomingState['players'] ?? [], 'is_array'));
+    $changed = false;
+
+    foreach ($currentPlayers as $index => $currentPlayer) {
+        if (!player_is_claimed($currentPlayer)) {
+            continue;
+        }
+
+        $currentAuthKey = player_auth_key($currentPlayer);
+
+        if ($currentAuthKey === '' || $currentAuthKey === $requestAuthKey) {
+            continue;
+        }
+
+        $incomingPlayer = $incomingPlayers[$index] ?? null;
+
+        if (is_array($incomingPlayer) && player_is_claimed($incomingPlayer) && player_auth_key($incomingPlayer) === $currentAuthKey) {
+            continue;
+        }
+
+        $incomingPlayers[$index] = $currentPlayer;
+        $changed = true;
+    }
+
+    if ($changed) {
+        $incomingState['players'] = $incomingPlayers;
+    }
+
+    return $changed;
+}
+
 function state_is_valid_new_player_claim(array $currentState, array $incomingState, string $authKey): bool
 {
     $currentPlayers = array_values(array_filter($currentState['players'] ?? [], 'is_array'));
@@ -927,6 +961,8 @@ if ($action === 'save') {
         if ($strictAuth && !$isExistingPlayerSave && !$isNewPlayerClaim) {
             send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in this game.'], 403);
         }
+
+        merge_existing_claimed_players_into_incoming($currentState, $state, $requestAuthKey);
 
         if ($strictAuth && !state_preserves_existing_claimed_auth_keys($currentState, $state)) {
             send_json(['ok' => false, 'error' => 'Save rejected because it changes an existing player login token.'], 403);
