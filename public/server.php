@@ -214,6 +214,11 @@ function request_enforces_strict_auth(): bool
     return preg_match('/(^|\.)wordwefter\.com$/i', request_host()) === 1;
 }
 
+function request_disables_new_games(): bool
+{
+    return preg_match('/(^|\.)willshaver\.com$/i', request_host()) === 1;
+}
+
 function request_is_local_http(): bool
 {
     $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
@@ -778,7 +783,11 @@ if ($action === 'list') {
 if ($action === 'oauth_config') {
     send_json([
         'ok' => true,
-        'oauth' => read_public_oauth_config($oauthConfigFile)
+        'oauth' => read_public_oauth_config($oauthConfigFile),
+        'deployment' => [
+            'allowLegacyNameLogin' => request_allows_legacy_name_login(),
+            'disableNewGames' => request_disables_new_games()
+        ]
     ]);
 }
 
@@ -940,6 +949,10 @@ if ($action === 'save') {
     }
 
     if ($isNewGame) {
+        if (request_disables_new_games()) {
+            send_json(['ok' => false, 'error' => 'New games are created at https://wordwefter.com.'], 403);
+        }
+
         if ($strictAuth && !state_has_claimed_player_with_auth_key($state, $requestAuthKey)) {
             send_json(['ok' => false, 'error' => 'Save rejected because this login token is not a player in the new game.'], 403);
         }
@@ -992,7 +1005,8 @@ if ($action === 'save') {
         'saved' => true,
         'id' => $id,
         'turnIndex' => $incomingTurnIndex,
-        'lastPlayDate' => $state['lastPlayDate']
+        'lastPlayDate' => $state['lastPlayDate'],
+        'gameState' => $state
     ]);
 }
 

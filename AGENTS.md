@@ -19,8 +19,9 @@ Review notes for future Codex runs:
 - OAuth display-name records are stored separately from saved games in `server-data/user-logins.json`; local fake Google/Facebook IDs are allowed only on HTTP loopback hosts such as `localhost`, `127.*`, `0.0.0.0`, or `::1`, not the local Apache vanity host `wordwefter`.
 - Server-side login validation issues a per-login session token after OAuth/fake-local validation; game saves must include both `authKey` and `sessionToken`, and local fake IDs are accepted only on local HTTP requests.
 - If a player claims an invited/open spot while another player is actively taking a turn, the active player's browser may submit stale player metadata. `server.php` should preserve already-claimed non-requesting player records from the saved state before validating auth-token preservation.
+- Successful saves return canonical `gameState` so the active browser can merge updated player claim metadata and hide stale invite links without a full reload.
 - Production OAuth client IDs are read from `server-data/oauth-config.json` or `WORDWEFTER_GOOGLE_*` / `WORDWEFTER_FACEBOOK_*` environment variables through `server.php?action=oauth_config`; keep real config out of Git.
-- Legacy username-only `name:*` auth and the username login prompt are intentionally allowed on `willshaver.com` and local `http://wordwefter/`; `wordwefter.com` is OAuth-only.
+- Legacy username-only `name:*` auth and the username login prompt are intentionally allowed on the legacy host and local `http://wordwefter/`; `wordwefter.com` is OAuth-only.
 - Turn polling must only run on `screen-play`; list/rules/setup routes clear pending immediate poll timers to avoid stale `server.php?action=load&id=...&turnIndex=...` requests from a previously viewed game.
 - Game-list auto-refresh is a separate 10-second `action=list` timer that runs only on `screen-list`; keep it independent from active-game turn polling.
 - Malformed initial saves with turn 0, no history, no board/marketplace/discard state, `tilesDrawn: 0`, and all racks empty are repaired narrowly by `loadFromJSON()` dealing initial racks at load time.

@@ -2750,6 +2750,7 @@ const turnNotificationsKey = "wordwefterTurnNotifications";
 const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
 const gameListRefreshMilliseconds = 10000;
+const defaultGameMessageClearMilliseconds = 5000;
 const maxPlayerSlots = 6;
 let rackSortable = null;
 let marketplaceSortable = null;
@@ -2775,6 +2776,7 @@ let turnStartGameStateJSON = "";
 let showingPoolView = false;
 let waitingGamesForMenu = [];
 let serverOAuthConfig = null;
+let serverDeploymentConfig = null;
 const tileEnterDurations = [520, 560, 540, 500];
 const tileEnterYOffsets = ["0.45rem", "-0.4rem", "-0.55rem", "0.16rem"];
 const tileEnterRotations = ["-10deg", "11deg", "-6deg", "5deg"];
@@ -2785,8 +2787,12 @@ let tileEnterQueueAvailableAt = 0;
 let brandEfterAnimated = false;
 
 function isLegacyNameLoginAllowed() {
-  return /(^|\.)willshaver\.com$/i.test(window.location.hostname) ||
+  return Boolean(serverDeploymentConfig?.allowLegacyNameLogin) ||
     isLocalWordwefterHttpHost();
+}
+
+function isNewGameCreationDisabled() {
+  return Boolean(serverDeploymentConfig?.disableNewGames);
 }
 
 function isLocalWordwefterHttpHost() {
@@ -3997,7 +4003,9 @@ function renderGame(options = {}) {
 
 function setGameMessage(message, options = {}) {
   const messageElement = document.querySelector("#game-message");
-  const clearAfterMs = Math.max(0, Number(options.clearAfterMs || 0));
+  const clearAfterMs = Object.hasOwn(options, "clearAfterMs")
+    ? Math.max(0, Number(options.clearAfterMs || 0))
+    : defaultGameMessageClearMilliseconds;
 
   window.clearTimeout(gameMessageClearTimer);
   window.clearTimeout(gameMessageExitTimer);
@@ -4607,7 +4615,7 @@ function updateOAuthLoginAvailability() {
 }
 
 async function loadOAuthConfig() {
-  if (serverOAuthConfig) {
+  if (serverOAuthConfig && serverDeploymentConfig) {
     updateOAuthLoginAvailability();
     return serverOAuthConfig;
   }
@@ -4617,8 +4625,12 @@ async function loadOAuthConfig() {
     serverOAuthConfig = payload.oauth && typeof payload.oauth === "object"
       ? payload.oauth
       : {};
+    serverDeploymentConfig = payload.deployment && typeof payload.deployment === "object"
+      ? payload.deployment
+      : {};
   } catch {
     serverOAuthConfig = {};
+    serverDeploymentConfig = {};
   }
 
   updateOAuthLoginAvailability();
@@ -4900,11 +4912,16 @@ function getCurrentInviteLink() {
 }
 
 function hasOpenPlayerSpots(game = gameState) {
-  return (game.players || []).some((player) => (
-    player.open ||
-    player.claimed === false ||
-    /^open spot \d+$/i.test(String(player.name || ""))
-  ));
+  return (game.players || []).some((player) => {
+    const playerName = normalizePlayerName(player?.name);
+    const hasAuthKey = Boolean(String(player?.authKey || "").trim());
+    const isOpenByFlag = player?.open || player?.claimed === false;
+    const isOpenSlotName = !playerName ||
+      /^open spot \d+$/i.test(playerName) ||
+      /^guest$/i.test(playerName);
+
+    return !hasAuthKey && isOpenByFlag && isOpenSlotName;
+  });
 }
 
 function updateInviteLinkUI() {
@@ -5021,6 +5038,7 @@ function updateIdentityUI() {
 
   document.body.classList.toggle("has-player", Boolean(playerName));
   document.documentElement.classList.toggle("local-name-login-allowed", isLegacyNameLoginAllowed());
+  document.documentElement.classList.toggle("new-games-disabled", isNewGameCreationDisabled());
   updateOAuthLoginAvailability();
 
   if (identityNameDisplay) {
@@ -5560,6 +5578,17 @@ function showRules(options = {}) {
 
 function showNewGameSetup(options = {}) {
   requirePlayerName(() => {
+    if (isNewGameCreationDisabled()) {
+      setGameMessage("");
+      setScreen("setup", { clearGameURL: false });
+
+      if (options.updateURL !== false) {
+        setNewGameURLHash({ replace: options.replaceURL === true });
+      }
+
+      return;
+    }
+
     renderPlayerNameInputs([
       getStoredPlayerName(),
       "Guest"
@@ -5670,6 +5699,42 @@ async function fetchJSON(url, options = {}) {
   return payload;
 }
 
+function mergePlayerMetadataFromState(sourceState) {
+  const sourcePlayers = Array.isArray(sourceState?.players) ? sourceState.players : [];
+
+  if (sourcePlayers.length === 0) {
+    return false;
+  }
+
+  let changed = false;
+
+  sourcePlayers.forEach((sourcePlayer, index) => {
+    const player = gameState.players[index];
+
+    if (!player || !sourcePlayer) {
+      return;
+    }
+
+    const normalizedSource = {
+      name: String(sourcePlayer.name || player.name || "Player"),
+      invitedName: normalizePlayerName(sourcePlayer.invitedName || ""),
+      authKey: String(sourcePlayer.authKey || ""),
+      provider: String(sourcePlayer.provider || ""),
+      claimed: sourcePlayer.claimed !== false && !sourcePlayer.open,
+      open: sourcePlayer.claimed === false || Boolean(sourcePlayer.open)
+    };
+
+    Object.entries(normalizedSource).forEach(([key, value]) => {
+      if (player[key] !== value) {
+        player[key] = value;
+        changed = true;
+      }
+    });
+  });
+
+  return changed;
+}
+
 async function saveGameState() {
   const auth = getStoredPlayerAuth();
   const params = new URLSearchParams({
@@ -5691,6 +5756,11 @@ async function saveGameState() {
 
   if (payload.lastPlayDate) {
     gameState.lastPlayDate = payload.lastPlayDate;
+  }
+
+  if (mergePlayerMetadataFromState(payload.gameState)) {
+    updateInviteLinkUI();
+    renderScore();
   }
 
   rememberFriendsFromGame(gameState.toJSON());
@@ -6358,6 +6428,12 @@ async function loadGameFromURLHash() {
 }
 
 async function startNewGame() {
+  if (isNewGameCreationDisabled()) {
+    setGameMessage("Create new games at WordWefter.com.");
+    window.location.assign("https://wordwefter.com/");
+    return;
+  }
+
   const playerEntries = createPlayerSetupEntries();
   const validationMessage = validatePlayerSetupEntries(playerEntries);
 
@@ -7092,8 +7168,8 @@ function bindGameControls() {
 }
 
 async function initializeApp() {
-  clearDisallowedLegacyNameLogin();
   await loadOAuthConfig();
+  clearDisallowedLegacyNameLogin();
   await completeOAuthRedirectIfPresent();
   if (getPendingOAuthDisplayAuth()) {
     showOAuthDisplayNamePage();
