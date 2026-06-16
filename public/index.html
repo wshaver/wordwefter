@@ -1282,6 +1282,35 @@
       background: rgba(15, 139, 141, 0.12);
     }
 
+    .last-turn-notice {
+      display: none;
+      width: var(--play-width);
+      justify-self: center;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      min-height: 2.2rem;
+      padding: 0.36rem 0.75rem;
+      border: 2px solid #7a3f00;
+      border-radius: 8px;
+      background: rgba(251, 250, 246, 0.92);
+      color: #7a2438;
+      font: 900 0.9rem/1.15 system-ui, sans-serif;
+      letter-spacing: 0.06em;
+      text-align: center;
+      text-transform: uppercase;
+      box-shadow: 0.12rem 0.12rem 0 rgba(122, 63, 0, 0.22);
+    }
+
+    .last-turn-notice .material-symbols-outlined {
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+
+    body.screen-play.last-turn:not(.game-over) .last-turn-notice {
+      display: flex;
+    }
+
     .marketplace-wrap {
       width: var(--play-width);
       display: grid;
@@ -1327,6 +1356,56 @@
 
     body.screen-play .marketplace-cost-badge {
       display: block;
+    }
+
+    body.marketplace-closed .marketplace-cost-badge {
+      display: none;
+    }
+
+    .marketplace-closed-sign {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      z-index: 6;
+      display: grid;
+      place-items: center;
+      min-width: min(12rem, 62%);
+      min-height: 2.75rem;
+      padding: 0.4rem 1rem;
+      border: 3px solid #7a3f00;
+      border-radius: 6px;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 26%),
+        #f2b134;
+      color: #17202a;
+      font: 950 clamp(1.1rem, 5vw, 1.8rem)/1 system-ui, sans-serif;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      box-shadow:
+        0.18rem 0.22rem 0 rgba(122, 63, 0, 0.25),
+        inset 0 0 0 0.18rem rgba(251, 250, 246, 0.46);
+      transform: translate(-50%, -50%) rotate(-5deg);
+      pointer-events: none;
+    }
+
+    .marketplace-closed-sign::before,
+    .marketplace-closed-sign::after {
+      content: "";
+      position: absolute;
+      top: 0.34rem;
+      width: 0.42rem;
+      height: 0.42rem;
+      border-radius: 50%;
+      background: #fbfaf6;
+      box-shadow: inset 0 0 0 2px rgba(122, 63, 0, 0.35);
+    }
+
+    .marketplace-closed-sign::before {
+      left: 0.5rem;
+    }
+
+    .marketplace-closed-sign::after {
+      right: 0.5rem;
     }
 
     .winner-banner {
@@ -2381,6 +2460,10 @@
       box-shadow: 0.12rem 0.12rem 0 var(--warm);
     }
 
+    body.last-turn .rack-shuffle-button {
+      top: calc(2.2rem + 0.75rem - 0.88rem);
+    }
+
     body.screen-play .rack-shuffle-button {
       display: grid;
     }
@@ -2946,7 +3029,8 @@
     let allowsLegacyNameLogin = false;
 
     try {
-      allowsLegacyNameLogin = /(^|\.)willshaver\.com$/i.test(window.location.hostname);
+      allowsLegacyNameLogin = /(^|\.)willshaver\.com$/i.test(window.location.hostname) ||
+        (window.location.protocol === "http:" && /^wordwefter$/i.test(window.location.hostname));
     } catch {
       allowsLegacyNameLogin = false;
     }
@@ -3258,7 +3342,8 @@
         <article class="rules-card">
           <h3>Ending the Game</h3>
           <p>Game length controls the size of the tile pool: Short uses a smaller pool, Normal uses a medium pool, and Long uses the largest pool.</p>
-          <p>The game ends when the tile pool is empty, when every player passes in a row, or when every board square is covered by at least one tile.</p>
+          <p>When the pool runs out, the marketplace closes and its remaining tiles go back into the pool. If a player still cannot draw because the pool and marketplace are both empty, the final round begins.</p>
+          <p>In the final round, each player gets one more turn, including the player who drew the last tile. The game also ends when every player passes in a row or when every board square is covered by at least one tile.</p>
         </article>
       </div>
     </section>
@@ -3299,6 +3384,10 @@
         </div>
       </div>
       <div class="rack-wrap">
+        <div class="last-turn-notice" id="last-turn-notice" role="status" aria-live="polite">
+          <span class="material-symbols-outlined" aria-hidden="true">timer</span>
+          <span>Last Turn</span>
+        </div>
         <button class="game-button secondary rack-shuffle-button" type="button" id="shuffle-rack-button" aria-label="Shuffle rack" title="Shuffle rack">
           <span class="material-symbols-outlined" aria-hidden="true">shuffle</span>
         </button>
@@ -3371,6 +3460,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=rack-balance-draw-3"></script>
+  <script type="module" src="./game.js?v=last-turn-viewer-scope-1"></script>
 </body>
 </html>

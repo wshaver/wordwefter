@@ -205,7 +205,8 @@ function request_host(): string
 
 function request_allows_legacy_name_login(): bool
 {
-    return preg_match('/(^|\.)willshaver\.com$/i', request_host()) === 1;
+    return preg_match('/(^|\.)willshaver\.com$/i', request_host()) === 1 ||
+        request_is_local_wordwefter_http();
 }
 
 function request_enforces_strict_auth(): bool
@@ -220,9 +221,19 @@ function request_is_local_http(): bool
     $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
     $host = request_host();
     $isHttps = $https === 'on' || $https === '1' || $scheme === 'https' || $forwardedProto === 'https';
-    $isLocalHost = preg_match('/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i', $host) === 1;
+    $isLocalHost = preg_match('/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1)$/i', $host) === 1;
 
     return !$isHttps && $isLocalHost;
+}
+
+function request_is_local_wordwefter_http(): bool
+{
+    $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+    $scheme = strtolower((string) ($_SERVER['REQUEST_SCHEME'] ?? ''));
+    $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    $isHttps = $https === 'on' || $https === '1' || $scheme === 'https' || $forwardedProto === 'https';
+
+    return !$isHttps && request_host() === 'wordwefter';
 }
 
 function is_local_fallback_user_id(string $userId): bool

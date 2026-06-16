@@ -116,8 +116,11 @@ class WordWefterGameState {
       this.lettersAvailable = { ...this.lettersAvailable, ...setup.lettersAvailable };
     }
     this.tilesDrawn = Number.isInteger(Number(setup.tilesDrawn)) ? Math.max(0, Number(setup.tilesDrawn)) : 0;
-    this.finalTurnsRemaining = null;
-    this.pendingFinalRound = false;
+    this.finalTurnsRemaining = Number.isInteger(Number(setup.finalTurnsRemaining))
+      ? Math.max(0, Number(setup.finalTurnsRemaining))
+      : null;
+    this.pendingFinalRound = Boolean(setup.pendingFinalRound);
+    this.marketplaceClosed = Boolean(setup.marketplaceClosed);
     this.gameOver = Boolean(setup.gameOver);
     this.concededByPlayerNames = this.normalizeConcededPlayerNames(setup);
     this.concededByPlayerName = this.getLastConcededPlayerName();
@@ -477,6 +480,13 @@ class WordWefterGameState {
       return result;
     }
 
+    if (this.isFinalRoundActive() && !this.pendingFinalRound && this.finalTurnsRemaining <= 1) {
+      this.gameOver = true;
+      this.pendingFinalRound = false;
+      this.finalTurnsRemaining = 0;
+      return result;
+    }
+
     if (this.getActivePlayers().length <= 1) {
       this.gameOver = true;
       this.pendingFinalRound = false;
@@ -559,6 +569,21 @@ class WordWefterGameState {
 
   advanceTurnIndex() {
     this.turnIndex += 1;
+
+    if (this.gameOver || !this.isFinalRoundActive()) {
+      return;
+    }
+
+    if (this.pendingFinalRound) {
+      this.pendingFinalRound = false;
+      return;
+    }
+
+    this.finalTurnsRemaining = Math.max(0, this.finalTurnsRemaining - 1);
+
+    if (this.finalTurnsRemaining === 0) {
+      this.gameOver = true;
+    }
   }
 
   drawTiles(tileCount = 7, options = {}) {
@@ -568,7 +593,20 @@ class WordWefterGameState {
 
     const drawnTiles = [];
 
-    while (drawnTiles.length < tileCount && this.tilesRemaining > 0) {
+    while (drawnTiles.length < tileCount) {
+      if (this.tilesRemaining === 0) {
+        const returnedTileCount = this.closeMarketplaceIntoPool();
+
+        if (returnedTileCount === 0 && this.tilesRemaining === 0) {
+          this.beginFinalRound();
+          break;
+        }
+      }
+
+      if (this.tilesRemaining === 0) {
+        break;
+      }
+
       const shouldForceNonWildcard = Boolean(options.ensureRainbow) &&
         drawnTiles.length === tileCount - 1 &&
         !drawnTiles.some((drawnTile) => !drawnTile.wildcard) &&
@@ -585,6 +623,12 @@ class WordWefterGameState {
         drawnTiles.push(this.prepareRackDrawnTile(tile, {
           suppressRandomRainbow: Boolean(options.ensureRainbow)
         }));
+
+        if (this.tilesRemaining === 0 && !this.marketplaceTiles.some(Boolean)) {
+          this.beginFinalRound();
+        }
+      } else {
+        break;
       }
     }
 
@@ -602,6 +646,10 @@ class WordWefterGameState {
 
   drawMarketplaceTiles(tileCount = 7) {
     const drawnTiles = [];
+
+    if (this.marketplaceClosed) {
+      return drawnTiles;
+    }
 
     while (
       (this.marketplaceTiles.length < tileCount || this.marketplaceTiles.some((tile) => !tile)) &&
@@ -646,6 +694,43 @@ class WordWefterGameState {
 
   hasAvailableMarketplaceLetters() {
     return playableLetters.some((letter) => Math.max(0, Number(this.lettersAvailable[letter] || 0)) > 0);
+  }
+
+  isFinalRoundActive() {
+    return Number.isInteger(this.finalTurnsRemaining) && this.finalTurnsRemaining > 0;
+  }
+
+  isCurrentPlayerLastTurn() {
+    return !this.gameOver &&
+      this.isFinalRoundActive() &&
+      !this.pendingFinalRound &&
+      this.finalTurnsRemaining <= this.getActivePlayers().length;
+  }
+
+  beginFinalRound() {
+    if (this.gameOver || this.isFinalRoundActive()) {
+      return;
+    }
+
+    this.marketplaceClosed = true;
+    this.pendingFinalRound = true;
+    this.finalTurnsRemaining = Math.max(1, this.getActivePlayers().length);
+  }
+
+  closeMarketplaceIntoPool() {
+    const returnedTiles = this.marketplaceTiles.filter(Boolean);
+
+    if (this.marketplaceClosed) {
+      return 0;
+    }
+
+    this.marketplaceClosed = true;
+    this.marketplaceTiles = [];
+    returnedTiles.forEach((tile) => {
+      this.returnTileToAvailableLetters(tile, { restoreDrawCount: true });
+    });
+
+    return returnedTiles.length;
   }
 
   hasAvailableVowels(weightedLetters) {
@@ -1038,12 +1123,6 @@ class WordWefterGameState {
         this.lettersAvailable[letter] -= 1;
         this.tilesDrawn += 1;
 
-        if (this.tilesRemaining === 0) {
-          this.gameOver = true;
-          this.pendingFinalRound = false;
-          this.finalTurnsRemaining = null;
-        }
-
         return {
           id: `tile-${this.nextTileId++}`,
           letter,
@@ -1087,6 +1166,7 @@ class WordWefterGameState {
     this.boardTiles = new Map();
     this.boardBonuses = this.createBoardBonuses();
     this.marketplaceTiles = [];
+    this.marketplaceClosed = false;
     this.activePlacements = new Map();
     this.pendingMarketplacePurchaseTileIds.clear();
     this.pendingMarketplacePurchasePlayerIndex = null;
@@ -1291,6 +1371,11 @@ class WordWefterGameState {
       gameLength: this.gameLength,
       tilesDrawn: this.tilesDrawn,
       ...(this.gameOver ? { gameOver: true } : {}),
+      ...(this.marketplaceClosed ? { marketplaceClosed: true } : {}),
+      ...(this.isFinalRoundActive() ? {
+        finalTurnsRemaining: this.finalTurnsRemaining,
+        ...(this.pendingFinalRound ? { pendingFinalRound: true } : {})
+      } : {}),
       ...(this.concededByPlayerNames.length > 0 ? {
         concededByPlayerNames: [...this.concededByPlayerNames],
         concededByPlayerName: this.getLastConcededPlayerName()
@@ -1534,9 +1619,12 @@ class WordWefterGameState {
       ? Math.max(0, Number(source.tilesDrawn))
       : Math.max(0, this.totalTilePool - this.tilesRemaining);
     this.reconcileStartingPoolForLoadedState();
-    this.finalTurnsRemaining = null;
-    this.pendingFinalRound = false;
-    this.gameOver = Boolean(source.gameOver) || this.tilesRemaining === 0;
+    this.finalTurnsRemaining = Number.isInteger(Number(source.finalTurnsRemaining))
+      ? Math.max(0, Number(source.finalTurnsRemaining))
+      : null;
+    this.pendingFinalRound = Boolean(source.pendingFinalRound) && this.isFinalRoundActive();
+    this.marketplaceClosed = Boolean(source.marketplaceClosed);
+    this.gameOver = Boolean(source.gameOver);
     this.concededByPlayerNames = this.normalizeConcededPlayerNames(source);
     this.concededByPlayerName = this.getLastConcededPlayerName();
     this.turnIndex = Number.isInteger(Number(source.turnIndex)) ? Math.max(0, Number(source.turnIndex)) : 0;
@@ -1642,7 +1730,7 @@ class WordWefterGameState {
       };
     });
 
-    if (!Array.isArray(source.marketplaceTiles)) {
+    if (!Array.isArray(source.marketplaceTiles) && !this.marketplaceClosed) {
       this.drawMarketplaceTiles();
     }
 
@@ -2697,12 +2785,22 @@ let tileEnterQueueAvailableAt = 0;
 let brandEfterAnimated = false;
 
 function isLegacyNameLoginAllowed() {
-  return /(^|\.)willshaver\.com$/i.test(window.location.hostname);
+  return /(^|\.)willshaver\.com$/i.test(window.location.hostname) ||
+    isLocalWordwefterHttpHost();
+}
+
+function isLocalWordwefterHttpHost() {
+  return window.location.protocol === "http:" &&
+    /^wordwefter$/i.test(window.location.hostname);
+}
+
+function isLoopbackHttpHost() {
+  return window.location.protocol === "http:" &&
+    /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1)$/i.test(window.location.hostname);
 }
 
 function isLocalOAuthFallbackAllowed() {
-  return window.location.protocol === "http:" &&
-    /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|wordwefter)$/i.test(window.location.hostname);
+  return isLoopbackHttpHost();
 }
 
 function createPoolSnapshotForTesting(game = gameState) {
@@ -2836,6 +2934,80 @@ function runRedrawPoolAccountingCheck(setup = {}) {
   };
 }
 
+function runFinalRoundMarketplaceCloseCheck() {
+  const emptyPool = playableLetters.reduce((pool, letter) => {
+    pool[letter] = 0;
+    return pool;
+  }, { [wildcardLetter]: 0 });
+  const testGame = new WordWefterGameState({
+    playerNames: ["Test Player", "Test Opponent", "Test Third"],
+    gameLength: "short"
+  });
+
+  testGame.startingLettersAvailable = {
+    ...emptyPool,
+    E: 2
+  };
+  testGame.lettersAvailable = { ...emptyPool };
+  testGame.tilesDrawn = 2;
+  testGame.marketplaceTiles = [
+    { id: "market-e", letter: "E", points: 1 },
+    { id: "market-e-2", letter: "E", points: 1 }
+  ];
+  testGame.currentRack = [];
+
+  const firstDraw = testGame.drawTiles(1);
+  const afterClose = createPoolSnapshotForTesting(testGame);
+  const secondDraw = testGame.drawTiles(7);
+  const afterFinalStart = createPoolSnapshotForTesting(testGame);
+
+  testGame.advanceTurn();
+  testGame.advanceTurnIndex();
+  const afterArmingFinalRound = {
+    currentPlayerIndex: testGame.currentPlayerIndex,
+    finalTurnsRemaining: testGame.finalTurnsRemaining,
+    pendingFinalRound: testGame.pendingFinalRound,
+    gameOver: testGame.gameOver
+  };
+
+  testGame.advanceTurn();
+  testGame.advanceTurnIndex();
+  testGame.advanceTurn();
+  testGame.advanceTurnIndex();
+  const beforeLastFinalTurn = {
+    currentPlayerIndex: testGame.currentPlayerIndex,
+    finalTurnsRemaining: testGame.finalTurnsRemaining,
+    gameOver: testGame.gameOver
+  };
+
+  testGame.advanceTurn();
+
+  return {
+    firstDrawCount: firstDraw.length,
+    secondDrawCount: secondDraw.length,
+    afterClose,
+    afterFinalStart,
+    afterArmingFinalRound,
+    beforeLastFinalTurn,
+    finalGameOver: testGame.gameOver,
+    passed:
+      firstDraw.length === 1 &&
+      secondDraw.length === 1 &&
+      testGame.marketplaceClosed &&
+      testGame.marketplaceTiles.length === 0 &&
+      afterClose.tilesRemaining === 1 &&
+      afterFinalStart.tilesRemaining === 0 &&
+      afterFinalStart.tilesDrawn === 2 &&
+      afterArmingFinalRound.currentPlayerIndex === 1 &&
+      afterArmingFinalRound.finalTurnsRemaining === 3 &&
+      !afterArmingFinalRound.pendingFinalRound &&
+      !afterArmingFinalRound.gameOver &&
+      beforeLastFinalTurn.currentPlayerIndex === 0 &&
+      beforeLastFinalTurn.finalTurnsRemaining === 1 &&
+      testGame.gameOver
+  };
+}
+
 function createWildcardPivotTestTile(id, letter, row, column) {
   return {
     id,
@@ -2943,6 +3115,11 @@ function updateWordWefterTestingDataset() {
   dataset.wordWefterCurrentPlayerIndex = String(gameState.currentPlayerIndex);
   dataset.wordWefterCurrentTurnIndex = String(gameState.turnIndex);
   dataset.wordWefterGameOver = String(gameState.gameOver);
+  dataset.wordWefterMarketplaceClosed = String(gameState.marketplaceClosed);
+  dataset.wordWefterFinalTurnsRemaining = String(gameState.finalTurnsRemaining ?? "");
+  dataset.wordWefterPendingFinalRound = String(gameState.pendingFinalRound);
+  dataset.wordWefterCurrentPlayerLastTurn = String(gameState.isCurrentPlayerLastTurn());
+  dataset.wordWefterDisplayedLastTurnNotice = String(shouldShowLastTurnNotice());
 }
 
 function exposeWordWefterTestingGlobals() {
@@ -2960,6 +3137,7 @@ function exposeWordWefterTestingGlobals() {
     getPoolSnapshot: (game = gameState) => createPoolSnapshotForTesting(game),
     runRackBalanceDrawCheck,
     runRedrawPoolAccountingCheck,
+    runFinalRoundMarketplaceCloseCheck,
     runWildcardPivotResolutionCheck,
     isWord: (word) => gameState.isRealWord(word)
   };
@@ -2984,6 +3162,9 @@ function exposeWordWefterTestingGlobals() {
   );
   document.documentElement.dataset.wordWefterRackBalanceDrawCheck = JSON.stringify(
     runRackBalanceDrawCheck()
+  );
+  document.documentElement.dataset.wordWefterFinalRoundMarketplaceCloseCheck = JSON.stringify(
+    runFinalRoundMarketplaceCloseCheck()
   );
   document.documentElement.dataset.wordWefterWildcardPivotResolutionCheck = JSON.stringify(
     runWildcardPivotResolutionCheck()
@@ -3433,6 +3614,15 @@ function renderMarketplace(options = {}) {
 
   marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
 
+  if (gameState.marketplaceClosed) {
+    const closedSign = document.createElement("div");
+
+    closedSign.className = "marketplace-closed-sign";
+    closedSign.setAttribute("aria-label", "Marketplace closed");
+    closedSign.textContent = "CLOSED";
+    marketplace.append(closedSign);
+  }
+
   gameState.marketplaceTiles.forEach((tile) => {
     const itemElement = document.createElement("div");
 
@@ -3776,6 +3966,9 @@ function renderScore() {
 
 function renderGame(options = {}) {
   document.body.classList.toggle("game-over", gameState.gameOver);
+  document.body.classList.toggle("marketplace-closed", gameState.marketplaceClosed);
+  document.body.classList.toggle("final-round", gameState.isFinalRoundActive() && !gameState.gameOver);
+  document.body.classList.toggle("last-turn", shouldShowLastTurnNotice());
 
   if (renderedGameId !== gameState.id) {
     renderedRackTileKeys = [];
@@ -3925,6 +4118,10 @@ function isMyTurn() {
   return Boolean(storedPlayerKey) &&
     normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey &&
     !gameState.isPlayerNameConceded(getStoredPlayerName());
+}
+
+function shouldShowLastTurnNotice() {
+  return isMyTurn() && gameState.isCurrentPlayerLastTurn();
 }
 
 function getLoggedInPlayer() {
@@ -4397,7 +4594,7 @@ function hasOAuthProviderConfig(provider) {
 }
 
 function providerLoginIsVisible(provider) {
-  return hasOAuthProviderConfig(provider) || isLocalOAuthFallbackAllowed();
+  return window.location.protocol === "https:" && hasOAuthProviderConfig(provider);
 }
 
 function updateOAuthLoginAvailability() {
@@ -5552,6 +5749,10 @@ async function pollActiveGameState() {
 
     const changedCellKeys = getChangedBoardCellKeys(payload.gameState);
     const wasMyTurn = isMyTurn();
+    const wasMarketplaceClosed = gameState.marketplaceClosed;
+    const wasFinalRoundActive = gameState.isFinalRoundActive();
+    const wasCurrentPlayerLastTurn = gameState.isCurrentPlayerLastTurn();
+    const wasLastTurnNoticeVisible = shouldShowLastTurnNotice();
     const storedPlayerName = getStoredPlayerName();
     const previousVisibleRack = getVisibleRack();
     const nextVisibleRack = getPlayerRackFromState(payload.gameState, storedPlayerName);
@@ -5566,7 +5767,11 @@ async function pollActiveGameState() {
       visibleRackTileSetChanged ||
       gameState.gameOver ||
       gameState.hasActivePlacements() ||
-      gameState.hasPendingMarketplacePurchases();
+      gameState.hasPendingMarketplacePurchases() ||
+      wasMarketplaceClosed !== gameState.marketplaceClosed ||
+      wasFinalRoundActive !== gameState.isFinalRoundActive() ||
+      wasCurrentPlayerLastTurn !== gameState.isCurrentPlayerLastTurn() ||
+      wasLastTurnNoticeVisible !== shouldShowLastTurnNotice();
 
     if (shouldRenderRefresh) {
       renderGame();
