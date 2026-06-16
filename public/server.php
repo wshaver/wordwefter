@@ -133,6 +133,43 @@ function game_summary_timestamp(array $summary): int
     return $timestamp === false ? (int) ($summary['turnIndex'] ?? 0) : $timestamp;
 }
 
+function is_unplayed_conceded_game(array $state): bool
+{
+    if (empty($state['gameOver'])) {
+        return false;
+    }
+
+    $concededNames = [];
+
+    if (isset($state['concededByPlayerNames']) && is_array($state['concededByPlayerNames'])) {
+        $concededNames = array_filter(array_map('trim', array_map('strval', $state['concededByPlayerNames'])));
+    }
+
+    if (!empty($state['concededByPlayerName'])) {
+        $concededNames[] = trim((string) $state['concededByPlayerName']);
+    }
+
+    if (count(array_filter($concededNames)) === 0) {
+        return false;
+    }
+
+    $history = is_array($state['history'] ?? null) ? $state['history'] : [];
+
+    if (count($history) > 1) {
+        return false;
+    }
+
+    if (count($history) === 1) {
+        $entry = $history[0];
+
+        if (!is_array($entry) || (string) ($entry['action'] ?? '') !== 'concede') {
+            return false;
+        }
+    }
+
+    return turn_index($state) <= 1;
+}
+
 function cleanup_saved_games(string $saveDirectory, string $leaderboardFile): int
 {
     $now = time();
@@ -144,6 +181,14 @@ function cleanup_saved_games(string $saveDirectory, string $leaderboardFile): in
         $state = json_decode((string) file_get_contents($file), true);
 
         if (!is_array($state)) {
+            continue;
+        }
+
+        if (is_unplayed_conceded_game($state)) {
+            if (is_file($file) && unlink($file)) {
+                $deletedCount += 1;
+            }
+
             continue;
         }
 
@@ -788,6 +833,10 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
             continue;
         }
 
+        if (is_unplayed_conceded_game($state)) {
+            continue;
+        }
+
         $gameId = strtoupper((string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)));
 
         if ($gameId !== '' && isset($archivedGameIds[$gameId])) {
@@ -984,6 +1033,7 @@ $requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $action = $_GET['action'] ?? $_POST['action'] ?? ($requestMethod === 'POST' ? 'save' : 'list');
 
 if ($action === 'list') {
+    cleanup_saved_games($saveDirectory, $leaderboardFile);
     $games = [];
 
     foreach (glob($saveDirectory . DIRECTORY_SEPARATOR . '*.json') ?: [] as $file) {
@@ -1000,6 +1050,7 @@ if ($action === 'list') {
 }
 
 if ($action === 'leaderboard') {
+    cleanup_saved_games($saveDirectory, $leaderboardFile);
     $leaderboard = build_leaderboard($saveDirectory, $leaderboardFile);
 
     if (!write_leaderboard($leaderboardFile, $leaderboard)) {
@@ -1223,6 +1274,25 @@ if ($action === 'save') {
     }
 
     $state['lastPlayDate'] = gmdate('c');
+
+    if (is_unplayed_conceded_game($state)) {
+        if (is_file($file) && !unlink($file)) {
+            send_json(['ok' => false, 'error' => 'Could not delete unplayed conceded game.'], 500);
+        }
+
+        write_leaderboard($leaderboardFile, build_leaderboard($saveDirectory, $leaderboardFile));
+
+        send_json([
+            'ok' => true,
+            'saved' => true,
+            'deleted' => true,
+            'id' => $id,
+            'turnIndex' => $incomingTurnIndex,
+            'lastPlayDate' => $state['lastPlayDate'],
+            'gameState' => $state
+        ]);
+    }
+
     $encodedState = json_encode($state, JSON_PRETTY_PRINT);
 
     if ($encodedState === false || file_put_contents($file, $encodedState) === false) {

@@ -2740,6 +2740,7 @@ const startCell = {
 };
 const serverURL = "./server.php";
 const playerNameCookie = "wordwefterPlayerName";
+const playerAuthCookie = "wordwefterPlayerAuth";
 const playerNameStorageKey = "wordwefterPlayerName";
 const playerAuthStorageKey = "wordwefterPlayerAuth";
 const friendsStorageKey = "wordwefterFriends";
@@ -2751,6 +2752,7 @@ const foregroundTurnPollMilliseconds = 3000;
 const backgroundTurnPollMilliseconds = 120000;
 const gameListRefreshMilliseconds = 10000;
 const defaultGameMessageClearMilliseconds = 5000;
+const storedAuthMaxAgeSeconds = 60 * 60 * 24 * 400;
 const maxPlayerSlots = 6;
 let rackSortable = null;
 let marketplaceSortable = null;
@@ -3933,9 +3935,7 @@ function getCookie(name) {
   return cookie ? decodeURIComponent(cookie.slice(cookiePrefix.length)) : "";
 }
 
-function setCookie(name, value) {
-  const maxAge = 60 * 60 * 24 * 365;
-
+function setCookie(name, value, maxAge = storedAuthMaxAgeSeconds) {
   try {
     document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=${maxAge}; path=/; samesite=lax`;
   } catch {
@@ -3996,8 +3996,27 @@ function setJSONStorageItem(key, value) {
   }
 }
 
+function getJSONCookie(name, fallbackValue) {
+  const value = getCookie(name);
+
+  if (!value) {
+    return fallbackValue;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallbackValue;
+  }
+}
+
+function setJSONCookie(name, value, maxAge = storedAuthMaxAgeSeconds) {
+  setCookie(name, JSON.stringify(value), maxAge);
+}
+
 function getStoredPlayerAuth() {
-  const auth = parseJSONStorageItem(playerAuthStorageKey, null);
+  const auth = parseJSONStorageItem(playerAuthStorageKey, null) ||
+    getJSONCookie(playerAuthCookie, null);
   const fallbackName = getStoredPlayerName();
 
   if (auth && typeof auth === "object" && normalizePlayerName(auth.name)) {
@@ -4146,6 +4165,10 @@ function setStoredPlayerAuth(auth) {
   };
 
   setJSONStorageItem(playerAuthStorageKey, normalizedAuth);
+  setJSONCookie(playerAuthCookie, {
+    ...normalizedAuth,
+    accessToken: ""
+  });
   return normalizedAuth;
 }
 
@@ -5438,11 +5461,12 @@ function clearDisallowedLegacyNameLogin() {
     return;
   }
 
-  const auth = parseJSONStorageItem(playerAuthStorageKey, null);
+  const auth = getStoredPlayerAuth();
   const provider = String(auth?.provider || (auth ? "name" : ""));
 
   if (!auth || provider === "name") {
     deleteCookie(playerNameCookie);
+    deleteCookie(playerAuthCookie);
     removeLocalStorageItem(playerNameStorageKey);
     removeLocalStorageItem(playerAuthStorageKey);
   }
@@ -5450,6 +5474,7 @@ function clearDisallowedLegacyNameLogin() {
 
 function logoutPlayer() {
   deleteCookie(playerNameCookie);
+  deleteCookie(playerAuthCookie);
   removeLocalStorageItem(playerNameStorageKey);
   removeLocalStorageItem(playerAuthStorageKey);
   pendingIdentityAction = null;
