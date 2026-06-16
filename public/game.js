@@ -5560,13 +5560,9 @@ function showRules(options = {}) {
 
 function showNewGameSetup(options = {}) {
   requirePlayerName(() => {
-    const otherPlayerNames = gameState.players.slice(1)
-      .map((player) => player.name)
-      .filter((name) => !/^player \d+$/i.test(normalizePlayerName(name)));
-
     renderPlayerNameInputs([
       getStoredPlayerName(),
-      ...(otherPlayerNames.length > 0 ? otherPlayerNames : ["Guest"])
+      "Guest"
     ]);
     renderFriendInviteOptions();
     syncSelectedFriendSlots();
