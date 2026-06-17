@@ -228,6 +228,19 @@ function normalize_name_key(string $name): string
     return strtolower(trim($name));
 }
 
+function leaderboard_player_key(array $player): string
+{
+    $name = trim((string) ($player['name'] ?? ''));
+    $nameKey = normalize_name_key($name);
+    $authKey = normalize_auth_key((string) ($player['authKey'] ?? ''));
+
+    if ($authKey !== '' && !is_legacy_name_auth_key($authKey)) {
+        return 'auth:' . $authKey;
+    }
+
+    return $nameKey !== '' ? 'name:' . $nameKey : '';
+}
+
 function normalize_provider(string $provider): string
 {
     $normalizedProvider = strtolower(trim($provider));
@@ -726,14 +739,21 @@ function read_archived_leaderboard_stats(string $leaderboardFile): array
         }
 
         $name = trim((string) ($player['name'] ?? ''));
-        $key = normalize_name_key($name);
+        $key = (string) ($player['key'] ?? '');
+
+        if ($key === '') {
+            $key = leaderboard_player_key($player);
+        }
 
         if ($name === '' || $key === '') {
             continue;
         }
 
         $players[$key] = [
+            'key' => $key,
             'name' => $name,
+            'authKey' => (string) ($player['authKey'] ?? ''),
+            'provider' => (string) ($player['provider'] ?? ''),
             'totalScore' => (int) ($player['totalScore'] ?? 0),
             'games' => (int) ($player['games'] ?? 0)
         ];
@@ -765,7 +785,7 @@ function add_game_to_archived_leaderboard_stats(array $archivedStats, array $sta
 
     foreach (player_summaries($state) as $player) {
         $name = trim((string) ($player['name'] ?? ''));
-        $key = normalize_name_key($name);
+        $key = leaderboard_player_key($player);
 
         if ($name === '' || $key === '' || empty($player['claimed']) || !empty($player['open'])) {
             continue;
@@ -773,13 +793,19 @@ function add_game_to_archived_leaderboard_stats(array $archivedStats, array $sta
 
         if (!isset($archivedStats['players'][$key])) {
             $archivedStats['players'][$key] = [
+                'key' => $key,
                 'name' => $name,
+                'authKey' => (string) ($player['authKey'] ?? ''),
+                'provider' => (string) ($player['provider'] ?? ''),
                 'totalScore' => 0,
                 'games' => 0
             ];
         }
 
+        $archivedStats['players'][$key]['key'] = $key;
         $archivedStats['players'][$key]['name'] = $name;
+        $archivedStats['players'][$key]['authKey'] = (string) ($player['authKey'] ?? '');
+        $archivedStats['players'][$key]['provider'] = (string) ($player['provider'] ?? '');
         $archivedStats['players'][$key]['totalScore'] += (int) ($player['score'] ?? 0);
         $archivedStats['players'][$key]['games'] += 1;
     }
@@ -812,14 +838,17 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
         }
 
         $name = trim((string) ($player['name'] ?? ''));
-        $playerKey = normalize_name_key($name ?: (string) $key);
+        $playerKey = (string) ($player['key'] ?? (string) $key);
 
         if ($playerKey === '') {
             continue;
         }
 
         $players[$playerKey] = [
+            'key' => $playerKey,
             'name' => $name !== '' ? $name : (string) $key,
+            'authKey' => (string) ($player['authKey'] ?? ''),
+            'provider' => (string) ($player['provider'] ?? ''),
             'totalScore' => (int) ($player['totalScore'] ?? 0),
             'games' => (int) ($player['games'] ?? 0),
             'activeGames' => 0
@@ -852,7 +881,7 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
 
         foreach (player_summaries($state) as $player) {
             $name = trim((string) ($player['name'] ?? ''));
-            $key = normalize_name_key($name);
+            $key = leaderboard_player_key($player);
 
             if ($name === '' || $key === '' || empty($player['claimed']) || !empty($player['open'])) {
                 continue;
@@ -860,14 +889,20 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
 
             if (!isset($players[$key])) {
                 $players[$key] = [
+                    'key' => $key,
                     'name' => $name,
+                    'authKey' => (string) ($player['authKey'] ?? ''),
+                    'provider' => (string) ($player['provider'] ?? ''),
                     'totalScore' => 0,
                     'games' => 0,
                     'activeGames' => 0
                 ];
             }
 
+            $players[$key]['key'] = $key;
             $players[$key]['name'] = $name;
+            $players[$key]['authKey'] = (string) ($player['authKey'] ?? '');
+            $players[$key]['provider'] = (string) ($player['provider'] ?? '');
             $players[$key]['totalScore'] += (int) ($player['score'] ?? 0);
             $players[$key]['games'] += 1;
 
