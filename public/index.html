@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=game-list-pills-2">
+  <link rel="stylesheet" href="./styles.css?v=rules-copy-weight-1">
   <script>
     let hasStoredPlayerName = false;
     let allowsLegacyNameLogin = false;
@@ -102,6 +102,10 @@
               <span>Continue with Facebook</span>
             </button>
           </div>
+            <button class="game-button secondary leaderboard-button-with-icon public-leaderboard-button" type="button" id="show-public-leaderboard-button">
+              <span class="material-symbols-outlined leaderboard-crown-icon" aria-hidden="true">crown</span>
+              <span>Leaderboard</span>
+            </button>
         </div>
         <div class="identity-bar" id="identity-bar" aria-label="Current player">
           <span class="identity-current">
@@ -115,23 +119,41 @@
             <span class="menu-notification-count" id="menu-notification-count" aria-label="Games waiting"></span>
           </button>
           <div class="identity-menu" id="identity-menu" aria-label="Player menu">
-            <button class="game-button secondary" type="button" id="show-new-game-button">New Game</button>
-            <button class="game-button secondary" type="button" id="show-game-list-button">Game List</button>
-            <button class="game-button secondary" type="button" id="show-leaderboard-button">Leaderboard</button>
-            <button class="game-button secondary" type="button" id="show-rules-button">Rules</button>
+              <button class="game-button secondary create-game-button-with-icon" type="button" id="show-new-game-button">
+                <span class="material-symbols-outlined create-game-playlist-icon" aria-hidden="true">playlist_add</span>
+                <span>New Game</span>
+              </button>
+              <button class="game-button secondary game-list-button-with-icon" type="button" id="show-game-list-button">
+                <span class="material-symbols-outlined game-list-crossword-icon" aria-hidden="true">crossword</span>
+                <span>Game List</span>
+              </button>
+              <button class="game-button secondary leaderboard-button-with-icon" type="button" id="show-leaderboard-button">
+                <span class="material-symbols-outlined leaderboard-crown-icon" aria-hidden="true">crown</span>
+                <span>Leaderboard</span>
+              </button>
+              <button class="game-button secondary rules-button-with-icon" type="button" id="show-rules-button">
+                <span class="material-symbols-outlined rules-guide-icon" aria-hidden="true">developer_guide</span>
+                <span>Rules</span>
+              </button>
             <label class="game-button secondary identity-menu-checkbox" id="notification-toggle-item" hidden>
               <input type="checkbox" id="notification-toggle-checkbox">
               <span>Alerts</span>
             </label>
-            <button class="game-button secondary" type="button" id="logout-button">Logout</button>
+            <button class="game-button secondary logout-button-with-icon" type="button" id="logout-button">
+              <span class="material-symbols-outlined logout-icon" aria-hidden="true">logout</span>
+              <span>Logout</span>
+            </button>
             <div class="menu-waiting-games" id="menu-waiting-games" aria-label="Games waiting for you"></div>
           </div>
         </div>
-        <div class="player-setup" id="player-setup" aria-label="Player setup">
-          <div class="page-hero">
-            <h2 class="section-title">New Game</h2>
-          </div>
-          <a class="game-button new-game-disabled-link" href="https://wordwefter.com/">Create games at WordWefter.com</a>
+          <div class="player-setup" id="player-setup" aria-label="Player setup">
+            <div class="page-hero">
+              <h2 class="section-title new-game-title">
+                <span class="material-symbols-outlined create-game-playlist-icon" aria-hidden="true">playlist_add</span>
+                <span>New Game</span>
+              </h2>
+            </div>
+          <a class="game-button new-game-disabled-link" href="https://wordwefter.com/">New games at WordWefter.com</a>
           <fieldset class="game-length-control new-game-enabled-control">
             <legend>Game length</legend>
             <div class="game-length-options">
@@ -171,7 +193,7 @@
           </div>
           <div class="game-controls new-game-enabled-control">
             <button class="game-button secondary" type="button" id="add-player-button">Add Player</button>
-            <button class="game-button" type="button" id="create-game-button">Create Game</button>
+            <button class="game-button" type="button" id="create-game-button">Start</button>
           </div>
           <div class="invite-setup new-game-enabled-control" aria-label="Invite setup">
             <div class="friend-invite-panel" id="friend-invite-panel">
@@ -184,20 +206,30 @@
       </div>
       <section class="active-games" aria-label="Active games">
         <div class="page-hero">
-          <h2 class="section-title">Game List</h2>
+          <h2 class="section-title game-list-title">
+            <span class="material-symbols-outlined game-list-crossword-icon" aria-hidden="true">crossword</span>
+            <span>Game List</span>
+          </h2>
         </div>
         <div class="active-games-actions">
-          <button class="game-button new-game-enabled-control" type="button" id="create-game-from-list-button">Create Game</button>
-          <a class="game-button new-game-disabled-link" href="https://wordwefter.com/">Create games at WordWefter.com</a>
+          <button class="game-button secondary create-game-button-with-icon new-game-enabled-control" type="button" id="create-game-from-list-button">
+            <span class="material-symbols-outlined create-game-playlist-icon" aria-hidden="true">playlist_add</span>
+            <span>New Game</span>
+          </button>
+          <a class="game-button new-game-disabled-link" href="https://wordwefter.com/">New games at WordWefter.com</a>
         </div>
         <div id="active-games-list" class="active-games-list"></div>
       </section>
 
       <section class="leaderboard-page" aria-label="Leaderboard">
         <div class="page-hero">
-          <h2 class="section-title">Leaderboard</h2>
+            <h2 class="section-title leaderboard-title">
+              <span class="material-symbols-outlined leaderboard-crown-icon" aria-hidden="true">crown</span>
+              <span>Leaderboard</span>
+            </h2>
         </div>
         <div class="leaderboard-summary" id="leaderboard-summary" aria-label="Leaderboard totals"></div>
+        <div class="leaderboard-highlights" id="leaderboard-highlights" aria-label="Leaderboard highlights"></div>
         <div class="leaderboard-table" id="leaderboard-table" aria-label="Top players"></div>
       </section>
     </header>
@@ -218,7 +250,10 @@
 
     <section class="rules-page" aria-label="WordWefter rules">
       <div class="rules-hero">
-        <h2 class="section-title">Rules</h2>
+        <h2 class="section-title rules-title">
+          <span class="material-symbols-outlined rules-guide-icon" aria-hidden="true">developer_guide</span>
+          <span>Rules</span>
+        </h2>
       </div>
       <div class="rules-grid">
         <article class="rules-card">
@@ -341,13 +376,13 @@
           <h3>Rainbow Tiles</h3>
           <p>Every opening rack includes one rainbow tile, randomly chosen from that rack's non-wild tiles. After that, each non-wild tile drawn into a rack has a 1-in-14 chance to become rainbow. Wild tiles cannot be rainbow, and marketplace tiles are never rainbow.</p>
           <p>A rainbow tile doubles every changed word that contains it, including future changes while it remains the top tile. If another tile covers it, the rainbow bonus stops applying.</p>
-          <div class="rules-example rules-example-bottom" aria-hidden="true">
-            <div class="board-cell">
-              <div class="tile tile-rainbow">R<span class="tile-points">1</span></div>
+            <div class="rules-example rules-example-bottom" aria-hidden="true">
+              <div class="board-cell">
+                <div class="tile tile-rainbow">R<span class="tile-points">1</span></div>
+              </div>
             </div>
-            <span class="rules-equation">word x2</span>
-          </div>
-        </article>
+            <p class="rules-equation">Word x2.</p>
+          </article>
         <article class="rules-card">
           <h3>Ending the Game</h3>
           <p>Game length controls the size of the tile pool: Short uses a smaller pool, Normal uses a medium pool, and Long uses the largest pool.</p>
@@ -470,6 +505,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./game.js?v=game-list-pills-1"></script>
+  <script type="module" src="./game.js?v=current-game-waiting-badge-1"></script>
 </body>
 </html>

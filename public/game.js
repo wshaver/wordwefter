@@ -5422,14 +5422,26 @@ function updateGameListRefreshTimer() {
 
 function renderWelcomeDemoGame() {
   if (getStoredPlayerName()) {
-    document.body.classList.remove("welcome-demo");
+    document.body.classList.remove("welcome-demo", "welcome-leaderboard");
     return;
   }
 
+  document.body.classList.remove("welcome-leaderboard");
   document.body.classList.add("welcome-demo");
   gameState.loadFromJSON(welcomeDemoGameState);
   captureTurnStartGameState();
   renderGame();
+}
+
+async function showWelcomeLeaderboardPreview() {
+  if (getStoredPlayerName()) {
+    await showLeaderboard();
+    return;
+  }
+
+  document.body.classList.remove("welcome-demo");
+  document.body.classList.add("welcome-leaderboard");
+  await loadLeaderboard();
 }
 
 function setScreen(screenName, options = {}) {
@@ -5441,7 +5453,7 @@ function setScreen(screenName, options = {}) {
   }
 
   document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-leaderboard", "screen-play", "screen-rules");
-  document.body.classList.remove("welcome-demo");
+  document.body.classList.remove("welcome-demo", "welcome-leaderboard");
   document.body.classList.add(`screen-${screenName}`);
 
   if (screenName !== "play") {
@@ -5454,6 +5466,7 @@ function setScreen(screenName, options = {}) {
   }
 
   closeIdentityMenu();
+  renderWaitingGamesMenu();
   updateTurnPolling();
   updateGameListRefreshTimer();
 
@@ -5516,16 +5529,159 @@ function formatLeaderboardNumber(value) {
   return Number(value || 0).toLocaleString();
 }
 
+function formatLeaderboardHighlightWord(highlight) {
+  return String(highlight?.word || "").trim().toUpperCase();
+}
+
+function formatLeaderboardHighlightPlayer(highlight) {
+  return String(highlight?.playerName || "").trim() || "Player";
+}
+
+function formatLeaderboardBoardCell(highlight) {
+  const row = Number(highlight?.row);
+  const column = Number(highlight?.column);
+
+  if (!Number.isInteger(row) || !Number.isInteger(column)) {
+    return "";
+  }
+
+  return `${String.fromCharCode(65 + Math.max(0, column))}${Math.max(0, row) + 1}`;
+}
+
+function formatLeaderboardHighlightWords(words) {
+  return (Array.isArray(words) ? words : [])
+    .map((word) => String(word || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+  function createLeaderboardHighlightItem(label, value, detail, words = [], options = {}) {
+    const item = document.createElement("div");
+    const labelElement = document.createElement("span");
+    const valueElement = document.createElement("strong");
+    const detailElement = document.createElement("span");
+    const wordList = document.createElement("div");
+    const hasWordList = () => wordList.childElementCount > 0;
+
+    item.className = "leaderboard-highlight-item";
+    labelElement.className = "leaderboard-highlight-label";
+    labelElement.textContent = label;
+    valueElement.className = "leaderboard-highlight-value";
+    valueElement.textContent = value || "-";
+    detailElement.className = "leaderboard-highlight-detail";
+    detailElement.textContent = detail || "No plays yet";
+    wordList.className = "leaderboard-highlight-words";
+    if (options.wordsAsValue) {
+      item.classList.add("leaderboard-highlight-item-words-value");
+    }
+    formatLeaderboardHighlightWords(words).forEach((word) => {
+      const wordElement = document.createElement("span");
+
+      wordElement.textContent = word;
+      wordList.append(wordElement);
+    });
+    item.append(labelElement);
+
+    if (value || !options.hideEmptyValue) {
+      item.append(valueElement);
+    }
+
+    if (options.wordsAsValue && hasWordList()) {
+      item.append(wordList);
+
+      if (detail) {
+        item.append(detailElement);
+      }
+
+      return item;
+    }
+
+    if (detail || !hasWordList()) {
+      item.append(detailElement);
+    }
+
+    if (hasWordList()) {
+      item.append(wordList);
+    }
+
+  return item;
+}
+
+function renderLeaderboardHighlights(leaderboard, highlightsElement) {
+  const highlights = leaderboard?.highlights || {};
+  const recent = highlights.recent || null;
+  const longest = highlights.longest || null;
+  const mostStacked = highlights.mostStacked || null;
+  const highestPoints = highlights.highestPoints || null;
+  const highestGameScore = highlights.highestGameScore || null;
+  const mostChangedWords = highlights.mostChangedWords || null;
+  const recentWord = formatLeaderboardHighlightWord(recent);
+  const longestWord = formatLeaderboardHighlightWord(longest);
+  const highestWord = formatLeaderboardHighlightWord(highestPoints);
+  const stackDepth = Number(mostStacked?.stackDepth || 0);
+  const changedWordCount = Number(mostChangedWords?.wordCount || 0);
+
+  highlightsElement.replaceChildren(
+    createLeaderboardHighlightItem(
+      "Recent",
+      "",
+      recentWord
+        ? `${formatLeaderboardHighlightPlayer(recent)} scored ${formatLeaderboardNumber(recent?.score)}`
+        : "",
+      recent?.words,
+      { hideEmptyValue: true, wordsAsValue: true }
+    ),
+    createLeaderboardHighlightItem(
+      "Longest",
+      longestWord,
+      longestWord
+        ? `${formatLeaderboardNumber(longest?.wordLength || longestWord.length)} letters by ${formatLeaderboardHighlightPlayer(longest)}`
+        : ""
+    ),
+      createLeaderboardHighlightItem(
+        "Most Stacked",
+        "",
+        "",
+        mostStacked?.words,
+        { hideEmptyValue: true, wordsAsValue: true }
+      ),
+    createLeaderboardHighlightItem(
+      "Highest Play",
+      Number(highestPoints?.score || 0) > 0 ? formatLeaderboardNumber(highestPoints?.score) : "",
+      highestWord
+        ? `${highestWord} by ${formatLeaderboardHighlightPlayer(highestPoints)}`
+        : ""
+    ),
+    createLeaderboardHighlightItem(
+      "Highest Score",
+      Number(highestGameScore?.score || 0) > 0 ? formatLeaderboardNumber(highestGameScore?.score) : "",
+      Number(highestGameScore?.score || 0) > 0
+        ? formatLeaderboardHighlightPlayer(highestGameScore)
+        : ""
+    ),
+    createLeaderboardHighlightItem(
+      "Most Changed",
+      "",
+      changedWordCount > 0
+        ? `${formatLeaderboardNumber(mostChangedWords?.score)} points by ${formatLeaderboardHighlightPlayer(mostChangedWords)}`
+        : "",
+      mostChangedWords?.words,
+      { hideEmptyValue: true, wordsAsValue: true }
+    )
+  );
+}
+
 function renderLeaderboard(leaderboard) {
   const summaryElement = document.querySelector("#leaderboard-summary");
+  const highlightsElement = document.querySelector("#leaderboard-highlights");
   const tableElement = document.querySelector("#leaderboard-table");
   const players = (Array.isArray(leaderboard?.players) ? leaderboard.players : []).slice(0, 20);
 
-  if (!summaryElement || !tableElement) {
+  if (!summaryElement || !highlightsElement || !tableElement) {
     return;
   }
 
   summaryElement.replaceChildren();
+  highlightsElement.replaceChildren();
   tableElement.replaceChildren();
 
   [
@@ -5545,6 +5701,8 @@ function renderLeaderboard(leaderboard) {
     item.append(valueElement, labelElement);
     summaryElement.append(item);
   });
+
+  renderLeaderboardHighlights(leaderboard, highlightsElement);
 
   if (players.length === 0) {
     const emptyElement = document.createElement("div");
@@ -6120,6 +6278,18 @@ function setWaitingGamesForMenu(games, options = {}) {
   renderWaitingGamesMenu();
 }
 
+function getVisibleWaitingGamesForMenu() {
+  const currentGameId = document.body.classList.contains("screen-play")
+    ? String(gameState.id || "").trim().toUpperCase()
+    : "";
+
+  if (!currentGameId) {
+    return waitingGamesForMenu;
+  }
+
+  return waitingGamesForMenu.filter((game) => String(game?.id || "").trim().toUpperCase() !== currentGameId);
+}
+
 async function refreshWaitingGamesForMenu() {
   const playerName = getStoredPlayerName();
 
@@ -6147,7 +6317,8 @@ function renderWaitingGamesMenu() {
   const menuButton = document.querySelector("#identity-menu-button");
   const notificationCount = document.querySelector("#menu-notification-count");
   const waitingGamesElement = document.querySelector("#menu-waiting-games");
-  const count = waitingGamesForMenu.length;
+  const visibleWaitingGames = getVisibleWaitingGamesForMenu();
+  const count = visibleWaitingGames.length;
 
   if (menuButton) {
     menuButton.classList.toggle("has-notifications", count > 0);
@@ -6174,7 +6345,7 @@ function renderWaitingGamesMenu() {
   title.textContent = "Your Turn";
   waitingGamesElement.append(title);
 
-  waitingGamesForMenu.forEach((game) => {
+  visibleWaitingGames.forEach((game) => {
     const button = document.createElement("button");
     const idElement = document.createElement("span");
     const turnElement = document.createElement("span");
@@ -7116,6 +7287,7 @@ function bindGameControls() {
   const saveIdentityButton = document.querySelector("#save-identity-button");
   const googleLoginButton = document.querySelector("#google-login-button");
   const facebookLoginButton = document.querySelector("#facebook-login-button");
+  const showPublicLeaderboardButton = document.querySelector("#show-public-leaderboard-button");
   const identityNameInput = document.querySelector("#identity-name-input");
   const identityNameDisplay = document.querySelector("#identity-name-display");
   const oauthDisplayNameInput = document.querySelector("#oauth-display-name-input");
@@ -7158,6 +7330,12 @@ function bindGameControls() {
   if (facebookLoginButton) {
     facebookLoginButton.addEventListener("click", () => {
       void startOAuthLogin("facebook");
+    });
+  }
+
+  if (showPublicLeaderboardButton) {
+    showPublicLeaderboardButton.addEventListener("click", () => {
+      void showLeaderboard();
     });
   }
 
@@ -7336,7 +7514,6 @@ async function initializeApp() {
       await showGameList({ replaceURL: true });
     } else {
       renderWelcomeDemoGame();
-      loadActiveGames();
     }
   }
 }
@@ -7354,6 +7531,14 @@ window.addEventListener("storage", handleIdentityStorageChange);
 
 window.addEventListener("hashchange", async () => {
   if (!window.location.hash) {
+    setGameMessage("");
+
+    if (getStoredPlayerName()) {
+      await showGameList({ replaceURL: true });
+    } else {
+      setScreen("welcome");
+    }
+
     return;
   }
 

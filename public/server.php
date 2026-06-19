@@ -743,8 +743,423 @@ function empty_archived_leaderboard_stats(): array
     return [
         'totalGamesPlayed' => 0,
         'archivedGameIds' => [],
-        'players' => []
+        'players' => [],
+        'highlights' => empty_leaderboard_highlights()
     ];
+}
+
+function empty_leaderboard_highlights(): array
+{
+    return [
+        'recent' => null,
+        'longest' => null,
+        'mostStacked' => null,
+        'highestPoints' => null,
+        'highestGameScore' => null,
+        'mostChangedWords' => null
+    ];
+}
+
+function normalize_leaderboard_highlight(?array $highlight, string $type): ?array
+{
+    if (!is_array($highlight)) {
+        return null;
+    }
+
+    $gameId = strtoupper(trim((string) ($highlight['gameId'] ?? '')));
+    $playerName = trim((string) ($highlight['playerName'] ?? ''));
+    $timestamp = (int) ($highlight['timestamp'] ?? 0);
+    $turnIndex = max(0, (int) ($highlight['turnIndex'] ?? 0));
+
+    if ($gameId === '' && $playerName === '') {
+        return null;
+    }
+
+    $normalized = [
+        'gameId' => $gameId,
+        'playerName' => $playerName,
+        'timestamp' => $timestamp,
+        'turnIndex' => $turnIndex
+    ];
+
+    if (isset($highlight['word'])) {
+        $word = strtoupper(trim((string) $highlight['word']));
+
+        if ($word !== '') {
+            $normalized['word'] = $word;
+            $normalized['score'] = max(0, (int) ($highlight['score'] ?? 0));
+            $normalized['wordLength'] = strlen($word);
+        }
+    }
+
+    if ($type === 'mostStacked') {
+        $stackDepth = max(0, (int) ($highlight['stackDepth'] ?? 0));
+
+        if ($stackDepth <= 1) {
+            return null;
+        }
+
+        $normalized['stackDepth'] = $stackDepth;
+        $normalized['row'] = max(0, (int) ($highlight['row'] ?? 0));
+        $normalized['column'] = max(0, (int) ($highlight['column'] ?? 0));
+        $normalized['letter'] = strtoupper(trim((string) ($highlight['letter'] ?? '')));
+        $normalized['words'] = normalize_highlight_words($highlight['words'] ?? []);
+    }
+
+    if ($type === 'mostChangedWords') {
+        $wordCount = max(0, (int) ($highlight['wordCount'] ?? 0));
+
+        if ($wordCount <= 0) {
+            return null;
+        }
+
+        $normalized['wordCount'] = $wordCount;
+        $normalized['score'] = max(0, (int) ($highlight['score'] ?? 0));
+        $normalized['words'] = normalize_highlight_words($highlight['words'] ?? []);
+    }
+
+    if ($type === 'recent') {
+        $words = normalize_highlight_words($highlight['words'] ?? []);
+
+        if (count($words) > 0) {
+            $normalized['words'] = $words;
+            $normalized['wordCount'] = count($words);
+        }
+    }
+
+    if ($type === 'highestGameScore') {
+        $score = max(0, (int) ($highlight['score'] ?? 0));
+
+        if ($score <= 0) {
+            return null;
+        }
+
+        $normalized['score'] = $score;
+    }
+
+    return $normalized;
+}
+
+function normalize_highlight_words($words): array
+{
+    $normalized = [];
+
+    foreach ((is_array($words) ? $words : []) as $word) {
+        $word = strtoupper(trim((string) $word));
+
+        if ($word !== '') {
+            $normalized[] = $word;
+        }
+    }
+
+    return array_values(array_unique($normalized));
+}
+
+function normalize_leaderboard_highlights($highlights): array
+{
+    $normalized = empty_leaderboard_highlights();
+
+    if (!is_array($highlights)) {
+        return $normalized;
+    }
+
+    foreach (array_keys($normalized) as $type) {
+        $normalized[$type] = normalize_leaderboard_highlight(
+            is_array($highlights[$type] ?? null) ? $highlights[$type] : null,
+            $type
+        );
+    }
+
+    return $normalized;
+}
+
+function leaderboard_highlight_is_better(?array $candidate, ?array $current, string $type): bool
+{
+    if ($candidate === null) {
+        return false;
+    }
+
+    if ($current === null) {
+        return true;
+    }
+
+    return match ($type) {
+        'recent' => [
+            (int) ($candidate['timestamp'] ?? 0),
+            (int) ($candidate['turnIndex'] ?? 0),
+            (string) ($candidate['gameId'] ?? '')
+        ] > [
+            (int) ($current['timestamp'] ?? 0),
+            (int) ($current['turnIndex'] ?? 0),
+            (string) ($current['gameId'] ?? '')
+        ],
+        'longest' => [
+            (int) ($candidate['wordLength'] ?? 0),
+            (int) ($candidate['score'] ?? 0),
+            (int) ($candidate['timestamp'] ?? 0)
+        ] > [
+            (int) ($current['wordLength'] ?? 0),
+            (int) ($current['score'] ?? 0),
+            (int) ($current['timestamp'] ?? 0)
+        ],
+        'mostStacked' => [
+            (int) ($candidate['stackDepth'] ?? 0),
+            (int) ($candidate['timestamp'] ?? 0)
+        ] > [
+            (int) ($current['stackDepth'] ?? 0),
+            (int) ($current['timestamp'] ?? 0)
+        ],
+        'highestPoints' => [
+            (int) ($candidate['score'] ?? 0),
+            (int) ($candidate['wordLength'] ?? 0),
+            (int) ($candidate['timestamp'] ?? 0)
+        ] > [
+            (int) ($current['score'] ?? 0),
+            (int) ($current['wordLength'] ?? 0),
+            (int) ($current['timestamp'] ?? 0)
+        ],
+        'highestGameScore' => [
+            (int) ($candidate['score'] ?? 0),
+            (int) ($candidate['timestamp'] ?? 0),
+            (string) ($candidate['gameId'] ?? '')
+        ] > [
+            (int) ($current['score'] ?? 0),
+            (int) ($current['timestamp'] ?? 0),
+            (string) ($current['gameId'] ?? '')
+        ],
+        'mostChangedWords' => [
+            (int) ($candidate['wordCount'] ?? 0),
+            (int) ($candidate['score'] ?? 0),
+            (int) ($candidate['timestamp'] ?? 0)
+        ] > [
+            (int) ($current['wordCount'] ?? 0),
+            (int) ($current['score'] ?? 0),
+            (int) ($current['timestamp'] ?? 0)
+        ],
+        default => false
+    };
+}
+
+function merge_leaderboard_highlight(array $highlights, string $type, ?array $candidate): array
+{
+    $candidate = normalize_leaderboard_highlight($candidate, $type);
+
+    if (leaderboard_highlight_is_better($candidate, $highlights[$type] ?? null, $type)) {
+        $highlights[$type] = $candidate;
+    }
+
+    return $highlights;
+}
+
+function merge_leaderboard_highlights(array $first, array $second): array
+{
+    $merged = normalize_leaderboard_highlights($first);
+    $second = normalize_leaderboard_highlights($second);
+
+    foreach (array_keys($merged) as $type) {
+        $merged = merge_leaderboard_highlight($merged, $type, $second[$type]);
+    }
+
+    return $merged;
+}
+
+function board_tile_letter_at_stack_layer(array $tile, int $layer): string
+{
+    $stack = is_array($tile['stack'] ?? null) ? $tile['stack'] : [];
+
+    if (count($stack) > 0) {
+        $index = min(max(0, $layer - 1), count($stack) - 1);
+        $stackTile = is_array($stack[$index] ?? null) ? $stack[$index] : [];
+
+        return strtoupper(trim((string) ($stackTile['letter'] ?? $tile['letter'] ?? '')));
+    }
+
+    return strtoupper(trim((string) ($tile['letter'] ?? '')));
+}
+
+function board_word_at_stack_layer(array $tileMap, int $row, int $column, int $layer, string $axis): string
+{
+    $rowStep = $axis === 'row' ? 0 : 1;
+    $columnStep = $axis === 'row' ? 1 : 0;
+    $startRow = $row;
+    $startColumn = $column;
+
+    while (isset($tileMap[($startRow - $rowStep) . ',' . ($startColumn - $columnStep)])) {
+        $startRow -= $rowStep;
+        $startColumn -= $columnStep;
+    }
+
+    $letters = [];
+    $currentRow = $startRow;
+    $currentColumn = $startColumn;
+
+    while (isset($tileMap[$currentRow . ',' . $currentColumn])) {
+        $letter = board_tile_letter_at_stack_layer($tileMap[$currentRow . ',' . $currentColumn], $layer);
+
+        if ($letter === '') {
+            break;
+        }
+
+        $letters[] = $letter;
+        $currentRow += $rowStep;
+        $currentColumn += $columnStep;
+    }
+
+    return count($letters) > 1 ? implode('', $letters) : '';
+}
+
+function stacked_words_for_board_tile(array $state, array $targetTile, int $stackDepth): array
+{
+    $tileMap = [];
+
+    foreach ((is_array($state['boardTiles'] ?? null) ? $state['boardTiles'] : []) as $tile) {
+        if (!is_array($tile)) {
+            continue;
+        }
+
+        $row = (int) ($tile['row'] ?? -1);
+        $column = (int) ($tile['column'] ?? -1);
+
+        if ($row < 0 || $column < 0) {
+            continue;
+        }
+
+        $tileMap[$row . ',' . $column] = $tile;
+    }
+
+    $row = (int) ($targetTile['row'] ?? -1);
+    $column = (int) ($targetTile['column'] ?? -1);
+    $words = [];
+
+    if ($row < 0 || $column < 0) {
+        return $words;
+    }
+
+    for ($layer = 1; $layer <= $stackDepth; $layer += 1) {
+        $layerWords = array_values(array_filter([
+            board_word_at_stack_layer($tileMap, $row, $column, $layer, 'row'),
+            board_word_at_stack_layer($tileMap, $row, $column, $layer, 'column')
+        ]));
+
+        if (count($layerWords) > 0) {
+            $words[] = implode(' / ', array_unique($layerWords));
+        }
+    }
+
+    return $words;
+}
+
+function leaderboard_highlights_for_game(array $state, string $file): array
+{
+    $highlights = empty_leaderboard_highlights();
+    $gameId = strtoupper((string) ($state['id'] ?? pathinfo($file, PATHINFO_FILENAME)));
+    $rawDate = (string) ($state['lastPlayDate'] ?? $state['startDate'] ?? '');
+    $timestamp = $rawDate !== '' ? strtotime($rawDate) : false;
+    $timestamp = $timestamp === false ? 0 : (int) $timestamp;
+
+    foreach (player_summaries($state) as $player) {
+        if (empty($player['claimed']) || !empty($player['open'])) {
+            continue;
+        }
+
+        $playerName = trim((string) ($player['name'] ?? 'Player')) ?: 'Player';
+        $score = max(0, (int) ($player['score'] ?? 0));
+
+        $highlights = merge_leaderboard_highlight($highlights, 'highestGameScore', [
+            'gameId' => $gameId,
+            'playerName' => $playerName,
+            'score' => $score,
+            'timestamp' => $timestamp,
+            'turnIndex' => turn_index($state)
+        ]);
+    }
+
+    foreach ((is_array($state['history'] ?? null) ? $state['history'] : []) as $index => $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $words = array_values(array_filter(
+            is_array($entry['words'] ?? null) ? $entry['words'] : [],
+            static fn($word): bool => is_array($word) && trim((string) ($word['word'] ?? '')) !== ''
+        ));
+
+        if (count($words) === 0) {
+            continue;
+        }
+
+        $turnIndex = max(0, (int) ($entry['turnIndex'] ?? $index));
+        $playerName = trim((string) ($entry['playerName'] ?? 'Player')) ?: 'Player';
+        $turnScore = 0;
+        $turnWords = [];
+
+        foreach ($words as $wordScore) {
+            $word = strtoupper(trim((string) ($wordScore['word'] ?? '')));
+            $score = max(0, (int) ($wordScore['score'] ?? 0));
+            $turnScore += $score;
+            $turnWords[] = $word;
+            $candidate = [
+                'gameId' => $gameId,
+                'playerName' => $playerName,
+                'word' => $word,
+                'score' => $score,
+                'timestamp' => $timestamp,
+                'turnIndex' => $turnIndex
+            ];
+
+            $highlights = merge_leaderboard_highlight($highlights, 'longest', $candidate);
+            $highlights = merge_leaderboard_highlight($highlights, 'highestPoints', $candidate);
+        }
+
+        $highlights = merge_leaderboard_highlight($highlights, 'recent', [
+            'gameId' => $gameId,
+            'playerName' => $playerName,
+            'word' => $turnWords[0] ?? '',
+            'wordCount' => count($words),
+            'words' => $turnWords,
+            'score' => $turnScore,
+            'timestamp' => $timestamp,
+            'turnIndex' => $turnIndex
+        ]);
+
+        $highlights = merge_leaderboard_highlight($highlights, 'mostChangedWords', [
+            'gameId' => $gameId,
+            'playerName' => $playerName,
+            'wordCount' => count($words),
+            'words' => $turnWords,
+            'score' => $turnScore,
+            'timestamp' => $timestamp,
+            'turnIndex' => $turnIndex
+        ]);
+    }
+
+    foreach ((is_array($state['boardTiles'] ?? null) ? $state['boardTiles'] : []) as $tile) {
+        if (!is_array($tile)) {
+            continue;
+        }
+
+        $stack = is_array($tile['stack'] ?? null) ? $tile['stack'] : [];
+        $stackDepth = count($stack) > 0 ? count($stack) : 1;
+
+        if ($stackDepth <= 1) {
+            continue;
+        }
+
+        $topTile = is_array($stack[$stackDepth - 1] ?? null) ? $stack[$stackDepth - 1] : $tile;
+        $highlights = merge_leaderboard_highlight($highlights, 'mostStacked', [
+            'gameId' => $gameId,
+            'playerName' => '',
+            'stackDepth' => $stackDepth,
+            'row' => max(0, (int) ($tile['row'] ?? 0)),
+            'column' => max(0, (int) ($tile['column'] ?? 0)),
+            'letter' => strtoupper(trim((string) ($topTile['letter'] ?? $tile['letter'] ?? ''))),
+            'words' => stacked_words_for_board_tile($state, $tile, $stackDepth),
+            'timestamp' => $timestamp,
+            'turnIndex' => turn_index($state)
+        ]);
+    }
+
+    return $highlights;
 }
 
 function read_archived_leaderboard_stats(string $leaderboardFile): array
@@ -794,7 +1209,8 @@ function read_archived_leaderboard_stats(string $leaderboardFile): array
             static fn($id): string => strtoupper(trim((string) $id)),
             is_array($archivedStats['archivedGameIds'] ?? null) ? $archivedStats['archivedGameIds'] : []
         ))),
-        'players' => $players
+        'players' => $players,
+        'highlights' => normalize_leaderboard_highlights($archivedStats['highlights'] ?? null)
     ];
 }
 
@@ -811,6 +1227,11 @@ function add_game_to_archived_leaderboard_stats(array $archivedStats, array $sta
     if ($gameId !== '') {
         $archivedStats['archivedGameIds'][] = $gameId;
     }
+
+    $archivedStats['highlights'] = merge_leaderboard_highlights(
+        $archivedStats['highlights'] ?? empty_leaderboard_highlights(),
+        leaderboard_highlights_for_game($state, $file)
+    );
 
     foreach (player_summaries($state) as $player) {
         $name = trim((string) ($player['name'] ?? ''));
@@ -860,6 +1281,8 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
     $archivedGameIds = array_fill_keys($archivedStats['archivedGameIds'], true);
     $totalGamesPlayed = (int) ($archivedStats['totalGamesPlayed'] ?? 0);
     $totalActiveGames = 0;
+    $archivedHighlights = normalize_leaderboard_highlights($archivedStats['highlights'] ?? null);
+    $highlights = $archivedHighlights;
 
     foreach (($archivedStats['players'] ?? []) as $key => $player) {
         if (!is_array($player)) {
@@ -907,6 +1330,11 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
         if ($isActiveGame) {
             $totalActiveGames += 1;
         }
+
+        $highlights = merge_leaderboard_highlights(
+            $highlights,
+            leaderboard_highlights_for_game($state, $file)
+        );
 
         foreach (player_summaries($state) as $player) {
             $name = trim((string) ($player['name'] ?? ''));
@@ -956,11 +1384,13 @@ function build_leaderboard(string $saveDirectory, string $leaderboardFile, ?arra
         'generatedAt' => gmdate('c'),
         'totalGamesPlayed' => $totalGamesPlayed,
         'totalActiveGames' => $totalActiveGames,
+        'highlights' => $highlights,
         'players' => $playerRows,
         'archivedStats' => [
             'totalGamesPlayed' => (int) ($archivedStats['totalGamesPlayed'] ?? 0),
             'archivedGameIds' => array_values($archivedStats['archivedGameIds'] ?? []),
-            'players' => array_values($archivedStats['players'] ?? [])
+            'players' => array_values($archivedStats['players'] ?? []),
+            'highlights' => $archivedHighlights
         ]
     ];
 }
