@@ -5496,8 +5496,28 @@ function handleInvalidLogin(error) {
   closeIdentityMenu();
   setWaitingGamesForMenu([]);
   setScreen("welcome");
-  setGameMessage(error?.message || "Sign in again to continue.");
+  setGameMessage("Please login again to continue", { clearAfterMs: 0 });
   updateIdentityUI();
+}
+
+function isAuthInvalidError(error) {
+  if (error?.authInvalid) {
+    return true;
+  }
+
+  const message = String(error?.message || "").toLowerCase();
+
+  return /\blogin\b/.test(message) &&
+    (
+      /\bsession\b/.test(message) ||
+      /\btoken\b/.test(message) ||
+      /\bauth/.test(message)
+    ) &&
+    (
+      /\binvalid\b/.test(message) ||
+      /\brejected\b/.test(message) ||
+      /\bnot registered\b/.test(message)
+    );
 }
 
 function appendCacheBuster(url) {
@@ -5599,7 +5619,7 @@ async function saveGameState() {
       body: JSON.stringify(gameState.toJSON())
     });
   } catch (error) {
-    if (error.authInvalid) {
+    if (isAuthInvalidError(error)) {
       handleInvalidLogin(error);
     }
 
@@ -5707,7 +5727,7 @@ async function pollActiveGameState() {
       clearRemotePlayedAnimationLater();
     }
   } catch (error) {
-    if (error.authInvalid) {
+    if (isAuthInvalidError(error)) {
       handleInvalidLogin(error);
       return;
     }
@@ -5914,7 +5934,7 @@ async function refreshWaitingGamesForMenu() {
 
     setWaitingGamesForMenu(payload.games || []);
   } catch (error) {
-    if (error.authInvalid) {
+    if (isAuthInvalidError(error)) {
       handleInvalidLogin(error);
     }
     // Keep the last successful badge state instead of flashing it away on a transient refresh failure.
@@ -6165,7 +6185,7 @@ async function loadActiveGames() {
       activeGamesList.append(groupElement);
     });
   } catch (error) {
-    if (error.authInvalid) {
+    if (isAuthInvalidError(error)) {
       activeGamesList.textContent = "";
       handleInvalidLogin(error);
       return;
@@ -6193,7 +6213,7 @@ async function loadGameById(gameId) {
   try {
     payload = await fetchJSON(`${serverURL}?${params.toString()}`);
   } catch (error) {
-    if (error.authInvalid) {
+    if (isAuthInvalidError(error)) {
       handleInvalidLogin(error);
     }
 
@@ -6236,6 +6256,10 @@ async function resumeGame(gameId) {
   try {
     await loadGameById(gameId);
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return;
+    }
+
     setGameMessage(`Could not load game: ${error.message}`);
   }
 }
@@ -6305,6 +6329,10 @@ async function loadGameFromURLHash() {
     await loadGameById(gameId);
     return true;
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return false;
+    }
+
     setScreen("welcome");
     clearGameURLGameId();
     setGameMessage(`Could not load game ${gameId}: ${error.message}`);
@@ -6357,6 +6385,10 @@ async function startNewGame() {
     await saveGameState();
     await loadActiveGames();
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return;
+    }
+
     setGameMessage(`Game started, but could not save: ${error.message}`);
   }
 }
@@ -6416,6 +6448,10 @@ async function confirmRedrawTilesAndSkipTurn() {
     await saveGameState();
     await loadActiveGames();
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return;
+    }
+
     setGameMessage(`Tiles redrawn, but could not save: ${error.message}`);
   }
 }
@@ -6467,6 +6503,10 @@ async function confirmPassTurn() {
     await saveGameState();
     await loadActiveGames();
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return;
+    }
+
     setGameMessage(`Turn passed, but could not save: ${error.message}`);
   }
 }
@@ -6504,6 +6544,10 @@ async function confirmConcedeGame() {
     await saveGameState();
     await loadActiveGames();
   } catch (error) {
+    if (isAuthInvalidError(error)) {
+      return;
+    }
+
     setGameMessage(`Game conceded, but could not save: ${error.message}`);
   }
 }
@@ -6566,6 +6610,10 @@ async function finishPlacement() {
       await saveGameState();
       await loadActiveGames();
     } catch (error) {
+      if (isAuthInvalidError(error)) {
+        return;
+      }
+
       setGameMessage(`Turn finished, but could not save: ${error.message}`);
     }
   }
