@@ -352,15 +352,15 @@ function validate_request_auth(string $userLoginFile, string $authKey, string $s
 
     if ($strictAuth) {
         if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
-            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because this login token is not registered on the server.'], 403);
+            send_json(['ok' => false, 'authInvalid' => true, 'error' => $actionLabel . ' rejected because this login token is not registered on the server.'], 403);
         }
 
         if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
-            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
+            send_json(['ok' => false, 'authInvalid' => true, 'error' => $actionLabel . ' rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
         }
 
         if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, trim($sessionToken))) {
-            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because this login session is not valid.'], 403);
+            send_json(['ok' => false, 'authInvalid' => true, 'error' => $actionLabel . ' rejected because this login session is not valid.'], 403);
         }
     }
 
@@ -1097,6 +1097,12 @@ $requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $action = $_GET['action'] ?? $_POST['action'] ?? ($requestMethod === 'POST' ? 'save' : 'list');
 
 if ($action === 'list') {
+    validate_request_auth(
+        $userLoginFile,
+        (string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''),
+        (string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''),
+        'List'
+    );
     cleanup_saved_games($saveDirectory, $leaderboardFile);
     $games = [];
 

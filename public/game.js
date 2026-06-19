@@ -5472,11 +5472,15 @@ function clearDisallowedLegacyNameLogin() {
   }
 }
 
-function logoutPlayer() {
+function clearStoredPlayerIdentity() {
   deleteCookie(playerNameCookie);
   deleteCookie(playerAuthCookie);
   removeLocalStorageItem(playerNameStorageKey);
   removeLocalStorageItem(playerAuthStorageKey);
+}
+
+function logoutPlayer() {
+  clearStoredPlayerIdentity();
   pendingIdentityAction = null;
   closeIdentityMenu();
   setWaitingGamesForMenu([]);
@@ -5484,6 +5488,16 @@ function logoutPlayer() {
   setGameMessage("");
   updateIdentityUI();
   loadActiveGames();
+}
+
+function handleInvalidLogin(error) {
+  clearStoredPlayerIdentity();
+  pendingIdentityAction = null;
+  closeIdentityMenu();
+  setWaitingGamesForMenu([]);
+  setScreen("welcome");
+  setGameMessage(error?.message || "Sign in again to continue.");
+  updateIdentityUI();
 }
 
 function appendCacheBuster(url) {
@@ -5513,7 +5527,11 @@ async function fetchJSON(url, options = {}) {
   const payload = await response.json();
 
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || "Server request failed.");
+    const error = new Error(payload.error || "Server request failed.");
+
+    error.status = response.status;
+    error.authInvalid = Boolean(payload.authInvalid);
+    throw error;
   }
 
   return payload;
@@ -5555,20 +5573,38 @@ function mergePlayerMetadataFromState(sourceState) {
   return changed;
 }
 
-async function saveGameState() {
+function createAuthenticatedGameParams(entries = {}) {
   const auth = getStoredPlayerAuth();
-  const params = new URLSearchParams({
-    action: "save",
+
+  return new URLSearchParams({
+    ...entries,
+    playerName: getStoredPlayerName(),
     authKey: getStoredPlayerAuthKey(),
     sessionToken: auth?.sessionToken || ""
   });
-  const payload = await fetchJSON(`${serverURL}?${params.toString()}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(gameState.toJSON())
+}
+
+async function saveGameState() {
+  const params = createAuthenticatedGameParams({
+    action: "save"
   });
+  let payload = null;
+
+  try {
+    payload = await fetchJSON(`${serverURL}?${params.toString()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(gameState.toJSON())
+    });
+  } catch (error) {
+    if (error.authInvalid) {
+      handleInvalidLogin(error);
+    }
+
+    throw error;
+  }
 
   if (payload.stale) {
     throw new Error(payload.error || "Save ignored because a newer turn is already stored.");
@@ -5607,14 +5643,10 @@ async function pollActiveGameState() {
   }
 
   try {
-    const auth = getStoredPlayerAuth();
-    const params = new URLSearchParams({
+    const params = createAuthenticatedGameParams({
       action: "load",
       id: gameState.id,
-      turnIndex: String(gameState.turnIndex),
-      playerName: getStoredPlayerName(),
-      authKey: getStoredPlayerAuthKey(),
-      sessionToken: auth?.sessionToken || ""
+      turnIndex: String(gameState.turnIndex)
     });
     const payload = await fetchJSON(
       `${serverURL}?${params.toString()}`
@@ -5675,6 +5707,11 @@ async function pollActiveGameState() {
       clearRemotePlayedAnimationLater();
     }
   } catch (error) {
+    if (error.authInvalid) {
+      handleInvalidLogin(error);
+      return;
+    }
+
     setGameMessage(`Could not refresh game: ${error.message}`);
   } finally {
     updateTurnPolling();
@@ -5870,10 +5907,16 @@ async function refreshWaitingGamesForMenu() {
   }
 
   try {
-    const payload = await fetchJSON(`${serverURL}?action=list`);
+    const params = createAuthenticatedGameParams({
+      action: "list"
+    });
+    const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
 
     setWaitingGamesForMenu(payload.games || []);
-  } catch {
+  } catch (error) {
+    if (error.authInvalid) {
+      handleInvalidLogin(error);
+    }
     // Keep the last successful badge state instead of flashing it away on a transient refresh failure.
   }
 }
@@ -5990,7 +6033,10 @@ async function loadActiveGames() {
   loadingActiveGames = true;
 
   try {
-    const payload = await fetchJSON(`${serverURL}?action=list`);
+    const params = createAuthenticatedGameParams({
+      action: "list"
+    });
+    const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
     (payload.games || []).forEach((game) => rememberFriendsFromGame(game));
     setWaitingGamesForMenu(payload.games || []);
     const matchingGames = (payload.games || [])
@@ -6119,6 +6165,12 @@ async function loadActiveGames() {
       activeGamesList.append(groupElement);
     });
   } catch (error) {
+    if (error.authInvalid) {
+      activeGamesList.textContent = "";
+      handleInvalidLogin(error);
+      return;
+    }
+
     activeGamesList.textContent = `Could not load active games: ${error.message}`;
   } finally {
     loadingActiveGames = false;
@@ -6132,15 +6184,21 @@ async function loadGameById(gameId) {
     throw new Error("Game ID must be a 5 character letter/number string.");
   }
 
-  const storedAuth = getStoredPlayerAuth();
-  const params = new URLSearchParams({
+  const params = createAuthenticatedGameParams({
     action: "load",
-    id: normalizedGameId,
-    playerName: getStoredPlayerName(),
-    authKey: getStoredPlayerAuthKey(),
-    sessionToken: storedAuth?.sessionToken || ""
+    id: normalizedGameId
   });
-  const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
+  let payload = null;
+
+  try {
+    payload = await fetchJSON(`${serverURL}?${params.toString()}`);
+  } catch (error) {
+    if (error.authInvalid) {
+      handleInvalidLogin(error);
+    }
+
+    throw error;
+  }
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
   const auth = getStoredPlayerAuth();
   const authKey = getStoredPlayerAuthKey();
