@@ -1216,7 +1216,7 @@ body.screen-welcome:not(.has-player) main {
 body.screen-welcome.welcome-demo .game-area {
   display: grid;
   gap: 0.5rem;
-  margin-top: 0.1rem;
+  margin-top: 1rem;
 }
 
 body.screen-welcome.welcome-demo .board {

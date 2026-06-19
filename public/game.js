@@ -3459,7 +3459,7 @@ function renderMarketplace(options = {}) {
       return;
     }
 
-    const canBuy = isMyTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
+    const canBuy = canInteractWithCurrentTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
 
     itemElement.dataset.tileId = tile.id;
     itemElement.dataset.tileSource = "marketplace";
