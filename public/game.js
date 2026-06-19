@@ -5296,6 +5296,16 @@ function createOpenPlayerSlot(index) {
   };
 }
 
+function isOpenPlayerSummary(player) {
+  return Boolean(player?.open) ||
+    player?.claimed === false ||
+    /^open spot(?:\s+\d+)?$/i.test(String(player?.name || ""));
+}
+
+function getPlayerSummaryDisplayName(player) {
+  return isOpenPlayerSummary(player) ? "Open Spot" : String(player?.name || "Player");
+}
+
 function createPlayerSetupEntries() {
   const auth = getStoredPlayerAuth();
   const hostName = getStoredPlayerName() || "Player 1";
@@ -6355,10 +6365,10 @@ async function loadActiveGames() {
           playerElement.classList.toggle("winner-player", Boolean(game.gameOver && victorNameKeys.has(normalizeNameKey(player.name))));
           playerElement.classList.toggle("conceded-player", concededPlayerKeys.has(normalizeNameKey(player.name)));
           playerNameElement.className = "active-game-player-name";
-          playerNameElement.textContent = player.name;
+          playerNameElement.textContent = getPlayerSummaryDisplayName(player);
           playerElement.append(playerNameElement);
 
-          if (player.score !== null) {
+          if (player.score !== null && Number(player.score) !== 0) {
             playerPointsElement.className = "active-game-player-points";
             playerPointsElement.textContent = player.score;
             playerElement.append(playerPointsElement);

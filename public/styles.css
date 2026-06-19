@@ -1005,10 +1005,11 @@ html.new-games-disabled .new-game-disabled-link {
 }
 
 .active-game-player-score {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0.25rem;
-  min-width: 0;
+  min-width: 7rem;
   padding: 0.18rem 0.45rem;
   border: 1px solid rgba(23, 32, 42, 0.14);
   border-radius: 6px;
@@ -1022,6 +1023,8 @@ html.new-games-disabled .new-game-disabled-link {
 }
 
 .active-game-player-points {
+  justify-self: end;
+  text-align: right;
   font-weight: 900;
 }
 
@@ -1048,8 +1051,16 @@ html.new-games-disabled .new-game-disabled-link {
   text-decoration: line-through;
 }
 
-.active-game-player-score.winner-player::before {
+.active-game-player-score.winner-player .active-game-player-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.active-game-player-score.winner-player .active-game-player-name::before {
   content: "workspace_premium";
+  flex: 0 0 auto;
   color: var(--warm);
   font-family: "Material Symbols Outlined";
   font-size: 1rem;
