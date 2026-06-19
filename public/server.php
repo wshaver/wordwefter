@@ -895,12 +895,14 @@ function leaderboard_highlight_is_better(?array $candidate, ?array $current, str
         ],
         'longest' => [
             (int) ($candidate['wordLength'] ?? 0),
-            (int) ($candidate['score'] ?? 0),
-            (int) ($candidate['timestamp'] ?? 0)
+            (int) ($candidate['timestamp'] ?? 0),
+            (int) ($candidate['turnIndex'] ?? 0),
+            (int) ($candidate['score'] ?? 0)
         ] > [
             (int) ($current['wordLength'] ?? 0),
-            (int) ($current['score'] ?? 0),
-            (int) ($current['timestamp'] ?? 0)
+            (int) ($current['timestamp'] ?? 0),
+            (int) ($current['turnIndex'] ?? 0),
+            (int) ($current['score'] ?? 0)
         ],
         'mostStacked' => [
             (int) ($candidate['stackDepth'] ?? 0),

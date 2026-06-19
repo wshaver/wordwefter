@@ -1033,7 +1033,7 @@ body.screen-play .invite-link-panel[hidden],
   text-align: right;
 }
 
-.leaderboard-row span:nth-child(2) {
+.leaderboard-row:not(.leaderboard-header) span:nth-child(2) {
   color: var(--ink);
   text-align: left;
 }

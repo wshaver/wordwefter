@@ -125,6 +125,13 @@ write_fixture($fixtureFiles[1], [
     ],
     'history' => [
         [
+            'turnIndex' => 0,
+            'playerName' => 'Cia',
+            'words' => [
+                ['word' => 'HELLOWORLDX', 'score' => 1]
+            ]
+        ],
+        [
             'turnIndex' => 1,
             'playerName' => 'Cia',
             'words' => [
@@ -177,7 +184,7 @@ if (!is_array($highlights)) {
 assert_same('RECENT', $highlights['recent']['word'] ?? null, 'recent word');
 assert_same(50, $highlights['recent']['score'] ?? null, 'recent score');
 assert_same(['RECENT', 'ALL'], $highlights['recent']['words'] ?? null, 'recent words');
-assert_same('QUIZZIFYING', $highlights['longest']['word'] ?? null, 'longest word');
+assert_same('HELLOWORLDX', $highlights['longest']['word'] ?? null, 'longest word');
 assert_same(6, $highlights['mostStacked']['stackDepth'] ?? null, 'most stacked depth');
 assert_same(['GOAT', 'FLOAT'], $highlights['mostStacked']['words'] ?? null, 'most stacked words');
 assert_same('QUIZZIFYING', $highlights['highestPoints']['word'] ?? null, 'highest points word');
