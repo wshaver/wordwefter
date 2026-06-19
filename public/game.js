@@ -5490,6 +5490,15 @@ function logoutPlayer() {
   loadActiveGames();
 }
 
+function handleMissingStoredIdentity(options = {}) {
+  pendingIdentityAction = null;
+  closeIdentityMenu();
+  setWaitingGamesForMenu([]);
+  setScreen("welcome");
+  setGameMessage(options.message || "");
+  updateIdentityUI();
+}
+
 function handleInvalidLogin(error) {
   clearStoredPlayerIdentity();
   pendingIdentityAction = null;
@@ -5498,6 +5507,18 @@ function handleInvalidLogin(error) {
   setScreen("welcome");
   setGameMessage("Please login again to continue", { clearAfterMs: 0 });
   updateIdentityUI();
+}
+
+function handleIdentityStorageChange(event) {
+  if (![playerNameStorageKey, playerAuthStorageKey].includes(event.key)) {
+    return;
+  }
+
+  updateIdentityUI();
+
+  if (!getStoredPlayerName() && document.body.classList.contains("screen-list")) {
+    handleMissingStoredIdentity({ message: "Please login again to continue" });
+  }
 }
 
 function isAuthInvalidError(error) {
@@ -6047,6 +6068,9 @@ async function loadActiveGames() {
   if (!storedPlayerName) {
     activeGamesList.textContent = "";
     setWaitingGamesForMenu([]);
+    if (document.body.classList.contains("screen-list")) {
+      handleMissingStoredIdentity({ message: "Please login again to continue" });
+    }
     return;
   }
 
@@ -7144,6 +7168,7 @@ if (document.readyState === "loading") {
 document.addEventListener("visibilitychange", refreshTurnStateSoon);
 window.addEventListener("focus", refreshTurnStateSoon);
 window.addEventListener("pageshow", refreshTurnStateSoon);
+window.addEventListener("storage", handleIdentityStorageChange);
 
 window.addEventListener("hashchange", async () => {
   if (!window.location.hash) {
