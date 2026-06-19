@@ -343,6 +343,35 @@ function is_legacy_name_auth_key(string $authKey): bool
     return strncmp($authKey, 'name:', 5) === 0;
 }
 
+function validate_request_auth(string $userLoginFile, string $authKey, string $sessionToken, string $actionLabel): array
+{
+    $requestAuthKey = normalize_auth_key($authKey);
+    $isLegacyNameLogin = is_legacy_name_auth_key($requestAuthKey);
+    $registeredLogin = get_user_login_by_auth_key($userLoginFile, $requestAuthKey);
+    $strictAuth = request_enforces_strict_auth();
+
+    if ($strictAuth) {
+        if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
+            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because this login token is not registered on the server.'], 403);
+        }
+
+        if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
+            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
+        }
+
+        if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, trim($sessionToken))) {
+            send_json(['ok' => false, 'error' => $actionLabel . ' rejected because this login session is not valid.'], 403);
+        }
+    }
+
+    return [
+        'authKey' => $requestAuthKey,
+        'isLegacyNameLogin' => $isLegacyNameLogin,
+        'registeredLogin' => $registeredLogin,
+        'strictAuth' => $strictAuth
+    ];
+}
+
 function read_user_logins(string $userLoginFile): array
 {
     if (!is_file($userLoginFile)) {
@@ -1120,6 +1149,13 @@ if ($action === 'load') {
         send_json(['ok' => false, 'error' => 'Saved game is not valid JSON.'], 500);
     }
 
+    validate_request_auth(
+        $userLoginFile,
+        (string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''),
+        (string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''),
+        'Load'
+    );
+
     $requestedTurnIndex = isset($_GET['turnIndex']) ? (int) $_GET['turnIndex'] : null;
     $savedTurnIndex = turn_index($state);
 
@@ -1243,25 +1279,14 @@ if ($action === 'save') {
     $file = game_path($saveDirectory, $id);
     $incomingTurnIndex = turn_index($state);
     $isNewGame = !is_file($file);
-    $requestAuthKey = normalize_auth_key((string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''));
-    $isLegacyNameLogin = is_legacy_name_auth_key($requestAuthKey);
-    $registeredLogin = get_user_login_by_auth_key($userLoginFile, $requestAuthKey);
-    $requestSessionToken = trim((string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''));
-    $strictAuth = request_enforces_strict_auth();
-
-    if ($strictAuth) {
-        if ($requestAuthKey === '' || (!$isLegacyNameLogin && $registeredLogin === null)) {
-            send_json(['ok' => false, 'error' => 'Save rejected because this login token is not registered on the server.'], 403);
-        }
-
-        if (!$isLegacyNameLogin && is_local_fallback_user_id((string) ($registeredLogin['userId'] ?? '')) && !request_is_local_http()) {
-            send_json(['ok' => false, 'error' => 'Save rejected because local fallback logins are only allowed on the local HTTP server.'], 403);
-        }
-
-        if (!$isLegacyNameLogin && !session_token_matches($registeredLogin, $requestSessionToken)) {
-            send_json(['ok' => false, 'error' => 'Save rejected because this login session is not valid.'], 403);
-        }
-    }
+    $requestAuth = validate_request_auth(
+        $userLoginFile,
+        (string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''),
+        (string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''),
+        'Save'
+    );
+    $requestAuthKey = $requestAuth['authKey'];
+    $strictAuth = $requestAuth['strictAuth'];
 
     if ($isNewGame) {
         if (request_disables_new_games()) {

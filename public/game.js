@@ -5607,12 +5607,14 @@ async function pollActiveGameState() {
   }
 
   try {
+    const auth = getStoredPlayerAuth();
     const params = new URLSearchParams({
       action: "load",
       id: gameState.id,
       turnIndex: String(gameState.turnIndex),
       playerName: getStoredPlayerName(),
-      authKey: getStoredPlayerAuthKey()
+      authKey: getStoredPlayerAuthKey(),
+      sessionToken: auth?.sessionToken || ""
     });
     const payload = await fetchJSON(
       `${serverURL}?${params.toString()}`
@@ -6130,11 +6132,13 @@ async function loadGameById(gameId) {
     throw new Error("Game ID must be a 5 character letter/number string.");
   }
 
+  const storedAuth = getStoredPlayerAuth();
   const params = new URLSearchParams({
     action: "load",
     id: normalizedGameId,
     playerName: getStoredPlayerName(),
-    authKey: getStoredPlayerAuthKey()
+    authKey: getStoredPlayerAuthKey(),
+    sessionToken: storedAuth?.sessionToken || ""
   });
   const payload = await fetchJSON(`${serverURL}?${params.toString()}`);
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
