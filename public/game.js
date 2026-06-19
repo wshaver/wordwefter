@@ -2738,6 +2738,152 @@ const startCell = {
   row: Math.floor(boardSize / 2),
   column: Math.floor(boardSize / 2)
 };
+const welcomeDemoGameState = {
+  version: 1,
+  id: "DEMO1",
+  startDate: "2026-06-19T00:00:00.000Z",
+  lastPlayDate: "2026-06-19T00:00:00.000Z",
+  gameLength: "normal",
+  tilesDrawn: 26,
+  turnIndex: 5,
+  currentPlayerIndex: 0,
+  players: [
+    {
+      name: "You",
+      score: 1000,
+      rack: [
+        { letter: "P" },
+        { letter: "L" },
+        { letter: "F" },
+        { letter: "U" },
+        { letter: "A" },
+        { letter: "L" },
+        { letter: "Y" }
+      ]
+    },
+    {
+      name: "Mina",
+      score: 35,
+      rack: [
+        { letter: "N" },
+        { letter: "O" },
+        { letter: "L" },
+        { letter: "S" },
+        { letter: "T" },
+        { letter: "A" },
+        { letter: "E" }
+      ]
+    }
+  ],
+  boardTiles: [
+    { row: 0, column: 5, letter: "L" },
+    { row: 1, column: 0, letter: "S" },
+    { row: 1, column: 1, letter: "T" },
+    { row: 1, column: 2, letter: "A" },
+    { row: 1, column: 3, letter: "C" },
+    {
+      row: 1,
+      column: 4,
+      letter: "K",
+      stack: [
+        { letter: "C" },
+        { letter: "K" }
+      ]
+    },
+    { row: 1, column: 5, letter: "A" },
+    {
+      row: 1,
+      column: 6,
+      letter: "B",
+      stack: [
+        { letter: "I" },
+        { letter: "B", rainbow: true }
+      ]
+    },
+    {
+      row: 1,
+      column: 7,
+      letter: "L",
+      stack: [
+        { letter: "L" },
+        { letter: "L" }
+      ]
+    },
+    {
+      row: 1,
+      column: 8,
+      letter: "E",
+      stack: [
+        { letter: "E" },
+        { letter: "E" }
+      ]
+    },
+    { row: 2, column: 0, letter: "C" },
+    { row: 2, column: 5, letter: "Y" },
+    { row: 3, column: 0, letter: "O" },
+    { row: 3, column: 3, letter: "S" },
+    { row: 3, column: 5, letter: "E" },
+    { row: 3, column: 8, letter: "W", rainbow: true },
+    { row: 4, column: 0, letter: "R" },
+    { row: 4, column: 2, letter: "R" },
+    { row: 4, column: 3, letter: "O" },
+    { row: 4, column: 4, letter: "A" },
+    { row: 4, column: 5, letter: "R" },
+    { row: 4, column: 8, letter: "O" },
+    { row: 5, column: 0, letter: "I" },
+    {
+      row: 5,
+      column: 3,
+      letter: "C",
+      stack: [
+        { letter: "R" },
+        { letter: "C" }
+      ]
+    },
+    {
+      row: 5,
+      column: 4,
+      letter: "L",
+      stack: [
+        { letter: "O" },
+        { letter: "L" }
+      ]
+    },
+    { row: 5, column: 5, letter: "E" },
+    {
+      row: 5,
+      column: 6,
+      letter: "V",
+      stack: [
+        { letter: "R" },
+        { letter: "V" }
+      ]
+    },
+    { row: 5, column: 7, letter: "E" },
+    { row: 5, column: 8, letter: "R" },
+    { row: 6, column: 0, letter: "N" },
+    { row: 6, column: 3, letter: "I" },
+    { row: 6, column: 5, letter: "D" },
+    { row: 6, column: 8, letter: "D" },
+    { row: 7, column: 0, letter: "G" },
+    { row: 7, column: 3, letter: "A" },
+    { row: 7, column: 8, letter: "S" },
+    { row: 8, column: 1, letter: "T" },
+    { row: 8, column: 2, letter: "I" },
+    { row: 8, column: 3, letter: "L", rainbow: true },
+    { row: 8, column: 4, letter: "E" },
+    { row: 8, column: 5, letter: "S" }
+  ],
+  marketplaceTiles: [
+    { letter: "E" },
+    { letter: "X" },
+    { letter: "A" },
+    { letter: "M" },
+    { letter: "P" },
+    { letter: "L" },
+    { letter: "E" }
+  ]
+};
 const serverURL = "./server.php";
 const playerNameCookie = "wordwefterPlayerName";
 const playerAuthCookie = "wordwefterPlayerAuth";
@@ -3031,7 +3177,7 @@ function renderBoard() {
         active: tile.active,
         covering: Boolean(activeTile && topBoardTile) || Boolean(!activeTile && boardStack.length > 1),
         flash: tile.active && gameState.flashActivePlacements,
-        movable: tile.active && isMyTurn(),
+        movable: tile.active && canInteractWithCurrentTurn(),
         remotePlayed: remotePlayedCellKeys.has(cellKey),
         stackMultiplier: activeTile && boardStack.length > 0
           ? boardStack.length + 1
@@ -3342,7 +3488,7 @@ function renderMarketplace(options = {}) {
 }
 
 function updatePlacementControls() {
-  const canPlay = isMyTurn() && !gameState.gameOver;
+  const canPlay = canInteractWithCurrentTurn() && !gameState.gameOver;
   const hasActivePlacements = gameState.hasActivePlacements() || gameState.hasPendingMarketplacePurchases();
 
   document.body.classList.toggle("has-active-placement", canPlay && hasActivePlacements);
@@ -3819,8 +3965,16 @@ function isMyTurn() {
     !gameState.isPlayerNameConceded(getStoredPlayerName());
 }
 
+function isWelcomeDemoMode() {
+  return document.body.classList.contains("welcome-demo");
+}
+
+function canInteractWithCurrentTurn() {
+  return isMyTurn() || isWelcomeDemoMode();
+}
+
 function shouldShowLastTurnNotice() {
-  return isMyTurn() && gameState.isCurrentPlayerLastTurn();
+  return !isWelcomeDemoMode() && isMyTurn() && gameState.isCurrentPlayerLastTurn();
 }
 
 function getLoggedInPlayer() {
@@ -5256,6 +5410,18 @@ function updateGameListRefreshTimer() {
   }
 }
 
+function renderWelcomeDemoGame() {
+  if (getStoredPlayerName()) {
+    document.body.classList.remove("welcome-demo");
+    return;
+  }
+
+  document.body.classList.add("welcome-demo");
+  gameState.loadFromJSON(welcomeDemoGameState);
+  captureTurnStartGameState();
+  renderGame();
+}
+
 function setScreen(screenName, options = {}) {
   const shouldClearGameURL = options.clearGameURL !== false;
 
@@ -5265,6 +5431,7 @@ function setScreen(screenName, options = {}) {
   }
 
   document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-leaderboard", "screen-play", "screen-rules");
+  document.body.classList.remove("welcome-demo");
   document.body.classList.add(`screen-${screenName}`);
 
   if (screenName !== "play") {
@@ -5279,6 +5446,10 @@ function setScreen(screenName, options = {}) {
   closeIdentityMenu();
   updateTurnPolling();
   updateGameListRefreshTimer();
+
+  if (screenName === "welcome") {
+    renderWelcomeDemoGame();
+  }
 }
 
 function showRules(options = {}) {
@@ -6589,7 +6760,7 @@ function cancelConcedeGame() {
 }
 
 async function shuffleRackTiles() {
-  if (!document.body.classList.contains("screen-play")) {
+  if (!document.body.classList.contains("screen-play") && !isWelcomeDemoMode()) {
     showNewGameSetup();
     return;
   }
@@ -6773,7 +6944,7 @@ function initializeRackSortable() {
     return;
   }
 
-  const canPlay = isMyTurn() && !gameState.gameOver;
+  const canPlay = canInteractWithCurrentTurn() && !gameState.gameOver;
 
   rackSortable = Sortable.create(rack, {
     animation: 120,
@@ -6828,7 +6999,7 @@ function initializeRackSortable() {
 function initializeMarketplaceSortable() {
   const marketplace = document.querySelector("#marketplace");
 
-  if (!marketplace || !window.Sortable || !isMyTurn() || gameState.gameOver) {
+  if (!marketplace || !window.Sortable || !canInteractWithCurrentTurn() || gameState.gameOver) {
     return;
   }
 
@@ -6865,7 +7036,7 @@ function initializeMarketplaceSortable() {
 }
 
 function initializeBoardSortables() {
-  if (!window.Sortable || !isMyTurn() || gameState.gameOver) {
+  if (!window.Sortable || !canInteractWithCurrentTurn() || gameState.gameOver) {
     return;
   }
 
@@ -7154,6 +7325,7 @@ async function initializeApp() {
     if (getStoredPlayerName()) {
       await showGameList({ replaceURL: true });
     } else {
+      renderWelcomeDemoGame();
       loadActiveGames();
     }
   }

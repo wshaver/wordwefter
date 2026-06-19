@@ -1189,11 +1189,13 @@ body.screen-rules .rules-hero {
 
 body.screen-welcome:not(.has-player) .identity-panel {
   display: grid;
+  gap: 0.85rem;
 }
 
 body.screen-welcome:not(.has-player) .masthead {
   grid-template-columns: 1fr;
   justify-items: center;
+  align-self: start;
 }
 
 body.screen-welcome:not(.has-player) .brand,
@@ -1202,7 +1204,93 @@ body.screen-welcome:not(.has-player) .game-controls {
 }
 
 body.screen-welcome:not(.has-player) .brand {
-  margin-bottom: 0.45em;
+  --brand-tile-size: clamp(2.45rem, 7.7vw, 5.2rem);
+  margin-bottom: 0.18em;
+}
+
+body.screen-welcome:not(.has-player) main {
+  align-content: start;
+  padding-top: clamp(0.85rem, 2.3vw, 1.55rem);
+}
+
+body.screen-welcome.welcome-demo .game-area {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+body.screen-welcome.welcome-demo .board {
+  border-width: 2px;
+}
+
+body.screen-welcome.welcome-demo .invite-link-panel,
+body.screen-welcome.welcome-demo .rack-controls,
+body.screen-welcome.welcome-demo .redraw-confirm,
+body.screen-welcome.welcome-demo .pass-confirm,
+body.screen-welcome.welcome-demo .game-log,
+body.screen-welcome.welcome-demo .concede-game-control,
+body.screen-welcome.welcome-demo .winner-banner,
+body.screen-welcome.welcome-demo .player-score-list,
+body.screen-welcome.welcome-demo #view-pool-button,
+body.screen-welcome.welcome-demo .game-state-summary > div:has(#current-game-id),
+body.screen-welcome.welcome-demo .game-state-summary > div:has(#current-turn-index),
+body.screen-welcome.welcome-demo .game-state-summary > div:has(#tiles-remaining) {
+  display: none;
+}
+
+body.screen-welcome.welcome-demo .game-state-panel {
+  width: var(--play-width);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.screen-welcome.welcome-demo .game-state-summary {
+  justify-content: center;
+}
+
+body.screen-welcome.welcome-demo .potential-points-summary {
+  position: relative;
+  min-width: min(17rem, 82vw);
+  padding: 0.72rem 1.05rem 0.82rem;
+  border: 3px solid rgba(23, 32, 42, 0.68);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(242, 177, 52, 0.28), rgba(255, 255, 255, 0.72) 58%),
+    rgba(251, 250, 246, 0.9);
+  box-shadow:
+    0.18rem 0.18rem 0 var(--warm),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.52);
+}
+
+body.screen-welcome.welcome-demo .potential-points-kicker {
+  color: rgba(23, 32, 42, 0.82);
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+}
+
+body.screen-welcome.welcome-demo #potential-points {
+  margin-top: 0.18rem;
+  color: var(--rose);
+  font: 950 2.05rem/0.95 Georgia, "Times New Roman", serif;
+  text-shadow: 0.06rem 0.06rem 0 rgba(255, 255, 255, 0.85);
+}
+
+body.screen-welcome.welcome-demo .rack {
+  background: rgba(15, 139, 141, 0.12);
+}
+
+body.screen-welcome.welcome-demo .rack-shuffle-button {
+  display: grid;
+}
+
+body.screen-welcome.welcome-demo .tile-movable {
+  cursor: grab;
+}
+
+body.screen-welcome.welcome-demo .tile-movable:active {
+  cursor: grabbing;
 }
 
 body.screen-display-name main {
@@ -3108,4 +3196,3 @@ body.screen-play:not(.is-my-turn) #rack .tile-movable {
     column-gap: 0.3rem;
   }
 }
-
