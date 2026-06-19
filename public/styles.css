@@ -205,6 +205,7 @@ main {
 
 .identity-panel {
   grid-column: 1 / -1;
+  gap: 0.95rem;
   justify-items: center;
 }
 
@@ -371,11 +372,12 @@ html.oauth-facebook-available .oauth-button.facebook {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  min-height: 2.75rem;
+  min-height: 3.1875rem;
   padding-block: 0;
 }
 
-.public-leaderboard-button {
+.game-button.public-leaderboard-button {
+  padding: 0.7rem 1.1rem;
   width: min(82vw, 22rem);
 }
 
@@ -800,6 +802,13 @@ body.screen-play .invite-link-panel[hidden],
 
 .game-button.secondary:hover {
   background: #f4f1e7;
+}
+
+.oauth-button.game-button.secondary,
+.public-leaderboard-button.game-button.secondary,
+.identity-menu > .game-button.secondary,
+.active-games-actions > .game-button.secondary {
+  min-height: 3.1875rem;
 }
 
 .active-games {

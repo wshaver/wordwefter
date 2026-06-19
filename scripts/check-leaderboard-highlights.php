@@ -78,29 +78,47 @@ write_fixture($fixtureFiles[0], [
             'turnIndex' => 0,
             'playerName' => 'Ada',
             'words' => [
+                ['word' => 'GOAT', 'score' => 8]
+            ]
+        ],
+        [
+            'turnIndex' => 1,
+            'playerName' => 'Ada',
+            'words' => [
                 ['word' => 'QUIZZIFYING', 'score' => 777],
                 ['word' => 'AX', 'score' => 22],
                 ['word' => 'OX', 'score' => 18],
                 ['word' => 'XI', 'score' => 15]
             ]
+        ],
+        [
+            'turnIndex' => 2,
+            'playerName' => 'Ada',
+            'words' => [
+                ['word' => 'FLOAT', 'score' => 18]
+            ]
         ]
     ],
     'boardTiles' => [
-        ['row' => 0, 'column' => 0, 'letter' => 'Q', 'stack' => [
-            ['letter' => 'A'],
-            ['letter' => 'B'],
-            ['letter' => 'C'],
-            ['letter' => 'Q']
+        ['row' => 0, 'column' => 0, 'letter' => 'F'],
+        ['row' => 0, 'column' => 1, 'letter' => 'L', 'stack' => [
+            ['letter' => 'G'],
+            ['letter' => 'L'],
+            ['letter' => 'L'],
+            ['letter' => 'L'],
+            ['letter' => 'L'],
+            ['letter' => 'L']
         ]],
-        ['row' => 0, 'column' => 1, 'letter' => 'T'],
-        ['row' => 0, 'column' => 2, 'letter' => 'E']
+        ['row' => 0, 'column' => 2, 'letter' => 'O'],
+        ['row' => 0, 'column' => 3, 'letter' => 'A'],
+        ['row' => 0, 'column' => 4, 'letter' => 'T']
     ]
 ]);
 
 write_fixture($fixtureFiles[1], [
     'version' => 1,
     'id' => 'ZZHLB',
-    'lastPlayDate' => '2026-06-19T12:00:00+00:00',
+    'lastPlayDate' => '2026-06-20T12:00:00+00:00',
     'gameOver' => false,
     'players' => [
         ['name' => 'Cia', 'score' => 80, 'authKey' => 'name:cia', 'provider' => 'name']
@@ -160,8 +178,8 @@ assert_same('RECENT', $highlights['recent']['word'] ?? null, 'recent word');
 assert_same(50, $highlights['recent']['score'] ?? null, 'recent score');
 assert_same(['RECENT', 'ALL'], $highlights['recent']['words'] ?? null, 'recent words');
 assert_same('QUIZZIFYING', $highlights['longest']['word'] ?? null, 'longest word');
-assert_same(4, $highlights['mostStacked']['stackDepth'] ?? null, 'most stacked depth');
-assert_same(['ATE', 'BTE', 'CTE', 'QTE'], $highlights['mostStacked']['words'] ?? null, 'most stacked words');
+assert_same(6, $highlights['mostStacked']['stackDepth'] ?? null, 'most stacked depth');
+assert_same(['GOAT', 'FLOAT'], $highlights['mostStacked']['words'] ?? null, 'most stacked words');
 assert_same('QUIZZIFYING', $highlights['highestPoints']['word'] ?? null, 'highest points word');
 assert_same(777, $highlights['highestPoints']['score'] ?? null, 'highest points score');
 assert_same('Ada', $highlights['highestGameScore']['playerName'] ?? null, 'highest game score player');

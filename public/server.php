@@ -1008,6 +1008,62 @@ function board_word_at_stack_layer(array $tileMap, int $row, int $column, int $l
     return count($letters) > 1 ? implode('', $letters) : '';
 }
 
+function history_word_strings(array $state): array
+{
+    $words = [];
+
+    foreach ((is_array($state['history'] ?? null) ? $state['history'] : []) as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        foreach ((is_array($entry['words'] ?? null) ? $entry['words'] : []) as $wordScore) {
+            if (!is_array($wordScore)) {
+                continue;
+            }
+
+            $word = strtoupper(trim((string) ($wordScore['word'] ?? '')));
+
+            if ($word !== '') {
+                $words[] = $word;
+            }
+        }
+    }
+
+    return array_values(array_unique($words));
+}
+
+function original_stacked_word_from_history(array $historyWords, string $layerWord, string $originalLetter): string
+{
+    $layerWord = strtoupper(trim($layerWord));
+    $originalLetter = strtoupper(trim($originalLetter));
+    $bestWord = '';
+
+    if ($layerWord === '' || $originalLetter === '') {
+        return $layerWord;
+    }
+
+    foreach ($historyWords as $historyWord) {
+        $historyWord = strtoupper(trim((string) $historyWord));
+
+        if (
+            $historyWord === '' ||
+            $historyWord === $layerWord ||
+            strlen($historyWord) >= strlen($layerWord) ||
+            strpos($historyWord, $originalLetter) === false ||
+            strpos($layerWord, $historyWord) === false
+        ) {
+            continue;
+        }
+
+        if (strlen($historyWord) > strlen($bestWord)) {
+            $bestWord = $historyWord;
+        }
+    }
+
+    return $bestWord !== '' ? $bestWord : $layerWord;
+}
+
 function stacked_words_for_board_tile(array $state, array $targetTile, int $stackDepth): array
 {
     $tileMap = [];
@@ -1030,6 +1086,9 @@ function stacked_words_for_board_tile(array $state, array $targetTile, int $stac
     $row = (int) ($targetTile['row'] ?? -1);
     $column = (int) ($targetTile['column'] ?? -1);
     $words = [];
+    $historyWords = history_word_strings($state);
+    $stack = is_array($targetTile['stack'] ?? null) ? $targetTile['stack'] : [];
+    $originalLetter = strtoupper(trim((string) (($stack[0] ?? [])['letter'] ?? $targetTile['letter'] ?? '')));
 
     if ($row < 0 || $column < 0) {
         return $words;
@@ -1042,6 +1101,13 @@ function stacked_words_for_board_tile(array $state, array $targetTile, int $stac
         ]));
 
         if (count($layerWords) > 0) {
+            if ($layer === 1) {
+                $layerWords = array_map(
+                    static fn(string $word): string => original_stacked_word_from_history($historyWords, $word, $originalLetter),
+                    $layerWords
+                );
+            }
+
             $words[] = implode(' / ', array_unique($layerWords));
         }
     }
