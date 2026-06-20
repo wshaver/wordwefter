@@ -372,6 +372,11 @@ function validate_request_auth(string $userLoginFile, string $authKey, string $s
     ];
 }
 
+function request_has_auth_credentials(string $authKey, string $sessionToken): bool
+{
+    return trim($authKey) !== '' || trim($sessionToken) !== '';
+}
+
 function read_user_logins(string $userLoginFile): array
 {
     if (!is_file($userLoginFile)) {
@@ -756,7 +761,7 @@ function empty_leaderboard_highlights(): array
         'mostStacked' => null,
         'highestPoints' => null,
         'highestGameScore' => null,
-        'mostChangedWords' => null
+        'mostWords' => null
     ];
 }
 
@@ -806,16 +811,19 @@ function normalize_leaderboard_highlight(?array $highlight, string $type): ?arra
         $normalized['words'] = normalize_highlight_words($highlight['words'] ?? []);
     }
 
-    if ($type === 'mostChangedWords') {
+    if ($type === 'mostWords') {
         $wordCount = max(0, (int) ($highlight['wordCount'] ?? 0));
 
         if ($wordCount <= 0) {
             return null;
         }
 
+        $words = normalize_highlight_words($highlight['words'] ?? []);
+
         $normalized['wordCount'] = $wordCount;
+        $normalized['letterCount'] = leaderboard_word_letter_count($words);
         $normalized['score'] = max(0, (int) ($highlight['score'] ?? 0));
-        $normalized['words'] = normalize_highlight_words($highlight['words'] ?? []);
+        $normalized['words'] = $words;
     }
 
     if ($type === 'recent') {
@@ -853,6 +861,15 @@ function normalize_highlight_words($words): array
     }
 
     return array_values(array_unique($normalized));
+}
+
+function leaderboard_word_letter_count($words): int
+{
+    return array_reduce(
+        normalize_highlight_words($words),
+        static fn(int $total, string $word): int => $total + strlen($word),
+        0
+    );
 }
 
 function normalize_leaderboard_highlights($highlights): array
@@ -929,13 +946,13 @@ function leaderboard_highlight_is_better(?array $candidate, ?array $current, str
             (int) ($current['timestamp'] ?? 0),
             (string) ($current['gameId'] ?? '')
         ],
-        'mostChangedWords' => [
+        'mostWords' => [
             (int) ($candidate['wordCount'] ?? 0),
-            (int) ($candidate['score'] ?? 0),
+            (int) ($candidate['letterCount'] ?? 0),
             (int) ($candidate['timestamp'] ?? 0)
         ] > [
             (int) ($current['wordCount'] ?? 0),
-            (int) ($current['score'] ?? 0),
+            (int) ($current['letterCount'] ?? 0),
             (int) ($current['timestamp'] ?? 0)
         ],
         default => false
@@ -1035,35 +1052,36 @@ function history_word_strings(array $state): array
     return array_values(array_unique($words));
 }
 
-function original_stacked_word_from_history(array $historyWords, string $layerWord, string $originalLetter): string
+function filter_stacked_words_to_history(array $historyWords, array $layerWords): array
 {
-    $layerWord = strtoupper(trim($layerWord));
-    $originalLetter = strtoupper(trim($originalLetter));
-    $bestWord = '';
+    $historyLookup = array_fill_keys($historyWords, true);
+    $words = [];
 
-    if ($layerWord === '' || $originalLetter === '') {
-        return $layerWord;
-    }
+    foreach ($layerWords as $word) {
+        $word = strtoupper(trim((string) $word));
 
-    foreach ($historyWords as $historyWord) {
-        $historyWord = strtoupper(trim((string) $historyWord));
-
-        if (
-            $historyWord === '' ||
-            $historyWord === $layerWord ||
-            strlen($historyWord) >= strlen($layerWord) ||
-            strpos($historyWord, $originalLetter) === false ||
-            strpos($layerWord, $historyWord) === false
-        ) {
+        if ($word === '') {
             continue;
         }
 
-        if (strlen($historyWord) > strlen($bestWord)) {
-            $bestWord = $historyWord;
+        if (isset($historyLookup[$word])) {
+            $words[] = $word;
+            continue;
+        }
+
+        foreach ($historyWords as $historyWord) {
+            if (
+                $historyWord !== '' &&
+                strlen($historyWord) > 1 &&
+                strlen($historyWord) < strlen($word) &&
+                strpos($word, $historyWord) !== false
+            ) {
+                $words[] = $historyWord;
+            }
         }
     }
 
-    return $bestWord !== '' ? $bestWord : $layerWord;
+    return array_values(array_unique($words));
 }
 
 function stacked_words_for_board_tile(array $state, array $targetTile, int $stackDepth): array
@@ -1089,32 +1107,44 @@ function stacked_words_for_board_tile(array $state, array $targetTile, int $stac
     $column = (int) ($targetTile['column'] ?? -1);
     $words = [];
     $historyWords = history_word_strings($state);
-    $stack = is_array($targetTile['stack'] ?? null) ? $targetTile['stack'] : [];
-    $originalLetter = strtoupper(trim((string) (($stack[0] ?? [])['letter'] ?? $targetTile['letter'] ?? '')));
 
     if ($row < 0 || $column < 0) {
         return $words;
     }
 
+    $axisWords = [
+        'row' => [],
+        'column' => []
+    ];
+
     for ($layer = 1; $layer <= $stackDepth; $layer += 1) {
-        $layerWords = array_values(array_filter([
-            board_word_at_stack_layer($tileMap, $row, $column, $layer, 'row'),
-            board_word_at_stack_layer($tileMap, $row, $column, $layer, 'column')
-        ]));
+        foreach (array_keys($axisWords) as $axis) {
+            $layerWords = array_values(array_filter([
+                board_word_at_stack_layer($tileMap, $row, $column, $layer, $axis)
+            ]));
 
-        if (count($layerWords) > 0) {
-            if ($layer === 1) {
-                $layerWords = array_map(
-                    static fn(string $word): string => original_stacked_word_from_history($historyWords, $word, $originalLetter),
-                    $layerWords
-                );
+            if (count($layerWords) > 0) {
+                array_push($axisWords[$axis], ...filter_stacked_words_to_history($historyWords, $layerWords));
             }
-
-            $words[] = implode(' / ', array_unique($layerWords));
         }
     }
 
-    return $words;
+    foreach ($axisWords as $axis => $axisWordList) {
+        $axisWords[$axis] = array_values(array_unique($axisWordList));
+    }
+
+    usort(
+        $axisWords,
+        static fn(array $first, array $second): int => [
+            count($second),
+            leaderboard_word_letter_count($second)
+        ] <=> [
+            count($first),
+            leaderboard_word_letter_count($first)
+        ]
+    );
+
+    return $axisWords[0] ?? [];
 }
 
 function leaderboard_highlights_for_game(array $state, string $file): array
@@ -1190,7 +1220,7 @@ function leaderboard_highlights_for_game(array $state, string $file): array
             'turnIndex' => $turnIndex
         ]);
 
-        $highlights = merge_leaderboard_highlight($highlights, 'mostChangedWords', [
+        $highlights = merge_leaderboard_highlight($highlights, 'mostWords', [
             'gameId' => $gameId,
             'playerName' => $playerName,
             'wordCount' => count($words),
@@ -1653,12 +1683,17 @@ if ($action === 'load') {
         send_json(['ok' => false, 'error' => 'Saved game is not valid JSON.'], 500);
     }
 
-    validate_request_auth(
-        $userLoginFile,
-        (string) ($_GET['authKey'] ?? $_POST['authKey'] ?? ''),
-        (string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? ''),
-        'Load'
-    );
+    $requestAuthKey = (string) ($_GET['authKey'] ?? $_POST['authKey'] ?? '');
+    $requestSessionToken = (string) ($_GET['sessionToken'] ?? $_POST['sessionToken'] ?? '');
+
+    if (request_has_auth_credentials($requestAuthKey, $requestSessionToken)) {
+        validate_request_auth(
+            $userLoginFile,
+            $requestAuthKey,
+            $requestSessionToken,
+            'Load'
+        );
+    }
 
     $requestedTurnIndex = isset($_GET['turnIndex']) ? (int) $_GET['turnIndex'] : null;
     $savedTurnIndex = turn_index($state);

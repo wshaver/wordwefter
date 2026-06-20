@@ -192,7 +192,97 @@ assert_same(777, $highlights['highestPoints']['score'] ?? null, 'highest points 
 assert_same('Ada', $highlights['highestGameScore']['playerName'] ?? null, 'highest game score player');
 assert_same(1234, $highlights['highestGameScore']['score'] ?? null, 'highest game score');
 assert_same('ZZHLA', $highlights['highestGameScore']['gameId'] ?? null, 'highest game score game');
-assert_same(4, $highlights['mostChangedWords']['wordCount'] ?? null, 'most changed words count');
-assert_same(['QUIZZIFYING', 'AX', 'OX', 'XI'], $highlights['mostChangedWords']['words'] ?? null, 'most changed words');
+assert_same(4, $highlights['mostWords']['wordCount'] ?? null, 'most words count');
+assert_same(17, $highlights['mostWords']['letterCount'] ?? null, 'most words letter count');
+assert_same(['QUIZZIFYING', 'AX', 'OX', 'XI'], $highlights['mostWords']['words'] ?? null, 'most words');
+
+$serverSource = file_get_contents($root . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'server.php');
+
+if (!is_string($serverSource)) {
+    fail('Could not read server.php for focused highlight checks.');
+}
+
+$dispatcherOffset = strpos($serverSource, '$requestMethod =');
+
+if ($dispatcherOffset === false) {
+    fail('Could not locate server.php action dispatcher.');
+}
+
+eval('?>' . substr($serverSource, 0, $dispatcherOffset));
+
+$singleWordOnlyHighlights = leaderboard_highlights_for_game([
+    'version' => 1,
+    'id' => 'ZZHLC',
+    'lastPlayDate' => '2026-06-21T12:00:00+00:00',
+    'players' => [
+        ['name' => 'Dee', 'score' => 99, 'authKey' => 'name:dee', 'provider' => 'name']
+    ],
+    'history' => [
+        [
+            'turnIndex' => 0,
+            'playerName' => 'Dee',
+            'words' => [
+                ['word' => 'OPENING', 'score' => 99]
+            ]
+        ],
+        [
+            'turnIndex' => 1,
+            'playerName' => 'Dee',
+            'words' => [
+                ['word' => 'SOLO', 'score' => 20]
+            ]
+        ]
+    ]
+], $saveDirectory . DIRECTORY_SEPARATOR . 'ZZHLC.json');
+
+assert_same(1, $singleWordOnlyHighlights['mostWords']['wordCount'] ?? null, 'single-word turns count as most words');
+assert_same(7, $singleWordOnlyHighlights['mostWords']['letterCount'] ?? null, 'single-word most words prefers letter count');
+assert_same(['OPENING'], $singleWordOnlyHighlights['mostWords']['words'] ?? null, 'single-word most words words');
+
+$tileTieBreakHighlights = leaderboard_highlights_for_game([
+    'version' => 1,
+    'id' => 'ZZHLD',
+    'lastPlayDate' => '2026-06-22T12:00:00+00:00',
+    'players' => [
+        ['name' => 'Eli', 'score' => 200, 'authKey' => 'name:eli', 'provider' => 'name']
+    ],
+    'history' => [
+        [
+            'turnIndex' => 0,
+            'playerName' => 'Eli',
+            'words' => [
+                ['word' => 'AXES', 'score' => 40],
+                ['word' => 'OXEN', 'score' => 40],
+                ['word' => 'EXIT', 'score' => 40]
+            ]
+        ],
+        [
+            'turnIndex' => 1,
+            'playerName' => 'Eli',
+            'words' => [
+                ['word' => 'AT', 'score' => 3],
+                ['word' => 'TO', 'score' => 3],
+                ['word' => 'OR', 'score' => 3]
+            ]
+        ]
+    ]
+], $saveDirectory . DIRECTORY_SEPARATOR . 'ZZHLD.json');
+
+assert_same(['AXES', 'OXEN', 'EXIT'], $tileTieBreakHighlights['mostWords']['words'] ?? null, 'most words tie prefers most letters');
+assert_same(12, $tileTieBreakHighlights['mostWords']['letterCount'] ?? null, 'most words letter tie-break count');
+
+$n9aapFile = $root . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'saved-games' . DIRECTORY_SEPARATOR . 'N9AAP.json';
+$n9aapState = json_decode((string) file_get_contents($n9aapFile), true);
+
+if (!is_array($n9aapState)) {
+    fail('Could not read N9AAP fixture from saved games.');
+}
+
+$n9aapHighlights = leaderboard_highlights_for_game(
+    $n9aapState,
+    $n9aapFile
+);
+
+assert_same(['GOOP', 'POOP', 'SNOOP'], $n9aapHighlights['mostStacked']['words'] ?? null, 'most stacked words stay on one axis');
 
 echo 'Leaderboard highlight checks passed.' . PHP_EOL;

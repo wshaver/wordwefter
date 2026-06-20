@@ -840,6 +840,7 @@ body.screen-play .invite-link-panel[hidden],
 .leaderboard-title,
 .game-list-title,
 .rules-title,
+.spectator-title,
 .new-game-title {
   display: inline-flex;
   align-items: center;
@@ -849,6 +850,7 @@ body.screen-play .invite-link-panel[hidden],
 .leaderboard-title .leaderboard-crown-icon,
 .game-list-title .game-list-crossword-icon,
 .rules-title .rules-guide-icon,
+.spectator-title .spectator-eyeglasses-icon,
 .new-game-title .create-game-playlist-icon {
   width: 1.8rem;
   height: 1.8rem;
@@ -964,6 +966,33 @@ body.screen-play .invite-link-panel[hidden],
   grid-template-rows: auto minmax(1.45rem, auto) auto auto;
   gap: 0.22rem;
   padding: 0.6rem 0.65rem;
+}
+
+.leaderboard-highlights a,
+.leaderboard-highlights a:visited,
+.leaderboard-highlights a:hover,
+.leaderboard-highlights a:focus,
+.leaderboard-highlight-link {
+  color: inherit;
+  text-decoration: none;
+  text-decoration-line: none;
+}
+
+.leaderboard-highlight-link {
+  cursor: pointer;
+}
+
+.leaderboard-highlight-link *,
+.leaderboard-highlight-link *:visited {
+  text-decoration: none;
+  text-decoration-line: none;
+}
+
+.leaderboard-highlight-link:hover,
+.leaderboard-highlight-link:focus-visible {
+  border-color: rgba(15, 139, 141, 0.48);
+  box-shadow: 0.16rem 0.16rem 0 rgba(15, 139, 141, 0.22);
+  outline: none;
 }
 
 .leaderboard-highlight-detail {
@@ -1352,6 +1381,10 @@ body.screen-play .masthead {
   margin-bottom: 0.75rem;
 }
 
+body.screen-play:not(.has-player) .masthead {
+  margin-bottom: 0;
+}
+
 .rules-page {
   display: none;
   grid-column: 1 / -1;
@@ -1385,13 +1418,19 @@ body.screen-leaderboard:not(.has-player) .identity-panel {
   gap: 0.85rem;
 }
 
+body.screen-play:not(.has-player) .identity-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
 body.screen-welcome:not(.has-player) .masthead {
   grid-template-columns: 1fr;
   justify-items: center;
   align-self: start;
 }
 
-body.screen-leaderboard:not(.has-player) .masthead {
+body.screen-leaderboard:not(.has-player) .masthead,
+body.screen-play:not(.has-player) .masthead {
   width: var(--play-width);
   grid-template-columns: 1fr;
   justify-items: center;
@@ -1404,7 +1443,12 @@ body.screen-welcome:not(.has-player) .game-controls {
 }
 
 body.screen-leaderboard:not(.has-player) .brand,
+body.screen-play:not(.has-player) .brand,
 body.screen-leaderboard:not(.has-player) .game-controls {
+  justify-self: center;
+}
+
+body.screen-play:not(.has-player) .game-controls {
   justify-self: center;
 }
 
@@ -1418,12 +1462,18 @@ body.screen-leaderboard:not(.has-player) .brand {
   margin-bottom: 0;
 }
 
+body.screen-play:not(.has-player) .brand {
+  --brand-tile-size: 3rem;
+  margin-bottom: 0;
+}
+
 body.screen-welcome:not(.has-player) main {
   align-content: start;
   padding-top: clamp(0.85rem, 2.3vw, 1.55rem);
 }
 
-body.screen-leaderboard:not(.has-player) main {
+body.screen-leaderboard:not(.has-player) main,
+body.screen-play:not(.has-player) main {
   align-content: start;
   gap: 0.75rem;
   padding-top: clamp(0.85rem, 2vw, 1.35rem);
@@ -1559,6 +1609,19 @@ body.screen-rules .rules-page {
 }
 
 body.screen-play .game-area {
+  display: grid;
+}
+
+.spectator-hero {
+  display: none;
+  width: var(--play-width);
+}
+
+.spectator-title .spectator-eyeglasses-icon {
+  color: var(--accent);
+}
+
+body.screen-play.spectator-mode .spectator-hero {
   display: grid;
 }
 
@@ -3011,6 +3074,24 @@ body.screen-play:not(.is-my-turn) .game-message {
 
 body.screen-play:not(.is-my-turn) .board {
   opacity: 0.82;
+}
+
+body.screen-play.spectator-mode .board {
+  opacity: 1;
+}
+
+body.screen-play.spectator-mode .marketplace,
+body.screen-play.spectator-mode .invite-link-panel,
+body.screen-play.spectator-mode .last-turn-notice,
+body.screen-play.spectator-mode .rack,
+body.screen-play.spectator-mode .rack-shuffle-button,
+body.screen-play.spectator-mode .rack-controls,
+body.screen-play.spectator-mode .redraw-confirm,
+body.screen-play.spectator-mode .pass-confirm,
+body.screen-play.spectator-mode .concede-game-control,
+body.screen-play.spectator-mode .potential-points-summary,
+body.screen-play.spectator-mode #view-pool-button {
+  display: none;
 }
 
 body.screen-play:not(.is-my-turn) .tile-movable {

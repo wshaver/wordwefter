@@ -2917,6 +2917,7 @@ let lastTurnNotificationKey = "";
 let remotePlayedCellKeys = new Set();
 let remotePlayedClearTimer = null;
 let loadingGameFromURL = false;
+let spectatorMode = false;
 let marketplaceRenderTimer = null;
 let renderedRackTileKeys = [];
 let renderedMarketplaceTileKeys = [];
@@ -3389,6 +3390,11 @@ function renderRack(options = {}) {
 
   rack.replaceChildren();
 
+  if (isSpectatorMode()) {
+    renderedRackTileKeys = [];
+    return;
+  }
+
   visibleRack.forEach((tile) => {
     rack.append(createTileElement(tile, { movable: !gameState.gameOver, source: "rack" }));
   });
@@ -3423,6 +3429,12 @@ function renderMarketplace(options = {}) {
 
   window.clearTimeout(marketplaceRenderTimer);
   marketplaceRenderTimer = null;
+
+  if (isSpectatorMode()) {
+    marketplace.replaceChildren();
+    renderedMarketplaceTileKeys = [];
+    return;
+  }
 
   if (Number.isFinite(options.delayMs) && options.delayMs > 0) {
     marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
@@ -3505,8 +3517,8 @@ function updatePlacementControls() {
   const shuffleRackButton = document.querySelector("#shuffle-rack-button");
 
   if (shuffleRackButton) {
-    shuffleRackButton.hidden = gameState.gameOver;
-    shuffleRackButton.disabled = gameState.gameOver || getVisibleRack().length < 2;
+    shuffleRackButton.hidden = gameState.gameOver || isSpectatorMode();
+    shuffleRackButton.disabled = gameState.gameOver || isSpectatorMode() || getVisibleRack().length < 2;
   }
 
   const concedeGameControl = document.querySelector("#concede-game-control");
@@ -3791,6 +3803,7 @@ function renderScore() {
 }
 
 function renderGame(options = {}) {
+  document.body.classList.toggle("spectator-mode", isSpectatorMode());
   document.body.classList.toggle("game-over", gameState.gameOver);
   document.body.classList.toggle("marketplace-closed", gameState.marketplaceClosed);
   document.body.classList.toggle("final-round", gameState.isFinalRoundActive() && !gameState.gameOver);
@@ -3959,10 +3972,16 @@ function normalizeNameKey(name) {
 
 function isMyTurn() {
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+  const loggedInPlayer = getLoggedInPlayer();
 
   return Boolean(storedPlayerKey) &&
+    Boolean(loggedInPlayer) &&
     normalizeNameKey(gameState.currentPlayerName) === storedPlayerKey &&
     !gameState.isPlayerNameConceded(getStoredPlayerName());
+}
+
+function isSpectatorMode() {
+  return spectatorMode && !isWelcomeDemoMode();
 }
 
 function isWelcomeDemoMode() {
@@ -3970,7 +3989,7 @@ function isWelcomeDemoMode() {
 }
 
 function canInteractWithCurrentTurn() {
-  return isMyTurn() || isWelcomeDemoMode();
+  return (!isSpectatorMode() && isMyTurn()) || isWelcomeDemoMode();
 }
 
 function shouldShowLastTurnNotice() {
@@ -3979,19 +3998,35 @@ function shouldShowLastTurnNotice() {
 
 function getLoggedInPlayer() {
   const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
+  const authKey = getStoredPlayerAuthKey();
 
-  if (!storedPlayerKey) {
+  if (!storedPlayerKey && !authKey) {
     return null;
   }
 
-  return gameState.players.find((player) => normalizeNameKey(player.name) === storedPlayerKey) || null;
+  return gameState.players.find((player) => (
+    player.claimed !== false &&
+    !player.open &&
+    (
+      (storedPlayerKey && normalizeNameKey(player.name) === storedPlayerKey) ||
+      (authKey && String(player.authKey || "") === authKey)
+    )
+  )) || null;
 }
 
 function getVisibleRack() {
+  if (isSpectatorMode()) {
+    return [];
+  }
+
   return getLoggedInPlayer()?.rack || gameState.currentRack;
 }
 
 function getDisplayedMarketplaceTileCost() {
+  if (isSpectatorMode()) {
+    return gameState.getMarketplaceTileCost(gameState.player);
+  }
+
   return gameState.getMarketplaceTileCost(getLoggedInPlayer() || gameState.player);
 }
 
@@ -5450,10 +5485,12 @@ function setScreen(screenName, options = {}) {
   if (screenName !== "play") {
     window.clearTimeout(immediateTurnRefreshTimer);
     immediateTurnRefreshTimer = null;
+    spectatorMode = false;
   }
 
   document.body.classList.remove("screen-welcome", "screen-display-name", "screen-setup", "screen-list", "screen-leaderboard", "screen-play", "screen-rules");
   document.body.classList.remove("welcome-demo", "welcome-leaderboard");
+  document.body.classList.toggle("spectator-mode", spectatorMode && screenName === "play");
   document.body.classList.add(`screen-${screenName}`);
 
   if (screenName !== "play") {
@@ -5554,54 +5591,66 @@ function formatLeaderboardHighlightWords(words) {
     .filter(Boolean);
 }
 
-  function createLeaderboardHighlightItem(label, value, detail, words = [], options = {}) {
-    const item = document.createElement("div");
-    const labelElement = document.createElement("span");
-    const valueElement = document.createElement("strong");
-    const detailElement = document.createElement("span");
-    const wordList = document.createElement("div");
-    const hasWordList = () => wordList.childElementCount > 0;
+function getLeaderboardHighlightGameId(highlight) {
+  const gameId = String(highlight?.gameId || "").trim().toUpperCase();
 
-    item.className = "leaderboard-highlight-item";
-    labelElement.className = "leaderboard-highlight-label";
-    labelElement.textContent = label;
-    valueElement.className = "leaderboard-highlight-value";
-    valueElement.textContent = value || "-";
-    detailElement.className = "leaderboard-highlight-detail";
-    detailElement.textContent = detail || "No plays yet";
-    wordList.className = "leaderboard-highlight-words";
-    if (options.wordsAsValue) {
-      item.classList.add("leaderboard-highlight-item-words-value");
-    }
-    formatLeaderboardHighlightWords(words).forEach((word) => {
-      const wordElement = document.createElement("span");
+  return /^[A-Z0-9]{5}$/.test(gameId) ? gameId : "";
+}
 
-      wordElement.textContent = word;
-      wordList.append(wordElement);
-    });
-    item.append(labelElement);
+function createLeaderboardHighlightItem(label, value, detail, words = [], options = {}) {
+  const gameId = getLeaderboardHighlightGameId(options.highlight);
+  const item = document.createElement(gameId ? "a" : "div");
+  const labelElement = document.createElement("span");
+  const valueElement = document.createElement("strong");
+  const detailElement = document.createElement("span");
+  const wordList = document.createElement("div");
+  const hasWordList = () => wordList.childElementCount > 0;
 
-    if (value || !options.hideEmptyValue) {
-      item.append(valueElement);
-    }
+  item.className = "leaderboard-highlight-item";
+  if (gameId) {
+    item.classList.add("leaderboard-highlight-link");
+    item.href = `#${gameId}`;
+    item.setAttribute("aria-label", `${label} highlight from game ${gameId}`);
+  }
+  labelElement.className = "leaderboard-highlight-label";
+  labelElement.textContent = label;
+  valueElement.className = "leaderboard-highlight-value";
+  valueElement.textContent = value || "-";
+  detailElement.className = "leaderboard-highlight-detail";
+  detailElement.textContent = detail || options.emptyDetail || "No plays yet";
+  wordList.className = "leaderboard-highlight-words";
+  if (options.wordsAsValue) {
+    item.classList.add("leaderboard-highlight-item-words-value");
+  }
+  formatLeaderboardHighlightWords(words).forEach((word) => {
+    const wordElement = document.createElement("span");
 
-    if (options.wordsAsValue && hasWordList()) {
-      item.append(wordList);
+    wordElement.textContent = word;
+    wordList.append(wordElement);
+  });
+  item.append(labelElement);
 
-      if (detail) {
-        item.append(detailElement);
-      }
+  if (value || !options.hideEmptyValue) {
+    item.append(valueElement);
+  }
 
-      return item;
-    }
+  if (options.wordsAsValue && hasWordList()) {
+    item.append(wordList);
 
-    if (detail || !hasWordList()) {
+    if (detail) {
       item.append(detailElement);
     }
 
-    if (hasWordList()) {
-      item.append(wordList);
-    }
+    return item;
+  }
+
+  if (detail || !hasWordList()) {
+    item.append(detailElement);
+  }
+
+  if (hasWordList()) {
+    item.append(wordList);
+  }
 
   return item;
 }
@@ -5613,12 +5662,12 @@ function renderLeaderboardHighlights(leaderboard, highlightsElement) {
   const mostStacked = highlights.mostStacked || null;
   const highestPoints = highlights.highestPoints || null;
   const highestGameScore = highlights.highestGameScore || null;
-  const mostChangedWords = highlights.mostChangedWords || null;
+  const mostWords = highlights.mostWords || null;
   const recentWord = formatLeaderboardHighlightWord(recent);
   const longestWord = formatLeaderboardHighlightWord(longest);
   const highestWord = formatLeaderboardHighlightWord(highestPoints);
   const stackDepth = Number(mostStacked?.stackDepth || 0);
-  const changedWordCount = Number(mostChangedWords?.wordCount || 0);
+  const mostWordCount = Number(mostWords?.wordCount || 0);
 
   highlightsElement.replaceChildren(
     createLeaderboardHighlightItem(
@@ -5628,44 +5677,55 @@ function renderLeaderboardHighlights(leaderboard, highlightsElement) {
         ? `${formatLeaderboardHighlightPlayer(recent)} scored ${formatLeaderboardNumber(recent?.score)}`
         : "",
       recent?.words,
-      { hideEmptyValue: true, wordsAsValue: true }
+      { hideEmptyValue: true, wordsAsValue: true, highlight: recent }
     ),
     createLeaderboardHighlightItem(
       "Longest",
       longestWord,
       longestWord
         ? `${formatLeaderboardNumber(longest?.wordLength || longestWord.length)} letters by ${formatLeaderboardHighlightPlayer(longest)}`
-        : ""
+        : "",
+      [],
+      { highlight: longest }
     ),
-      createLeaderboardHighlightItem(
-        "Most Stacked",
-        "",
-        "",
-        mostStacked?.words,
-        { hideEmptyValue: true, wordsAsValue: true }
-      ),
+    createLeaderboardHighlightItem(
+      "Most Stacked",
+      "",
+      "",
+      mostStacked?.words,
+      { hideEmptyValue: true, wordsAsValue: true, highlight: mostStacked }
+    ),
     createLeaderboardHighlightItem(
       "Highest Play",
       Number(highestPoints?.score || 0) > 0 ? formatLeaderboardNumber(highestPoints?.score) : "",
       highestWord
         ? `${highestWord} by ${formatLeaderboardHighlightPlayer(highestPoints)}`
-        : ""
+        : "",
+      [],
+      { highlight: highestPoints }
     ),
     createLeaderboardHighlightItem(
       "Highest Score",
       Number(highestGameScore?.score || 0) > 0 ? formatLeaderboardNumber(highestGameScore?.score) : "",
       Number(highestGameScore?.score || 0) > 0
         ? formatLeaderboardHighlightPlayer(highestGameScore)
-        : ""
+        : "",
+      [],
+      { highlight: highestGameScore }
     ),
     createLeaderboardHighlightItem(
-      "Most Changed",
+      "Most Words",
       "",
-      changedWordCount > 0
-        ? `${formatLeaderboardNumber(mostChangedWords?.score)} points by ${formatLeaderboardHighlightPlayer(mostChangedWords)}`
+      mostWordCount > 0
+        ? `${formatLeaderboardNumber(mostWords?.score)} points by ${formatLeaderboardHighlightPlayer(mostWords)}`
         : "",
-      mostChangedWords?.words,
-      { hideEmptyValue: true, wordsAsValue: true }
+      mostWords?.words,
+      {
+        hideEmptyValue: true,
+        wordsAsValue: true,
+        highlight: mostWords,
+        emptyDetail: "No words yet"
+      }
     )
   );
 }
@@ -5964,7 +6024,15 @@ function createAuthenticatedGameParams(entries = {}) {
   });
 }
 
+function createPublicGameParams(entries = {}) {
+  return new URLSearchParams(entries);
+}
+
 async function saveGameState() {
+  if (isSpectatorMode()) {
+    throw new Error("Spectators cannot save this game.");
+  }
+
   const params = createAuthenticatedGameParams({
     action: "save"
   });
@@ -6014,6 +6082,7 @@ function clearRemotePlayedAnimationLater() {
 async function pollActiveGameState() {
   if (
     !document.body.classList.contains("screen-play") ||
+    isSpectatorMode() ||
     isMyTurn() ||
     gameState.gameOver ||
     !/^[A-Z0-9]{5}$/.test(gameState.id)
@@ -6099,7 +6168,7 @@ async function pollActiveGameState() {
 }
 
 function updateTurnPolling() {
-  const shouldPoll = document.body.classList.contains("screen-play") && !isMyTurn() && !gameState.gameOver;
+  const shouldPoll = document.body.classList.contains("screen-play") && !isSpectatorMode() && !isMyTurn() && !gameState.gameOver;
   const pollMilliseconds = document.hidden
     ? backgroundTurnPollMilliseconds
     : foregroundTurnPollMilliseconds;
@@ -6133,6 +6202,13 @@ function refreshTurnStateSoon() {
   }
 
   if (!document.body.classList.contains("screen-play")) {
+    window.clearTimeout(immediateTurnRefreshTimer);
+    immediateTurnRefreshTimer = null;
+    updateTurnPolling();
+    return;
+  }
+
+  if (isSpectatorMode()) {
     window.clearTimeout(immediateTurnRefreshTimer);
     immediateTurnRefreshTimer = null;
     updateTurnPolling();
@@ -6591,38 +6667,40 @@ async function loadGameById(gameId) {
   } catch (error) {
     if (isAuthInvalidError(error)) {
       handleInvalidLogin(error);
+      const publicParams = createPublicGameParams({
+        action: "load",
+        id: normalizedGameId
+      });
+
+      payload = await fetchJSON(`${serverURL}?${publicParams.toString()}`);
+    } else {
+      throw error;
     }
-
-    throw error;
   }
-  const storedPlayerKey = normalizeNameKey(getStoredPlayerName());
   const auth = getStoredPlayerAuth();
-  const authKey = getStoredPlayerAuthKey();
-  const players = payload.gameState.players || [];
-  const canPlayGame = players
-    .some((player) => (
-      player.claimed !== false &&
-      !player.open &&
-      (
-        normalizeNameKey(player.name) === storedPlayerKey ||
-        (authKey && String(player.authKey || "") === authKey)
-      )
-    ));
-
-  if (!canPlayGame && !claimGameSpot(payload.gameState, auth)) {
-    throw new Error("This game does not include your player name.");
-  }
+  let claimedSpot = false;
 
   gameState.loadFromJSON(payload.gameState);
+  const canPlayGame = Boolean(getLoggedInPlayer());
+
+  if (!canPlayGame && auth?.name) {
+    claimedSpot = claimGameSpot(payload.gameState, auth);
+
+    if (claimedSpot) {
+      gameState.loadFromJSON(payload.gameState);
+    }
+  }
+
+  spectatorMode = !canPlayGame && !claimedSpot;
   rememberFriendsFromGame(gameState.toJSON());
   captureTurnStartGameState();
   setScreen("play");
   setGameURLGameId(gameState.id);
   setGameMessage("");
   renderGame();
-  setWaitingGamesForMenu(payload.waitingGames || [], { trusted: true });
+  setWaitingGamesForMenu(spectatorMode ? [] : payload.waitingGames || [], { trusted: true });
 
-  if (!canPlayGame) {
+  if (claimedSpot) {
     await saveGameState();
     setGameMessage(`Claimed a spot in game ${gameState.id}.`);
   }
@@ -6689,14 +6767,6 @@ async function loadGameFromURLHash() {
     clearGameURLGameId();
     setGameMessage("Could not load game: the URL game ID must be 5 letters or numbers.");
     return false;
-  }
-
-  if (!getStoredPlayerName()) {
-    requirePlayerName(() => {
-      loadGameFromURLHash();
-    }, { clearGameURL: false });
-    setGameMessage(`Enter your name to join game ${gameId}.`);
-    return true;
   }
 
   loadingGameFromURL = true;
