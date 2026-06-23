@@ -1,4 +1,4 @@
-﻿import { dictionaryWordSet } from "./dictionary.js";
+﻿import { dictionaryWordSet } from "./dictionary.js?v=common-one-prime-points";
 import { letter_points, letters_available } from "./letter-setup.js?v=common-one-prime-points";
 
 const bonusTypes = {
