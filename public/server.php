@@ -398,13 +398,65 @@ function hash_session_token(string $sessionToken): string
     return hash('sha256', $sessionToken);
 }
 
+function login_session_token_hashes(?array $entry): array
+{
+    return array_values(array_unique(array_map(
+        static fn(array $session): string => $session['hash'],
+        login_session_token_records($entry)
+    )));
+}
+
+function login_session_token_records(?array $entry): array
+{
+    $sessions = is_array($entry) && is_array($entry['sessionTokens'] ?? null)
+        ? $entry['sessionTokens']
+        : [];
+    $recordsByHash = [];
+
+    foreach ($sessions as $session) {
+        if (is_array($session)) {
+            $sessionHash = (string) ($session['hash'] ?? '');
+            $issuedAt = (string) ($session['issuedAt'] ?? '');
+        } else {
+            $sessionHash = (string) $session;
+            $issuedAt = '';
+        }
+
+        if ($sessionHash !== '') {
+            $recordsByHash[$sessionHash] = [
+                'hash' => $sessionHash,
+                'issuedAt' => $issuedAt
+            ];
+        }
+    }
+
+    $legacyHash = is_array($entry) ? (string) ($entry['sessionTokenHash'] ?? '') : '';
+
+    if ($legacyHash !== '' && !isset($recordsByHash[$legacyHash])) {
+        $recordsByHash[$legacyHash] = [
+            'hash' => $legacyHash,
+            'issuedAt' => (string) ($entry['sessionIssuedAt'] ?? '')
+        ];
+    }
+
+    return array_values($recordsByHash);
+}
+
 function session_token_matches(?array $entry, string $sessionToken): bool
 {
-    $sessionHash = (string) ($entry['sessionTokenHash'] ?? '');
+    if ($sessionToken === '') {
+        return false;
+    }
 
-    return $sessionHash !== '' &&
-        $sessionToken !== '' &&
-        hash_equals($sessionHash, hash_session_token($sessionToken));
+    $requestHash = hash_session_token($sessionToken);
+
+    foreach (login_session_token_hashes($entry) as $sessionHash) {
+        if (hash_equals($sessionHash, $requestHash)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function write_user_logins(string $userLoginFile, array $logins): bool
@@ -526,14 +578,34 @@ function save_user_login(string $userLoginFile, string $provider, string $userId
     }
 
     $logins = read_user_logins($userLoginFile);
+    $existingEntry = isset($logins[$key]) && is_array($logins[$key])
+        ? $logins[$key]
+        : null;
     $sessionToken = create_session_token();
+    $sessionHash = hash_session_token($sessionToken);
+    $sessionIssuedAt = gmdate('c');
+    $existingSessionTokens = login_session_token_records($existingEntry);
+    $sessionTokensByHash = [];
+
+    foreach ($existingSessionTokens as $session) {
+        $sessionTokensByHash[(string) $session['hash']] = $session;
+    }
+
+    $sessionTokensByHash[$sessionHash] = [
+        'hash' => $sessionHash,
+        'issuedAt' => $sessionIssuedAt
+    ];
+
+    $sessionTokens = array_values($sessionTokensByHash);
+    $sessionTokens = array_slice($sessionTokens, -20);
     $entry = [
         'provider' => $normalizedProvider,
         'userId' => $normalizedUserId,
         'username' => $normalizedPlayerName,
-        'sessionTokenHash' => hash_session_token($sessionToken),
-        'sessionIssuedAt' => gmdate('c'),
-        'updatedAt' => gmdate('c')
+        'sessionTokenHash' => $sessionHash,
+        'sessionTokens' => $sessionTokens,
+        'sessionIssuedAt' => $sessionIssuedAt,
+        'updatedAt' => $sessionIssuedAt
     ];
     $logins[$key] = $entry;
 
