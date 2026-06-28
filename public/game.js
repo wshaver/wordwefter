@@ -656,27 +656,17 @@ class WordWefterGameState {
       this.tilesRemaining > 0 &&
       this.hasAvailableMarketplaceLetters()
     ) {
-      const wasGameOver = this.gameOver;
-      const tile = this.drawTile();
+      const duplicateLetters = this.getMarketplaceDuplicateDrawLetters();
+      const excludedDuplicateLetters = this.hasAvailableMarketplaceLetters(duplicateLetters)
+        ? duplicateLetters
+        : new Set();
+      const tile = this.drawTile({
+        excludeLetters: excludedDuplicateLetters,
+        excludeWildcards: true
+      });
 
       if (!tile) {
-        continue;
-      }
-
-      if (tile.wildcard) {
-        this.returnTileToAvailableLetters(tile, { restoreDrawCount: true });
-
-        if (!wasGameOver && this.tilesRemaining > 0) {
-          this.gameOver = false;
-          this.pendingFinalRound = false;
-          this.finalTurnsRemaining = null;
-        }
-
-        if (!this.hasAvailableMarketplaceLetters()) {
-          break;
-        }
-
-        continue;
+        break;
       }
 
       const emptyIndex = this.marketplaceTiles.findIndex((marketplaceTile) => !marketplaceTile);
@@ -692,8 +682,18 @@ class WordWefterGameState {
     return drawnTiles;
   }
 
-  hasAvailableMarketplaceLetters() {
-    return playableLetters.some((letter) => Math.max(0, Number(this.lettersAvailable[letter] || 0)) > 0);
+  getMarketplaceDuplicateDrawLetters() {
+    return new Set(this.marketplaceTiles
+      .filter(Boolean)
+      .map((tile) => String(tile.letter || "").toUpperCase())
+      .filter((letter) => playableLetters.includes(letter)));
+  }
+
+  hasAvailableMarketplaceLetters(excludeLetters = new Set()) {
+    return playableLetters.some((letter) => (
+      !excludeLetters.has(letter) &&
+      Math.max(0, Number(this.lettersAvailable[letter] || 0)) > 0
+    ));
   }
 
   isFinalRoundActive() {
@@ -848,26 +848,7 @@ class WordWefterGameState {
   }
 
   getMarketplaceTileCostForPurchaseCount(purchaseCountValue) {
-    const purchaseCount = Math.max(0, Number(purchaseCountValue || 0));
-    let previousCost = 5;
-    let currentCost = 10;
-
-    if (purchaseCount === 0) {
-      return previousCost;
-    }
-
-    if (purchaseCount === 1) {
-      return currentCost;
-    }
-
-    for (let index = 2; index <= purchaseCount; index += 1) {
-      const nextCost = previousCost + currentCost;
-
-      previousCost = currentCost;
-      currentCost = nextCost;
-    }
-
-    return currentCost;
+    return 5;
   }
 
   canBuyTile(tileId) {
@@ -1098,10 +1079,14 @@ class WordWefterGameState {
   }
 
   drawTile(options = {}) {
+    const excludeLetters = options.excludeLetters instanceof Set
+      ? options.excludeLetters
+      : new Set(Array.isArray(options.excludeLetters) ? options.excludeLetters : []);
     const weightedLetters = Object.entries(this.lettersAvailable)
       .filter(([letter, count]) => (
         count > 0 &&
-        (!options.excludeWildcards || letter !== wildcardLetter)
+        (!options.excludeWildcards || letter !== wildcardLetter) &&
+        !excludeLetters.has(letter)
       ));
     const rackBalance = Array.isArray(options.rackBalanceTiles)
       ? this.getRackVowelBalance(options.rackBalanceTiles)
@@ -7617,4 +7602,3 @@ window.addEventListener("hashchange", async () => {
 
 
 export { WordWefterGameState, gameState };
-
