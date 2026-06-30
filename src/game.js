@@ -681,10 +681,47 @@ function renderRack(options = {}) {
   renderedRackTileKeys = getTileAnimationKeys(visibleRack);
 }
 
+function createMarketplaceCostRail() {
+  const costRail = document.createElement("div");
+  const slotCount = Math.max(7, gameState.marketplaceTiles.length);
+
+  costRail.className = "marketplace-cost-rail";
+  costRail.setAttribute("aria-label", "Marketplace tile costs");
+
+  for (let index = 0; index < slotCount; index += 1) {
+    const cost = index + 1;
+    const costElement = document.createElement("span");
+
+    costElement.className = "marketplace-tile-cost";
+    costElement.textContent = `${cost}`;
+    costElement.setAttribute("aria-label", `${cost} point${cost === 1 ? "" : "s"}`);
+    costRail.append(costElement);
+  }
+
+  return costRail;
+}
+
+function createMarketplaceFrameSlots() {
+  const slotCount = Math.max(7, gameState.marketplaceTiles.length);
+  const slots = [];
+
+  for (let index = 0; index < slotCount; index += 1) {
+    const itemElement = document.createElement("div");
+    const tilePlaceholder = document.createElement("div");
+
+    itemElement.className = "marketplace-item marketplace-item-frame-placeholder";
+    itemElement.setAttribute("aria-hidden", "true");
+    tilePlaceholder.className = "tile marketplace-tile-placeholder";
+    tilePlaceholder.textContent = " ";
+    itemElement.append(tilePlaceholder);
+    slots.push(itemElement);
+  }
+
+  return slots;
+}
+
 function renderMarketplace(options = {}) {
   const marketplace = document.querySelector("#marketplace");
-  const marketplaceCostBadge = document.querySelector(".marketplace-cost-badge");
-  const marketplaceCostElement = document.querySelector("#marketplace-cost");
   const enteringTileKeyCounts = options.enter
     ? getNewTileAnimationKeyCounts(gameState.marketplaceTiles, [])
     : getNewTileAnimationKeyCounts(gameState.marketplaceTiles, renderedMarketplaceTileKeys);
@@ -703,7 +740,7 @@ function renderMarketplace(options = {}) {
   }
 
   if (Number.isFinite(options.delayMs) && options.delayMs > 0) {
-    marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
+    marketplace.replaceChildren(createMarketplaceCostRail(), ...createMarketplaceFrameSlots());
     marketplaceRenderTimer = window.setTimeout(() => {
       renderMarketplace({
         enter: options.enter
@@ -712,24 +749,33 @@ function renderMarketplace(options = {}) {
     return;
   }
 
-  const marketplaceCosts = gameState.getMarketplaceTileCosts();
-  const visibleCosts = marketplaceCosts.filter((cost) => Number.isFinite(cost));
+  const openingSoon = gameState.shouldShowMarketplaceOpeningSoon();
 
-  if (marketplaceCostElement) {
-    marketplaceCostElement.textContent = visibleCosts.length > 0
-      ? `1-${Math.max(...visibleCosts)}`
-      : "-";
+  marketplace.replaceChildren();
+  marketplace.append(createMarketplaceCostRail());
+
+  if (openingSoon) {
+    const openingSign = document.createElement("div");
+
+    marketplace.append(...createMarketplaceFrameSlots());
+    openingSign.className = "marketplace-opening-soon-sign";
+    openingSign.setAttribute("aria-label", "Marketplace opening soon");
+    openingSign.textContent = "OPENING SOON";
+    marketplace.append(openingSign);
+    renderedMarketplaceTileKeys = [];
+    return;
   }
-
-  marketplace.replaceChildren(...(marketplaceCostBadge ? [marketplaceCostBadge] : []));
 
   if (gameState.marketplaceClosed) {
     const closedSign = document.createElement("div");
 
+    marketplace.append(...createMarketplaceFrameSlots());
     closedSign.className = "marketplace-closed-sign";
     closedSign.setAttribute("aria-label", "Marketplace closed");
     closedSign.textContent = "CLOSED";
     marketplace.append(closedSign);
+    renderedMarketplaceTileKeys = [];
+    return;
   }
 
   gameState.marketplaceTiles.forEach((tile, index) => {
@@ -744,20 +790,15 @@ function renderMarketplace(options = {}) {
     }
 
     const canBuy = canInteractWithCurrentTurn() && !gameState.gameOver && gameState.canBuyTile(tile.id);
-    const costElement = document.createElement("span");
 
     itemElement.dataset.tileId = tile.id;
     itemElement.dataset.marketplaceCost = String(marketplaceCost);
     itemElement.dataset.tileSource = "marketplace";
     itemElement.classList.toggle("tile-movable", canBuy);
-    costElement.className = "marketplace-tile-cost";
-    costElement.textContent = `${marketplaceCost}`;
-    costElement.setAttribute("aria-label", `${marketplaceCost} point${marketplaceCost === 1 ? "" : "s"}`);
     itemElement.append(createTileElement(tile, {
       movable: canBuy,
       source: "marketplace"
     }));
-    itemElement.append(costElement);
     marketplace.append(itemElement);
   });
 
@@ -1084,6 +1125,7 @@ function renderGame(options = {}) {
   document.body.classList.toggle("spectator-mode", isSpectatorMode());
   document.body.classList.toggle("game-over", gameState.gameOver);
   document.body.classList.toggle("marketplace-closed", gameState.marketplaceClosed);
+  document.body.classList.toggle("marketplace-opening-soon", gameState.shouldShowMarketplaceOpeningSoon());
   document.body.classList.toggle("final-round", gameState.isFinalRoundActive() && !gameState.gameOver);
   document.body.classList.toggle("last-turn", shouldShowLastTurnNotice());
 

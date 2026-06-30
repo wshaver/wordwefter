@@ -368,6 +368,23 @@ class WordWefterGameState {
     return this.player.name;
   }
 
+  hasPlayerCompletedTurn(playerIndex = this.currentPlayerIndex) {
+    const player = this.players[playerIndex];
+    const playerKey = normalizeNameKey(player?.name);
+
+    if (!playerKey) {
+      return false;
+    }
+
+    return this.history.some((entry) => normalizeNameKey(entry?.playerName) === playerKey);
+  }
+
+  shouldShowMarketplaceOpeningSoon(playerIndex = this.currentPlayerIndex) {
+    return !this.gameOver &&
+      !this.marketplaceClosed &&
+      !this.hasPlayerCompletedTurn(playerIndex);
+  }
+
   setGameLength(gameLength) {
     this.gameLength = normalizeGameLength(gameLength);
   }
@@ -547,8 +564,11 @@ class WordWefterGameState {
     return this.drawTiles(7, options);
   }
 
-  drawMarketplaceTiles(tileCount = 7) {
+  drawMarketplaceTiles(tileCount = 7, options = {}) {
     const drawnTiles = [];
+    const refillExcludeLetters = options.excludeLetters instanceof Set
+      ? options.excludeLetters
+      : new Set(Array.isArray(options.excludeLetters) ? options.excludeLetters : []);
 
     if (this.marketplaceClosed) {
       return drawnTiles;
@@ -563,8 +583,12 @@ class WordWefterGameState {
       const excludedDuplicateLetters = this.hasAvailableMarketplaceLetters(duplicateLetters)
         ? duplicateLetters
         : new Set();
+      const excludedLetters = new Set([
+        ...excludedDuplicateLetters,
+        ...refillExcludeLetters
+      ]);
       const tile = this.drawTile({
-        excludeLetters: excludedDuplicateLetters,
+        excludeLetters: excludedLetters,
         excludeWildcards: true
       });
 
@@ -592,13 +616,19 @@ class WordWefterGameState {
 
     const remainingTiles = this.marketplaceTiles.filter(Boolean);
     const expiredTile = remainingTiles.shift() || null;
+    const refillExcludeLetters = new Set();
 
     if (expiredTile) {
-      this.discardedTiles.push(expiredTile);
+      const expiredLetter = String(expiredTile.sourceLetter || expiredTile.letter || "").toUpperCase();
+
+      this.returnTileToAvailableLetters(expiredTile, { restoreDrawCount: true });
+      if (expiredLetter) {
+        refillExcludeLetters.add(expiredLetter);
+      }
     }
 
     this.marketplaceTiles = remainingTiles;
-    this.drawMarketplaceTiles(tileCount);
+    this.drawMarketplaceTiles(tileCount, { excludeLetters: refillExcludeLetters });
     return expiredTile;
   }
 

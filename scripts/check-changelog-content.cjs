@@ -11,7 +11,12 @@ function assertIncludes(text, message) {
   }
 }
 
+assertIncludes("Opening Soon Marketplace", "Changelog should describe opening soon marketplace behavior.");
+assertIncludes("Opening Soon sign", "Changelog should mention the opening soon sign.");
+assertIncludes("Marketplace Tile Return", "Changelog should describe marketplace tile return behavior.");
+assertIncludes("immediate refill", "Changelog should mention immediate marketplace refill exclusion.");
 assertIncludes("Marketplace Turn Pricing", "Changelog should describe marketplace turn pricing.");
+assertIncludes("June 30, 2026", "Changelog entries should include dates.");
 assertIncludes("Bonus Square Placement", "Changelog should describe bonus square placement.");
 assertIncludes("center row or center column", "Changelog should mention center-line bonus exclusion.");
 assertIncludes("Letter Point Rebalance", "Changelog should describe letter point rebalance.");

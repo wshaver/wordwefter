@@ -1357,7 +1357,14 @@ html.new-games-disabled .new-game-disabled-link {
   font: 900 1.08rem/1.1 Georgia, "Times New Roman", serif;
 }
 
+.changelog-entry .changelog-date {
+  color: #5f6f78;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .changelog-entry p {
+  font-weight: 400;
   line-height: 1.42;
 }
 
@@ -1840,33 +1847,8 @@ body.screen-play.last-turn:not(.game-over) .last-turn-notice {
   position: relative;
 }
 
-.marketplace-cost-badge {
-  display: none;
-  position: absolute;
-  top: -0.58rem;
-  right: 0.7rem;
-  z-index: 4;
-  padding: 0.12rem 0.38rem;
-  border: 2px solid rgba(23, 32, 42, 0.55);
-  border-radius: 5px;
-  background: #fbfaf6;
-  color: rgba(23, 32, 42, 0.74);
-  font: 800 0.72rem/1 system-ui, sans-serif;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-body.screen-play .marketplace-cost-badge {
-  display: block;
-}
-
-body.marketplace-closed .marketplace-cost-badge {
-  display: none;
-}
-
-.marketplace-closed-sign {
+.marketplace-closed-sign,
+.marketplace-opening-soon-sign {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -1892,8 +1874,15 @@ body.marketplace-closed .marketplace-cost-badge {
   pointer-events: none;
 }
 
+.marketplace-opening-soon-sign {
+  min-width: min(17rem, 84%);
+  transform: translate(-50%, -50%) rotate(3deg);
+}
+
 .marketplace-closed-sign::before,
-.marketplace-closed-sign::after {
+.marketplace-closed-sign::after,
+.marketplace-opening-soon-sign::before,
+.marketplace-opening-soon-sign::after {
   content: "";
   position: absolute;
   top: 0.34rem;
@@ -1904,11 +1893,13 @@ body.marketplace-closed .marketplace-cost-badge {
   box-shadow: inset 0 0 0 2px rgba(122, 63, 0, 0.35);
 }
 
-.marketplace-closed-sign::before {
+.marketplace-closed-sign::before,
+.marketplace-opening-soon-sign::before {
   left: 0.5rem;
 }
 
-.marketplace-closed-sign::after {
+.marketplace-closed-sign::after,
+.marketplace-opening-soon-sign::after {
   right: 0.5rem;
 }
 
@@ -2240,10 +2231,23 @@ body.game-over .winner-banner {
 }
 
 .marketplace-item {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 0.22rem;
   align-content: start;
   min-width: 0;
+}
+
+.marketplace-cost-rail {
+  position: absolute;
+  left: clamp(0.45rem, 1.8vw, 0.75rem);
+  right: clamp(0.45rem, 1.8vw, 0.75rem);
+  bottom: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: clamp(0.35rem, 1.8vw, 0.75rem);
+  pointer-events: none;
 }
 
 .marketplace-tile-cost {
@@ -2259,6 +2263,7 @@ body.game-over .winner-banner {
   color: rgba(23, 32, 42, 0.84);
   font: 950 0.72rem/1 system-ui, sans-serif;
   box-shadow: 0.06rem 0.06rem 0 rgba(242, 177, 52, 0.45);
+  transform: translateY(calc(50% + 1px));
 }
 
 .marketplace-item.tile-movable {
@@ -2268,6 +2273,11 @@ body.game-over .winner-banner {
 .marketplace-item-empty {
   min-height: 100%;
   border-radius: 7px;
+}
+
+.marketplace-item-frame-placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .marketplace:has(> .tile.sortable-ghost) .marketplace-item-empty {

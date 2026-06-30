@@ -51,7 +51,47 @@ The app is intended to run from a web server because it uses browser modules and
 
 In this workspace the local Apache URL is usually `http://wordwefter/`.
 
-The main app files live in `public/`.
+The app is served from `public/`. Source JavaScript lives in `src/` and is bundled into `public/dist/` for the browser.
+
+## Build and Deploy
+
+Install dependencies once with:
+
+```powershell
+npm.cmd install
+```
+
+Create the production bundle with:
+
+```powershell
+npm.cmd run build:prod
+```
+
+This writes the deployable JavaScript bundle to `public/dist/`. The production build does not include browser test hooks.
+
+For local verification, create the test bundle with:
+
+```powershell
+npm.cmd run build:test
+```
+
+This writes to `public/dist-test/` and includes the test hook entry used by automated checks. Do not ship `public/dist-test/` to production.
+
+Run the full project check with:
+
+```powershell
+npm.cmd run check
+```
+
+`npm.cmd run check` builds both variants and runs the JavaScript regression checks for build separation, changelog content, letter points, board bonuses, marketplace flow, auth redirects, and leaderboard behavior.
+
+Deployments should use:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy.ps1
+```
+
+The deploy script runs the production build, uploads files from `public/`, and excludes `dist-test` so test-only code is not deployed.
 
 ## Status
 

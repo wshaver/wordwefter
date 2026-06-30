@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=marketplace-turn-pricing-1">
+  <link rel="stylesheet" href="./styles.css?v=marketplace-stable-frame-slots-1">
   <script>
     let hasStoredPlayerName = false;
     let allowsLegacyNameLogin = false;
@@ -353,8 +353,9 @@
         <article class="rules-card">
           <h3>Buying Tiles</h3>
           <p>The marketplace is shared by all players. Buy a tile by dragging it to your rack or directly to the board.</p>
+          <p>Each player sees an Opening Soon sign instead of marketplace letters until that player has completed their first turn.</p>
           <p>Marketplace prices are set at the start of the turn and do not change during that turn. The leftmost available tile costs 1 point, the next costs 2, and prices continue upward from left to right.</p>
-          <p>Bought tiles leave empty spaces until the turn ends. At turn end, the leftmost unbought marketplace tile falls away, the remaining tiles slide left, and new tiles fill in on the right for the next player.</p>
+          <p>Bought tiles leave empty spaces until the turn ends. At turn end, the leftmost unbought marketplace tile returns to the pool, the remaining tiles slide left, and new tiles fill in on the right for the next player. The returned tile cannot be drawn straight back into the marketplace during that same refill.</p>
           <p>If the tile pool runs out, the marketplace closes, its remaining tiles return to the pool, and a tilted CLOSED sign appears. Those returned tiles can still be drawn, but no new marketplace purchases are available.</p>
           <ul>
             <li>You may buy any number of marketplace tiles you can afford.</li>
@@ -407,17 +408,32 @@
       </div>
       <div class="changelog-list">
         <article class="changelog-entry">
+          <h3>Opening Soon Marketplace</h3>
+          <p class="changelog-date">June 30, 2026</p>
+          <p>Players now see an Opening Soon sign instead of marketplace letters until they have completed their own first turn.</p>
+          <p>In multiplayer games, each player unlocks the visible marketplace independently after their first turn, so later players still see Opening Soon until they have played.</p>
+        </article>
+        <article class="changelog-entry">
+          <h3>Marketplace Tile Return</h3>
+          <p class="changelog-date">June 30, 2026</p>
+          <p>The turn-expired marketplace tile now returns to the tile pool instead of being discarded.</p>
+          <p>That returned tile is excluded from the immediate refill, so the same tile cannot fall off the left side and come right back on the marketplace in the same turn transition.</p>
+        </article>
+        <article class="changelog-entry">
           <h3>Marketplace Turn Pricing</h3>
+          <p class="changelog-date">June 30, 2026</p>
           <p>Marketplace tiles now use position-based prices. At the start of each turn, the leftmost tile costs 1 point and each tile to the right costs 1 more.</p>
           <p>Prices stay locked for the whole turn. Buying a tile leaves its slot empty until the turn is over, so other marketplace tiles do not slide or change price midturn.</p>
           <p>When the turn ends, the leftmost unbought tile leaves the marketplace, the remaining tiles slide left, and new tiles fill in from the right for the next player.</p>
         </article>
         <article class="changelog-entry">
           <h3>Bonus Square Placement</h3>
+          <p class="changelog-date">June 30, 2026</p>
           <p>New games no longer place bonus squares in the center row or center column. The center lanes are kept clear so opening and crossing plays have more neutral space.</p>
         </article>
         <article class="changelog-entry">
           <h3>Letter Point Rebalance</h3>
+          <p class="changelog-date">June 30, 2026</p>
           <p>Letter values now use a less top-heavy 1-to-5 scale. A, E, I, and O are the only 1-point letters, while high-impact letters such as J, Q, X, and Z now top out at 5 points.</p>
           <p>Common consonants such as N, R, S, and T moved up to 2 points, making everyday words a little more valuable while reducing big swings from rare letters.</p>
         </article>
@@ -433,7 +449,6 @@
       </div>
       <div class="marketplace-wrap" aria-label="Tile marketplace">
         <div class="marketplace" id="marketplace" aria-label="Tile marketplace">
-          <div class="marketplace-cost-badge" aria-label="Marketplace tile cost range">Costs: <span id="marketplace-cost">1-7</span></div>
         </div>
         <div class="winner-banner" id="winner-banner" role="status" aria-live="polite" aria-hidden="true">
           <span class="winner-banner-confetti" aria-hidden="true">
@@ -542,6 +557,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./dist/game.js?v=letter-points-1"></script>
+  <script type="module" src="./dist/game.js?v=marketplace-stable-frame-slots-1"></script>
 </body>
 </html>

@@ -106,7 +106,17 @@ try {
   assert.deepEqual(
     marketplaceLetters(game),
     ["C", "D", "E", "F"],
-    "turn-end marketplace advance should drop the leftmost remaining tile, slide, and refill right"
+    "turn-end marketplace advance should return the leftmost remaining tile to the pool, slide, and refill right without immediately redrawing it"
+  );
+  assert.equal(
+    game.lettersAvailable.B,
+    1,
+    "the turn-expired marketplace tile should return to the pool"
+  );
+  assert.equal(
+    game.tilesDrawn,
+    5,
+    "returning the expired marketplace tile should restore pool accounting before refilling"
   );
   assert.deepEqual(
     game.getMarketplaceTileCosts(),
@@ -115,8 +125,8 @@ try {
   );
   assert.deepEqual(
     game.discardedTiles.map((tile) => tile.letter),
-    ["B"],
-    "the turn-expired marketplace tile should be discarded"
+    [],
+    "the turn-expired marketplace tile should not be discarded"
   );
 } finally {
   Math.random = originalRandom;
