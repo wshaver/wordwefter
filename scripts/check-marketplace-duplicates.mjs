@@ -13,7 +13,7 @@ globalThis.window = {
   }
 };
 
-const { WordWefterGameState } = await import("../public/game.js");
+const { WordWefterGameState } = await import("../src/game-state.js");
 
 function createMarketplaceGame(lettersAvailable, marketplaceTiles) {
   const game = new WordWefterGameState({

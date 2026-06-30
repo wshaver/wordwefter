@@ -366,6 +366,7 @@ html.oauth-facebook-available .oauth-button.facebook {
 .leaderboard-button-with-icon,
 .game-list-button-with-icon,
 .rules-button-with-icon,
+.changelog-button-with-icon,
 .create-game-button-with-icon,
 .logout-button-with-icon {
   display: inline-flex;
@@ -384,6 +385,7 @@ html.oauth-facebook-available .oauth-button.facebook {
 .leaderboard-crown-icon,
 .game-list-crossword-icon,
 .rules-guide-icon,
+.changelog-history-icon,
 .create-game-playlist-icon,
 .logout-icon {
   color: var(--warm);
@@ -404,6 +406,10 @@ html.oauth-facebook-available .oauth-button.facebook {
 
 .rules-guide-icon {
   color: var(--rose);
+}
+
+.changelog-history-icon {
+  color: var(--accent);
 }
 
 .create-game-playlist-icon {
@@ -502,7 +508,7 @@ body.menu-open .identity-menu {
   text-align: left;
 }
 
-.identity-menu > .game-button:not(.identity-menu-checkbox):not(.create-game-button-with-icon):not(.game-list-button-with-icon):not(.leaderboard-button-with-icon):not(.rules-button-with-icon):not(.logout-button-with-icon)::before {
+.identity-menu > .game-button:not(.identity-menu-checkbox):not(.create-game-button-with-icon):not(.game-list-button-with-icon):not(.leaderboard-button-with-icon):not(.rules-button-with-icon):not(.changelog-button-with-icon):not(.logout-button-with-icon)::before {
   content: "";
   width: 1.15rem;
   height: 1.15rem;
@@ -840,6 +846,7 @@ body.screen-play .invite-link-panel[hidden],
 .leaderboard-title,
 .game-list-title,
 .rules-title,
+.changelog-title,
 .spectator-title,
 .new-game-title {
   display: inline-flex;
@@ -850,6 +857,7 @@ body.screen-play .invite-link-panel[hidden],
 .leaderboard-title .leaderboard-crown-icon,
 .game-list-title .game-list-crossword-icon,
 .rules-title .rules-guide-icon,
+.changelog-title .changelog-history-icon,
 .spectator-title .spectator-eyeglasses-icon,
 .new-game-title .create-game-playlist-icon {
   width: 1.8rem;
@@ -1323,6 +1331,36 @@ html.new-games-disabled .new-game-disabled-link {
   padding-left: 1.1rem;
 }
 
+.changelog-list {
+  display: grid;
+  gap: 0.85rem;
+  width: var(--play-width);
+  justify-self: center;
+}
+
+.changelog-entry {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 2px solid rgba(23, 32, 42, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0.18rem 0.18rem 0 rgba(15, 139, 141, 0.22);
+}
+
+.changelog-entry h3,
+.changelog-entry p {
+  margin: 0;
+}
+
+.changelog-entry h3 {
+  font: 900 1.08rem/1.1 Georgia, "Times New Roman", serif;
+}
+
+.changelog-entry p {
+  line-height: 1.42;
+}
+
 .rules-example,
 .rules-board-example {
   --rules-board-cell-size: calc((var(--play-width) - 10px) / 9);
@@ -1385,7 +1423,8 @@ body.screen-play:not(.has-player) .masthead {
   margin-bottom: 0;
 }
 
-.rules-page {
+.rules-page,
+.changelog-page {
   display: none;
   grid-column: 1 / -1;
   width: 100%;
@@ -1395,7 +1434,8 @@ body.screen-play:not(.has-player) .masthead {
   font: 700 0.98rem/1.45 system-ui, sans-serif;
 }
 
-body.screen-rules .rules-page {
+body.screen-rules .rules-page,
+body.screen-changelog .changelog-page {
   margin-top: calc(clamp(1.5rem, 3vw, 2.25rem) - 0.75rem);
 }
 
@@ -1403,7 +1443,8 @@ body.screen-display-name .display-name-page {
   margin-top: clamp(0.35rem, 1.5vw, 0.8rem);
 }
 
-body.screen-rules .rules-hero {
+body.screen-rules .rules-hero,
+body.screen-changelog .page-hero {
   width: var(--play-width);
   justify-self: center;
 }
@@ -1604,7 +1645,8 @@ body.screen-display-name .display-name-page {
   display: grid;
 }
 
-body.screen-rules .rules-page {
+body.screen-rules .rules-page,
+body.screen-changelog .changelog-page {
   display: grid;
 }
 
@@ -2204,6 +2246,21 @@ body.game-over .winner-banner {
   min-width: 0;
 }
 
+.marketplace-tile-cost {
+  display: inline-grid;
+  place-items: center;
+  justify-self: center;
+  min-width: 1.45rem;
+  height: 1.25rem;
+  padding: 0 0.28rem;
+  border: 2px solid rgba(23, 32, 42, 0.58);
+  border-radius: 999px;
+  background: #fbfaf6;
+  color: rgba(23, 32, 42, 0.84);
+  font: 950 0.72rem/1 system-ui, sans-serif;
+  box-shadow: 0.06rem 0.06rem 0 rgba(242, 177, 52, 0.45);
+}
+
 .marketplace-item.tile-movable {
   cursor: pointer;
 }
@@ -2247,6 +2304,12 @@ body.game-over .winner-banner {
   display: grid;
   place-items: center;
   gap: 0;
+}
+
+.board-cell .marketplace-tile-cost,
+.marketplace-item.sortable-drag .marketplace-tile-cost,
+.marketplace-item.sortable-ghost .marketplace-tile-cost {
+  display: none;
 }
 
 .board-cell .marketplace-item .tile {

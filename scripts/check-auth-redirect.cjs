@@ -1,5 +1,5 @@
 const fs = require('fs');
-const source = fs.readFileSync('public/game.js', 'utf8');
+const source = fs.readFileSync('src/game.js', 'utf8');
 
 function assert(condition, message) {
   if (!condition) {

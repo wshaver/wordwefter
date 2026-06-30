@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:prod",
+    "build:prod": "vite build --mode production",
+    "build:test": "vite build --mode test",
+    "check": "npm run build:prod && npm run build:test && node scripts/check-build-variants.cjs && node scripts/check-changelog-content.cjs && node scripts/check-letter-points.mjs && node scripts/check-board-bonus-center-lines.mjs && node scripts/check-marketplace-turn-pricing.mjs && node scripts/check-marketplace-duplicates.mjs && node scripts/check-auth-redirect.cjs && node scripts/check-public-leaderboard-entry.cjs"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

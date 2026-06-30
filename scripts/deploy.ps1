@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Resolve-Path "$PSScriptRoot\.."
 $publicRoot = Join-Path $projectRoot "public"
+$sourceRoot = Join-Path $projectRoot "src"
 
 if (!(Test-Path $ConfigPath)) {
   throw "Missing deploy config: $ConfigPath. Copy deploy.config.example.ps1 to deploy.config.ps1 and fill in the remote SSH target."
@@ -27,7 +28,7 @@ if (!(Get-Command scp -ErrorAction SilentlyContinue)) {
   throw "scp was not found on PATH."
 }
 
-$exclude = @($DeployExclude) | Where-Object { $_ }
+$exclude = @($DeployExclude + @("dist-test")) | Where-Object { $_ }
 $sshTarget = "${DeployUser}@${DeployHost}"
 $sshOptions = @()
 
@@ -82,6 +83,13 @@ function Invoke-NativeCommand {
 }
 
 function Invoke-Deploy {
+  Push-Location $projectRoot
+  try {
+    Invoke-NativeCommand "npm.cmd" -Arguments @("run", "build")
+  } finally {
+    Pop-Location
+  }
+
   $files = Get-ChildItem -Path $publicRoot -Recurse -File | Where-Object {
     $relative = Get-DeployRelativePath $_.FullName
     !(Test-IsExcluded $relative)
@@ -124,20 +132,31 @@ Invoke-Deploy
 
 $pending = $false
 $lastChange = Get-Date
-$watcher = [System.IO.FileSystemWatcher]::new($publicRoot)
-$watcher.IncludeSubdirectories = $true
-$watcher.EnableRaisingEvents = $true
+$watchers = @(
+  [System.IO.FileSystemWatcher]::new($publicRoot),
+  [System.IO.FileSystemWatcher]::new($sourceRoot)
+)
 
 $action = {
+  $fullPath = $Event.SourceEventArgs.FullPath
+
+  if ($fullPath -and $fullPath.StartsWith((Join-Path $publicRoot "dist"))) {
+    return
+  }
+
   $script:pending = $true
   $script:lastChange = Get-Date
 }
 
 $subscriptions = @(
-  Register-ObjectEvent $watcher Changed -Action $action,
-  Register-ObjectEvent $watcher Created -Action $action,
-  Register-ObjectEvent $watcher Deleted -Action $action,
-  Register-ObjectEvent $watcher Renamed -Action $action
+  $watchers | ForEach-Object {
+    $_.IncludeSubdirectories = $true
+    $_.EnableRaisingEvents = $true
+    Register-ObjectEvent $_ Changed -Action $action
+    Register-ObjectEvent $_ Created -Action $action
+    Register-ObjectEvent $_ Deleted -Action $action
+    Register-ObjectEvent $_ Renamed -Action $action
+  }
 )
 
 try {
@@ -154,5 +173,5 @@ try {
     Unregister-Event -SubscriptionId $_.Id
     Remove-Job -Id $_.Id -Force
   }
-  $watcher.Dispose()
+  $watchers | ForEach-Object { $_.Dispose() }
 }
