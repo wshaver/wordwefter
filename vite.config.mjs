@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig(({ mode }) => {
   const includesTestHooks = mode === "test";
+  const entryFileNames = includesTestHooks ? "game.js" : "game-[hash].js";
+  const chunkFileNames = includesTestHooks ? "[name].js" : "[name]-[hash].js";
 
   return {
     publicDir: false,
@@ -15,8 +17,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: "src/game.js",
         output: {
-          entryFileNames: "game.js",
-          chunkFileNames: "[name].js",
+          entryFileNames,
+          chunkFileNames,
           assetFileNames: "[name][extname]"
         }
       }

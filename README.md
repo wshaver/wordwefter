@@ -67,7 +67,9 @@ Create the production bundle with:
 npm.cmd run build:prod
 ```
 
-This writes the deployable JavaScript bundle to `public/dist/`. The production build does not include browser test hooks.
+This writes deployable hashed assets to `public/dist/` and updates `public/index.html` to reference the current filenames. The production build does not include browser test hooks.
+
+Production asset filenames include content hashes, such as `game-BY5EFXuB.js` and `styles-4e269f2e.css`. When the bundle or stylesheet changes, the filename changes, so browsers request the new asset instead of reusing a long-cached file.
 
 For local verification, create the test bundle with:
 
