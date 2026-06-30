@@ -79,9 +79,11 @@ web_modules/
 .env.production.local
 .env.local
 deploy.config.ps1
+.codex-remote-attachments/
 
 # Local saved games
 public/saved-games/*.json
+public/dist-test/
 server-data/
 /data/
 
