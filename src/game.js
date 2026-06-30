@@ -720,6 +720,12 @@ function createMarketplaceFrameSlots() {
   return slots;
 }
 
+function shouldRenderMarketplaceOpeningSoon() {
+  return document.body.classList.contains("screen-play") &&
+    Boolean(getLoggedInPlayer()) &&
+    gameState.shouldShowMarketplaceOpeningSoon();
+}
+
 function renderMarketplace(options = {}) {
   const marketplace = document.querySelector("#marketplace");
   const enteringTileKeyCounts = options.enter
@@ -749,7 +755,7 @@ function renderMarketplace(options = {}) {
     return;
   }
 
-  const openingSoon = gameState.shouldShowMarketplaceOpeningSoon();
+  const openingSoon = shouldRenderMarketplaceOpeningSoon();
 
   marketplace.replaceChildren();
   marketplace.append(createMarketplaceCostRail());
@@ -1125,7 +1131,7 @@ function renderGame(options = {}) {
   document.body.classList.toggle("spectator-mode", isSpectatorMode());
   document.body.classList.toggle("game-over", gameState.gameOver);
   document.body.classList.toggle("marketplace-closed", gameState.marketplaceClosed);
-  document.body.classList.toggle("marketplace-opening-soon", gameState.shouldShowMarketplaceOpeningSoon());
+  document.body.classList.toggle("marketplace-opening-soon", shouldRenderMarketplaceOpeningSoon());
   document.body.classList.toggle("final-round", gameState.isFinalRoundActive() && !gameState.gameOver);
   document.body.classList.toggle("last-turn", shouldShowLastTurnNotice());
 

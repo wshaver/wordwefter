@@ -1529,7 +1529,7 @@ body.screen-play:not(.has-player) main {
 
 body.screen-welcome.welcome-demo .game-area {
   display: grid;
-  gap: 0.5rem;
+  gap: 1rem;
   margin-top: 1rem;
 }
 
