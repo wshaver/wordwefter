@@ -639,6 +639,41 @@ class WordWefterGameState {
       .filter((letter) => playableLetters.includes(letter)));
   }
 
+  reconcileMarketplaceDuplicateLetters() {
+    const seenLetters = new Set();
+
+    this.marketplaceTiles = this.marketplaceTiles.map((tile) => {
+      const letter = String(tile?.sourceLetter || tile?.letter || "").toUpperCase();
+
+      if (!playableLetters.includes(letter)) {
+        return tile;
+      }
+
+      if (!seenLetters.has(letter)) {
+        seenLetters.add(letter);
+        return tile;
+      }
+
+      if (!this.hasAvailableMarketplaceLetters(seenLetters)) {
+        return tile;
+      }
+
+      this.returnTileToAvailableLetters(tile, { restoreDrawCount: true });
+      const replacementTile = this.drawTile({
+        excludeLetters: seenLetters,
+        excludeWildcards: true
+      });
+
+      if (!replacementTile) {
+        seenLetters.add(letter);
+        return tile;
+      }
+
+      seenLetters.add(String(replacementTile.letter || "").toUpperCase());
+      return replacementTile;
+    });
+  }
+
   hasAvailableMarketplaceLetters(excludeLetters = new Set()) {
     return playableLetters.some((letter) => (
       !excludeLetters.has(letter) &&
@@ -1686,6 +1721,8 @@ class WordWefterGameState {
 
     if (!Array.isArray(source.marketplaceTiles) && !this.marketplaceClosed) {
       this.drawMarketplaceTiles();
+    } else if (!this.marketplaceClosed) {
+      this.reconcileMarketplaceDuplicateLetters();
     }
 
     this.activePlacements = hydrateTileMap(source.activePlacements, true);

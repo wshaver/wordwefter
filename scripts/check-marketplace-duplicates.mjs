@@ -62,6 +62,46 @@ try {
     ["A", "A"],
     "marketplace should allow duplicates when no other letters are available"
   );
+
+  const loadedGameWithPersistedDuplicate = new WordWefterGameState({
+    playerNames: ["Ada"],
+    gameLength: "short"
+  });
+
+  loadedGameWithPersistedDuplicate.loadFromJSON({
+    version: 1,
+    id: "DUPES",
+    startDate: "2026-06-30T00:00:00.000Z",
+    gameLength: "short",
+    tilesDrawn: 3,
+    turnIndex: 1,
+    currentPlayerIndex: 0,
+    history: [{ turnIndex: 0, playerName: "Ada", words: [{ word: "AB", score: 2 }] }],
+    players: [{ name: "Ada", rack: [] }],
+    startingLettersAvailable: { A: 3, B: 3, C: 3 },
+    lettersAvailable: { A: 2, B: 1, C: 3 },
+    boardTiles: [],
+    boardBonuses: [],
+    marketplaceTiles: [{ letter: "B" }, { letter: "B" }, { letter: "C" }]
+  });
+
+  const loadedMarketplaceLetters = getMarketplaceLetters(loadedGameWithPersistedDuplicate);
+
+  assert.equal(
+    new Set(loadedMarketplaceLetters).size,
+    loadedMarketplaceLetters.length,
+    "loading a saved marketplace should replace duplicate letters when alternatives are available"
+  );
+  assert.equal(
+    loadedMarketplaceLetters[0],
+    "B",
+    "loading a saved marketplace should keep the first copy of a duplicated letter"
+  );
+  assert.equal(
+    loadedMarketplaceLetters[2],
+    "C",
+    "loading a saved marketplace should keep already unique letters"
+  );
 } finally {
   Math.random = originalRandom;
 }
