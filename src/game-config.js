@@ -1,5 +1,5 @@
-﻿import { dictionaryWordSet } from "../public/dictionary.js";
-import { letter_points, letters_available } from "../public/letter-setup.js";
+import { dictionaryWordSet } from "./generated/dictionary.js";
+import { letter_points, letters_available } from "./letter-setup.js";
 
 const bonusTypes = {
   doubleLetter: {

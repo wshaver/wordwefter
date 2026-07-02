@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { letter_points } from "../public/letter-setup.js";
+import { letter_points } from "../src/letter-setup.js";
 
 const expectedLetterPoints = {
   "?": 0,
