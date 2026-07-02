@@ -4,9 +4,10 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const publicRoot = path.join(root, "public");
+const sourceRoot = path.join(root, "src");
 const distRoot = path.join(publicRoot, "dist");
 const indexPath = path.join(publicRoot, "index.html");
-const stylesPath = path.join(publicRoot, "styles.css");
+const stylesPath = path.join(sourceRoot, "styles.css");
 
 function fail(message) {
   console.error(message);
@@ -41,7 +42,7 @@ if (!fs.existsSync(indexPath)) {
 }
 
 if (!fs.existsSync(stylesPath)) {
-  fail("Missing public/styles.css.");
+  fail("Missing src/styles.css.");
 }
 
 for (const fileName of fs.readdirSync(distRoot)) {

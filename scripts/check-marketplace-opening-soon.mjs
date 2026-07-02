@@ -68,10 +68,43 @@ assert.equal(
   "the closed marketplace sign should take precedence once the marketplace is closed"
 );
 
+const waitingForOpenSpotGame = new WordWefterGameState({
+  playerNames: ["Sue", "Open Spot 2"],
+  gameLength: "short"
+});
+waitingForOpenSpotGame.currentPlayerIndex = 1;
+waitingForOpenSpotGame.players[1].claimed = false;
+waitingForOpenSpotGame.players[1].open = true;
+waitingForOpenSpotGame.history.push({
+  turnIndex: 0,
+  playerName: "Sue",
+  words: [
+    {
+      word: "DIE",
+      score: 5
+    }
+  ]
+});
+assert.equal(
+  waitingForOpenSpotGame.shouldShowMarketplaceOpeningSoon(0),
+  false,
+  "a player waiting for an open spot to move should see the marketplace after their own first turn"
+);
+assert.equal(
+  waitingForOpenSpotGame.shouldShowMarketplaceOpeningSoon(),
+  true,
+  "the active open spot may still be opening soon, but it should not control the logged-in player's marketplace display"
+);
+
 assert.match(
   gameJs,
-  /function shouldRenderMarketplaceOpeningSoon\(\)\s*\{[\s\S]*?screen-play[\s\S]*?gameState\.shouldShowMarketplaceOpeningSoon\(\)[\s\S]*?\}/,
-  "the Opening Soon sign should only render on the play screen"
+  /function getLoggedInPlayerIndex\(\)\s*\{[\s\S]*?findIndex[\s\S]*?\}/,
+  "the renderer should be able to resolve the logged-in player's index"
+);
+assert.match(
+  gameJs,
+  /function shouldRenderMarketplaceOpeningSoon\(\)\s*\{[\s\S]*?screen-play[\s\S]*?getLoggedInPlayerIndex\(\)[\s\S]*?gameState\.shouldShowMarketplaceOpeningSoon\(loggedInPlayerIndex\)[\s\S]*?\}/,
+  "the Opening Soon sign should only render on the play screen for the logged-in player's first-turn state"
 );
 assert.match(
   gameJs,

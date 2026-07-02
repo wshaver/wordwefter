@@ -51,7 +51,7 @@ The app is intended to run from a web server because it uses browser modules and
 
 In this workspace the local Apache URL is usually `http://wordwefter/`.
 
-The app is served from `public/`. Source JavaScript lives in `src/` and is bundled into `public/dist/` for the browser.
+The app is served from `public/`. Source JavaScript and CSS live in `src/` and are bundled or copied into `public/dist/` for the browser.
 
 ## Build and Deploy
 

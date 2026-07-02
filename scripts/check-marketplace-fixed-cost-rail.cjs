@@ -3,7 +3,7 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const gameJs = fs.readFileSync(path.join(root, "src", "game.js"), "utf8");
-const stylesCss = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
+const stylesCss = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const marketplaceRule = stylesCss.match(/\.marketplace\s*\{[\s\S]*?\n\}/)?.[0] || "";
 const welcomeDemoGameAreaRule = stylesCss.match(/body\.screen-welcome\.welcome-demo \.game-area\s*\{[\s\S]*?\n\}/)?.[0] || "";
 

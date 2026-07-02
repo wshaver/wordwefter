@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       outDir: includesTestHooks ? "public/dist-test" : "public/dist",
       emptyOutDir: true,
       sourcemap: true,
+      chunkSizeWarningLimit: 2500,
       rollupOptions: {
         input: "src/game.js",
         output: {

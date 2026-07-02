@@ -721,9 +721,14 @@ function createMarketplaceFrameSlots() {
 }
 
 function shouldRenderMarketplaceOpeningSoon() {
-  return document.body.classList.contains("screen-play") &&
-    Boolean(getLoggedInPlayer()) &&
-    gameState.shouldShowMarketplaceOpeningSoon();
+  if (!document.body.classList.contains("screen-play")) {
+    return false;
+  }
+
+  const loggedInPlayerIndex = getLoggedInPlayerIndex();
+
+  return loggedInPlayerIndex !== -1 &&
+    gameState.shouldShowMarketplaceOpeningSoon(loggedInPlayerIndex);
 }
 
 function renderMarketplace(options = {}) {
@@ -1338,6 +1343,14 @@ function getLoggedInPlayer() {
       (authKey && String(player.authKey || "") === authKey)
     )
   )) || null;
+}
+
+function getLoggedInPlayerIndex() {
+  const loggedInPlayer = getLoggedInPlayer();
+
+  return loggedInPlayer
+    ? gameState.players.findIndex((player) => player === loggedInPlayer)
+    : -1;
 }
 
 function getVisibleRack() {
@@ -2882,6 +2895,16 @@ function formatLeaderboardNumber(value) {
   return Number(value || 0).toLocaleString();
 }
 
+function formatLeaderboardAverage(totalScore, games) {
+  const gameCount = Math.max(0, Number(games || 0));
+
+  if (!Number.isFinite(gameCount) || gameCount <= 0) {
+    return "0";
+  }
+
+  return Math.round(Number(totalScore || 0) / gameCount).toLocaleString();
+}
+
 function formatLeaderboardHighlightWord(highlight) {
   return String(highlight?.word || "").trim().toUpperCase();
 }
@@ -3081,7 +3104,7 @@ function renderLeaderboard(leaderboard) {
   const header = document.createElement("div");
 
   header.className = "leaderboard-row leaderboard-header";
-  ["Rank", "Player", "Total Score", "Games", "Active"].forEach((label) => {
+  ["Rank", "Player", "Total Score", "Avg/Game", "Games", "Active"].forEach((label) => {
     const cell = document.createElement("span");
 
     cell.textContent = label;
@@ -3095,6 +3118,7 @@ function renderLeaderboard(leaderboard) {
       `#${index + 1}`,
       String(player?.name || "Player"),
       formatLeaderboardNumber(player?.totalScore),
+      formatLeaderboardAverage(player?.totalScore, player?.games),
       formatLeaderboardNumber(player?.games),
       formatLeaderboardNumber(player?.activeGames)
     ];

@@ -4,7 +4,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const indexHtml = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const gameJs = fs.readFileSync(path.join(root, "src", "game.js"), "utf8");
-const stylesCss = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
+const stylesCss = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -51,6 +51,18 @@ assert(
 assert(
   /^\.leaderboard-page\s*\{[^}]*width:\s*var\(--play-width\);[^}]*max-width:\s*var\(--play-width\);/ms.test(stylesCss),
   "Leaderboard pages should use the logged-in play width in every access state."
+);
+assert(
+  /\["Rank", "Player", "Total Score", "Avg\/Game", "Games", "Active"\]/.test(gameJs),
+  "Leaderboard player ranking table should include an Avg/Game column."
+);
+assert(
+  /formatLeaderboardAverage\(player\?\.totalScore,\s*player\?\.games\)/.test(gameJs),
+  "Leaderboard rows should calculate average points per game from total score and games played."
+);
+assert(
+  /\.leaderboard-row\s*\{[^}]*grid-template-columns:\s*3\.3rem minmax\(0, 1fr\) minmax\(5\.4rem, auto\) minmax\(5\.2rem, auto\) minmax\(4\.2rem, auto\) minmax\(4\.2rem, auto\);/s.test(stylesCss),
+  "Leaderboard row grid should include a column for average points per game."
 );
 assert(
   /body\.screen-leaderboard:not\(\.has-player\) \.identity-panel\s*\{[^}]*display:\s*grid;/s.test(stylesCss),

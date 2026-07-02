@@ -1047,7 +1047,7 @@ body.screen-play .invite-link-panel[hidden],
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 3.3rem minmax(0, 1fr) minmax(5.4rem, auto) minmax(4.2rem, auto) minmax(4.2rem, auto);
+  grid-template-columns: 3.3rem minmax(0, 1fr) minmax(5.4rem, auto) minmax(5.2rem, auto) minmax(4.2rem, auto) minmax(4.2rem, auto);
   align-items: center;
   gap: 0.5rem;
   min-height: 2.9rem;

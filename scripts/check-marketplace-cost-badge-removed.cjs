@@ -4,7 +4,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const indexHtml = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const gameJs = fs.readFileSync(path.join(root, "src", "game.js"), "utf8");
-const stylesCss = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
+const stylesCss = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 
 function assertNotIncludes(source, text, message) {
   if (source.includes(text)) {
