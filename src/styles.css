@@ -3485,6 +3485,16 @@ body.screen-play:not(.is-my-turn) #rack .tile-movable {
   font: 900 1rem/1 system-ui, sans-serif;
 }
 
+.pool-blank-icon {
+  display: inline-block;
+  width: 1.08rem;
+  height: 0.62rem;
+  border-right: 0.14rem solid currentColor;
+  border-bottom: 0.14rem solid currentColor;
+  border-left: 0.14rem solid currentColor;
+  transform: translateY(0.12rem);
+}
+
 .pool-letter-count {
   justify-self: end;
   color: var(--accent);

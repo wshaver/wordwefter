@@ -1034,8 +1034,22 @@ function renderPoolView(gameLogElement) {
     item.className = "pool-letter";
     letterElement.className = "pool-letter-name";
     countElement.className = "pool-letter-count";
-    letterElement.textContent = letter === blankTileLetter ? "blank" : letter;
-    countElement.textContent = Math.max(0, Number(gameState.lettersAvailable[letter] || 0));
+    const tileCount = Math.max(0, Number(gameState.lettersAvailable[letter] || 0));
+
+    if (letter === blankTileLetter) {
+      item.title = "Blank tile";
+      item.setAttribute("aria-label", `Blank tile, ${tileCount} remaining`);
+      letterElement.classList.add("pool-blank-icon");
+      letterElement.setAttribute("aria-label", "blank");
+    } else {
+      if (letter === wildcardLetter) {
+        item.title = "Wild tile";
+        item.setAttribute("aria-label", `Wild tile, ${tileCount} remaining`);
+      }
+      letterElement.textContent = letter;
+    }
+
+    countElement.textContent = tileCount;
 
     item.append(letterElement, countElement);
     poolGrid.append(item);
