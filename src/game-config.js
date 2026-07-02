@@ -44,6 +44,7 @@ const gameLengthSettings = {
 };
 
 const wildcardLetter = "?";
+const blankTileLetter = " ";
 const playableLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const vowelLetters = new Set(["A", "E", "I", "O", "U"]);
 const wildcardPoolFrequency = 14;
@@ -72,7 +73,8 @@ function createLettersAvailableForGameLength(gameLength) {
   const normalizedLength = normalizeGameLength(gameLength);
   const targetTotal = Math.max(1, Number(gameLengthSettings[normalizedLength].totalTiles || 1));
   const wildcardCount = Math.max(1, Math.round(targetTotal / wildcardPoolFrequency));
-  const targetPlayableTotal = Math.max(1, targetTotal - wildcardCount);
+  const blankTileCount = wildcardCount;
+  const targetPlayableTotal = Math.max(1, targetTotal - wildcardCount - blankTileCount);
 
   const playableTotal = playableLetters
     .reduce((total, letter) => total + Math.max(0, Number(letters_available[letter] || 0)), 0);
@@ -99,6 +101,7 @@ function createLettersAvailableForGameLength(gameLength) {
 
   return {
     [wildcardLetter]: wildcardCount,
+    [blankTileLetter]: blankTileCount,
     ...scaledLetters.reduce((counts, entry) => {
       counts[entry.letter] = entry.count;
       return counts;
@@ -110,6 +113,7 @@ export {
   bonusTypes,
   gameLengthSettings,
   wildcardLetter,
+  blankTileLetter,
   playableLetters,
   vowelLetters,
   wildcardPoolFrequency,

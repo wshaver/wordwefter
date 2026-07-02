@@ -2,6 +2,7 @@ import {
   bonusTypes,
   gameLengthSettings,
   wildcardLetter,
+  blankTileLetter,
   playableLetters,
   letter_points,
   boardSize,
@@ -305,7 +306,11 @@ function createTileElement(tile, options = {}) {
     tileElement.dataset.marketplacePending = "true";
     tileElement.classList.add("tile-marketplace-pending");
   }
-  if (tile.letter === wildcardLetter) {
+  if (tile.blank || tile.letter === blankTileLetter) {
+    letterElement.className = "tile-blank-symbol";
+    letterElement.setAttribute("aria-hidden", "true");
+    letterElement.textContent = "";
+  } else if (tile.letter === wildcardLetter) {
     letterElement.className = "material-symbols-outlined tile-wild-symbol";
     letterElement.textContent = "asterisk";
   } else {
@@ -321,7 +326,12 @@ function createTileElement(tile, options = {}) {
       : `Wild tile resolved as ${tile.letter}`;
   }
 
-  if (tile.rainbow && !tile.wildcard) {
+  if (tile.blank || tile.letter === blankTileLetter) {
+    tileElement.classList.add("tile-blank");
+    tileElement.title = "Blank tile: splits words";
+  }
+
+  if (tile.rainbow && !tile.wildcard && !(tile.blank || tile.letter === blankTileLetter)) {
     tileElement.classList.add("tile-rainbow");
     tileElement.style.setProperty(
       "--rainbow-animation-delay",
@@ -1008,7 +1018,7 @@ function renderPoolView(gameLogElement) {
   header.append(title);
   poolGrid.className = "pool-grid";
 
-  [...playableLetters, wildcardLetter].forEach((letter) => {
+  [...playableLetters, wildcardLetter, blankTileLetter].forEach((letter) => {
     const item = document.createElement("div");
     const letterElement = document.createElement("span");
     const countElement = document.createElement("span");
@@ -1016,7 +1026,7 @@ function renderPoolView(gameLogElement) {
     item.className = "pool-letter";
     letterElement.className = "pool-letter-name";
     countElement.className = "pool-letter-count";
-    letterElement.textContent = letter;
+    letterElement.textContent = letter === blankTileLetter ? "blank" : letter;
     countElement.textContent = Math.max(0, Number(gameState.lettersAvailable[letter] || 0));
 
     item.append(letterElement, countElement);
@@ -4148,7 +4158,7 @@ async function startNewGame() {
   gameState.lastPlayDate = gameState.startDate;
   gameState.players.forEach((_, index) => {
     gameState.currentPlayerIndex = index;
-    gameState.drawSevenTiles({ ensureRainbow: true });
+    gameState.drawSevenTiles({ ensureRainbow: true, excludeBlanks: true });
   });
   gameState.currentPlayerIndex = 0;
   captureTurnStartGameState();

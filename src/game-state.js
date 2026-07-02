@@ -2,6 +2,7 @@ import {
   bonusTypes,
   gameLengthSettings,
   wildcardLetter,
+  blankTileLetter,
   playableLetters,
   rackRainbowProbability,
   boardSize,
@@ -329,7 +330,7 @@ class WordWefterGameState {
   }
 
   reconcileStartingPoolForLoadedState() {
-    [wildcardLetter, ...playableLetters].forEach((letter) => {
+    [wildcardLetter, blankTileLetter, ...playableLetters].forEach((letter) => {
       this.startingLettersAvailable[letter] = Math.max(
         Math.max(0, Number(this.startingLettersAvailable[letter] || 0)),
         Math.max(0, Number(this.lettersAvailable[letter] || 0))
@@ -531,8 +532,11 @@ class WordWefterGameState {
         drawnTiles.length === tileCount - 1 &&
         !drawnTiles.some((drawnTile) => !drawnTile.wildcard) &&
         this.hasAvailableMarketplaceLetters();
+      const shouldExcludeBlanks = Boolean(options.excludeBlanks) ||
+        [...this.currentRack, ...drawnTiles].some((rackTile) => this.isBlankTile(rackTile));
       const tile = this.drawTile({
         excludeWildcards: shouldForceNonWildcard,
+        excludeBlanks: shouldExcludeBlanks,
         rackBalanceTiles: [
           ...this.currentRack,
           ...drawnTiles
@@ -783,6 +787,7 @@ class WordWefterGameState {
   prepareRackDrawnTile(tile, options = {}) {
     return !options.suppressRandomRainbow &&
       tile.letter !== wildcardLetter &&
+      !this.isBlankTile(tile) &&
       Math.random() < rackRainbowProbability
       ? {
         ...tile,
@@ -792,7 +797,7 @@ class WordWefterGameState {
   }
 
   assignRainbowTile(tiles) {
-    const candidates = tiles.filter((tile) => !tile.wildcard);
+    const candidates = tiles.filter((tile) => !tile.wildcard && !this.isBlankTile(tile));
 
     if (candidates.length === 0) {
       return null;
@@ -908,7 +913,8 @@ class WordWefterGameState {
       letter: cleanTile.letter,
       points: cleanTile.points,
       ...(cleanTile.wildcard ? { wildcard: true } : {}),
-      ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
+      ...(this.isBlankTile(cleanTile) ? { blank: true } : {}),
+      ...(cleanTile.rainbow && !cleanTile.wildcard && !this.isBlankTile(cleanTile) ? { rainbow: true } : {}),
       ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {})
     };
   }
@@ -1076,6 +1082,7 @@ class WordWefterGameState {
       .filter(([letter, count]) => (
         count > 0 &&
         (!options.excludeWildcards || letter !== wildcardLetter) &&
+        (!options.excludeBlanks || letter !== blankTileLetter) &&
         !excludeLetters.has(letter)
       ));
     const rackBalance = Array.isArray(options.rackBalanceTiles)
@@ -1101,8 +1108,9 @@ class WordWefterGameState {
         return {
           id: `tile-${this.nextTileId++}`,
           letter,
-          points: this.letterPoints[letter],
+          points: letter === blankTileLetter ? 0 : this.letterPoints[letter],
           ...(letter === wildcardLetter ? { wildcard: true } : {}),
+          ...(letter === blankTileLetter ? { blank: true } : {}),
         };
       }
 
@@ -1316,7 +1324,8 @@ class WordWefterGameState {
     return {
       letter: tile.letter,
       ...(tile.wildcard ? { wildcard: true } : {}),
-      ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
+      ...(this.isBlankTile(tile) ? { blank: true } : {}),
+      ...(tile.rainbow && !tile.wildcard && !this.isBlankTile(tile) ? { rainbow: true } : {}),
       ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
       ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
       ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
@@ -1441,7 +1450,8 @@ class WordWefterGameState {
     return [
       String(tile?.letter || "").toUpperCase(),
       tile?.wildcard ? "wild" : "letter",
-      tile?.rainbow && !tile?.wildcard ? "rainbow" : "plain",
+      this.isBlankTile(tile) ? "blank" : "letter",
+      tile?.rainbow && !tile?.wildcard && !this.isBlankTile(tile) ? "rainbow" : "plain",
       String(tile?.sourceLetter || "").toUpperCase()
     ].join("|");
   }
@@ -1512,8 +1522,11 @@ class WordWefterGameState {
     this.nextTileId = 1;
 
     const hydrateTile = (tile) => {
-      const letter = String(tile.letter || "").toUpperCase();
+      const letter = Boolean(tile.blank)
+        ? blankTileLetter
+        : String(tile.letter || "").toUpperCase();
       const wildcard = Boolean(tile.wildcard) || letter === wildcardLetter;
+      const blank = !wildcard && (Boolean(tile.blank) || letter === blankTileLetter);
 
       if (!letter) {
         throw new Error("Tiles must include a letter.");
@@ -1522,9 +1535,10 @@ class WordWefterGameState {
       return {
         id: `tile-${this.nextTileId++}`,
         letter,
-        points: wildcard ? 0 : this.letterPoints[letter],
+        points: wildcard || blank ? 0 : this.letterPoints[letter],
         ...(wildcard ? { wildcard: true } : {}),
-        ...(!wildcard && tile.rainbow ? { rainbow: true } : {}),
+        ...(blank ? { blank: true } : {}),
+        ...(!wildcard && !blank && tile.rainbow ? { rainbow: true } : {}),
         ...(tile.sourceLetter ? { sourceLetter: String(tile.sourceLetter).toUpperCase() } : {}),
         ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
         ...(Number.isInteger(Number(tile.marketplaceIndex)) ? { marketplaceIndex: Number(tile.marketplaceIndex) } : {}),
@@ -1558,7 +1572,8 @@ class WordWefterGameState {
               letter: hydratedTile.letter,
               points: hydratedTile.points,
               ...(hydratedTile.wildcard ? { wildcard: true } : {}),
-              ...(hydratedTile.rainbow && !hydratedTile.wildcard ? { rainbow: true } : {}),
+              ...(this.isBlankTile(hydratedTile) ? { blank: true } : {}),
+              ...(hydratedTile.rainbow && !hydratedTile.wildcard && !this.isBlankTile(hydratedTile) ? { rainbow: true } : {}),
               ...(hydratedTile.sourceLetter ? { sourceLetter: hydratedTile.sourceLetter } : {}),
               row: hydratedTile.row,
               column: hydratedTile.column,
@@ -1570,7 +1585,8 @@ class WordWefterGameState {
           hydratedTile.letter = topTile.letter;
           hydratedTile.points = topTile.points;
           hydratedTile.wildcard = Boolean(topTile.wildcard);
-          hydratedTile.rainbow = Boolean(topTile.rainbow) && !hydratedTile.wildcard;
+          hydratedTile.blank = this.isBlankTile(topTile);
+          hydratedTile.rainbow = Boolean(topTile.rainbow) && !hydratedTile.wildcard && !hydratedTile.blank;
           hydratedTile.sourceLetter = topTile.sourceLetter;
         }
 
@@ -1596,7 +1612,7 @@ class WordWefterGameState {
 
       this.players.forEach((_, index) => {
         this.currentPlayerIndex = index;
-        this.drawSevenTiles({ ensureRainbow: true });
+        this.drawSevenTiles({ ensureRainbow: true, excludeBlanks: true });
       });
       this.currentPlayerIndex = loadedPlayerIndex;
     };
@@ -1743,6 +1759,14 @@ class WordWefterGameState {
 
   isUnresolvedWildcard(tile) {
     return Boolean(tile?.wildcard) && tile.letter === wildcardLetter;
+  }
+
+  isBlankTile(tile) {
+    return !tile?.wildcard && (Boolean(tile?.blank) || tile?.letter === blankTileLetter);
+  }
+
+  isWordTile(tile) {
+    return Boolean(tile) && !this.isBlankTile(tile);
   }
 
   getCellKey(row, column) {
@@ -1927,6 +1951,19 @@ class WordWefterGameState {
       return false;
     }
 
+    const placingTile = source === "rack"
+      ? this.currentRack.find((tile) => tile.id === tileId)
+      : source === "marketplace"
+        ? this.marketplaceTiles.find((tile) => tile?.id === tileId)
+        : movingActiveTile;
+
+    if (
+      this.isBlankTile(placingTile) &&
+      !this.boardTiles.has(this.getCellKey(normalizedRow, normalizedColumn))
+    ) {
+      return false;
+    }
+
     if (!this.hasActivePlacements()) {
       return true;
     }
@@ -1975,7 +2012,8 @@ class WordWefterGameState {
       letter: tile.letter,
       points: tile.points,
       ...(tile.wildcard ? { wildcard: true } : {}),
-      ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
+      ...(this.isBlankTile(tile) ? { blank: true } : {}),
+      ...(tile.rainbow && !tile.wildcard && !this.isBlankTile(tile) ? { rainbow: true } : {}),
       ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {}),
       ...(tile.pendingMarketplace ? { pendingMarketplace: true } : {}),
       ...(Number.isInteger(tile.marketplaceIndex) ? { marketplaceIndex: tile.marketplaceIndex } : {}),
@@ -2117,7 +2155,8 @@ class WordWefterGameState {
         letter: tile.letter,
         points: tile.points,
         ...(tile.wildcard ? { wildcard: true } : {}),
-        ...(tile.rainbow && !tile.wildcard ? { rainbow: true } : {}),
+        ...(this.isBlankTile(tile) ? { blank: true } : {}),
+        ...(tile.rainbow && !tile.wildcard && !this.isBlankTile(tile) ? { rainbow: true } : {}),
         ...(tile.sourceLetter ? { sourceLetter: tile.sourceLetter } : {})
       });
     });
@@ -2153,7 +2192,7 @@ class WordWefterGameState {
       for (let column = 0; column < boardSize; column += 1) {
         const tile = getWordTileAt(row, column);
 
-        if (tile) {
+        if (this.isWordTile(tile)) {
           currentWordTiles.push(tile);
         } else {
           collectWord(currentWordTiles);
@@ -2170,7 +2209,7 @@ class WordWefterGameState {
       for (let row = 0; row < boardSize; row += 1) {
         const tile = getWordTileAt(row, column);
 
-        if (tile) {
+        if (this.isWordTile(tile)) {
           currentWordTiles.push(tile);
         } else {
           collectWord(currentWordTiles);
@@ -2359,7 +2398,7 @@ class WordWefterGameState {
     while (
       startRow - rowStep >= 0 &&
       startColumn - columnStep >= 0 &&
-      this.getTileAt(startRow - rowStep, startColumn - columnStep)
+      this.isWordTile(this.getTileAt(startRow - rowStep, startColumn - columnStep))
     ) {
       startRow -= rowStep;
       startColumn -= columnStep;
@@ -2372,7 +2411,7 @@ class WordWefterGameState {
     while (
       currentRow < boardSize &&
       currentColumn < boardSize &&
-      this.getTileAt(currentRow, currentColumn)
+      this.isWordTile(this.getTileAt(currentRow, currentColumn))
     ) {
       tiles.push(this.getTileAt(currentRow, currentColumn));
       currentRow += rowStep;
@@ -2388,9 +2427,42 @@ class WordWefterGameState {
     };
   }
 
+  getWordsAdjacentToBlank(tile, direction, assignments = new Map()) {
+    const rowStep = direction === "column" ? 1 : 0;
+    const columnStep = direction === "row" ? 1 : 0;
+    const words = [];
+    const seenKeys = new Set();
+    const addWordAt = (row, column) => {
+      if (
+        row < 0 ||
+        row >= boardSize ||
+        column < 0 ||
+        column >= boardSize ||
+        !this.isWordTile(this.getTileAt(row, column))
+      ) {
+        return;
+      }
+
+      const word = this.getWordAt(row, column, direction, assignments);
+
+      if (word.word.length > 1 && !seenKeys.has(word.key)) {
+        seenKeys.add(word.key);
+        words.push(word);
+      }
+    };
+
+    addWordAt(tile.row - rowStep, tile.column - columnStep);
+    addWordAt(tile.row + rowStep, tile.column + columnStep);
+    return words;
+  }
+
   scoreWordTiles(tiles) {
     let wordMultiplier = 1;
     const letterScore = tiles.reduce((total, tile) => {
+      if (this.isBlankTile(tile)) {
+        return total;
+      }
+
       const cellKey = this.getCellKey(tile.row, tile.column);
       const boardTile = this.boardTiles.get(cellKey);
       const boardStackLength = this.getTileStack(boardTile).length;
@@ -2425,6 +2497,14 @@ class WordWefterGameState {
 
     this.activePlacements.forEach((tile) => {
       ["row", "column"].forEach((direction) => {
+        if (this.isBlankTile(tile)) {
+          this.getWordsAdjacentToBlank(tile, direction, assignments)
+            .forEach((word) => {
+              changedWords.set(word.key, word);
+            });
+          return;
+        }
+
         const word = this.getWordAt(tile.row, tile.column, direction, assignments);
 
         if (word.word.length > 1) {
@@ -2630,7 +2710,8 @@ class WordWefterGameState {
         letter: cleanTile.letter,
         points: cleanTile.points,
         ...(cleanTile.wildcard ? { wildcard: true } : {}),
-        ...(cleanTile.rainbow && !cleanTile.wildcard ? { rainbow: true } : {}),
+        ...(this.isBlankTile(cleanTile) ? { blank: true } : {}),
+        ...(cleanTile.rainbow && !cleanTile.wildcard && !this.isBlankTile(cleanTile) ? { rainbow: true } : {}),
         ...(cleanTile.sourceLetter ? { sourceLetter: cleanTile.sourceLetter } : {}),
         row: cleanTile.row,
         column: cleanTile.column,

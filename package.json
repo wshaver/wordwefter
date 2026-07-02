@@ -4,7 +4,7 @@
     "build": "npm run build:prod",
     "build:prod": "vite build --mode production && node scripts/update-prod-asset-references.cjs",
     "build:test": "vite build --mode test",
-    "check": "npm run build:prod && npm run build:test && node scripts/check-build-variants.cjs && node scripts/check-changelog-content.cjs && node scripts/check-letter-points.mjs && node scripts/check-board-bonus-center-lines.mjs && node scripts/check-marketplace-turn-pricing.mjs && node scripts/check-marketplace-opening-soon.mjs && node scripts/check-marketplace-cost-badge-removed.cjs && node scripts/check-marketplace-fixed-cost-rail.cjs && node scripts/check-marketplace-duplicates.mjs && node scripts/check-auth-redirect.cjs && node scripts/check-public-leaderboard-entry.cjs"
+    "check": "npm run build:prod && npm run build:test && node scripts/check-build-variants.cjs && node scripts/check-changelog-content.cjs && node scripts/check-letter-points.mjs && node scripts/check-board-bonus-center-lines.mjs && node scripts/check-blank-tiles.mjs && node scripts/check-marketplace-turn-pricing.mjs && node scripts/check-marketplace-opening-soon.mjs && node scripts/check-marketplace-cost-badge-removed.cjs && node scripts/check-marketplace-fixed-cost-rail.cjs && node scripts/check-marketplace-duplicates.mjs && node scripts/check-auth-redirect.cjs && node scripts/check-public-leaderboard-entry.cjs"
   },
   "devDependencies": {
     "vite": "^7.0.0"

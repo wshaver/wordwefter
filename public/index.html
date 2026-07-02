@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,600,0,0" rel="stylesheet">
-  <link rel="stylesheet" href="./dist/styles-3c54517b.css">
+  <link rel="stylesheet" href="./dist/styles-6f46ccb0.css">
   <script>
     let hasStoredPlayerName = false;
     let allowsLegacyNameLogin = false;
@@ -379,8 +379,22 @@
           </div>
         </article>
         <article class="rules-card">
+          <h3>Blank Tiles</h3>
+          <p>Blank tiles are zero-point space tiles. They are mixed into the pool in the same count as wild tiles, but they are not wild, never rainbow, and never appear in opening racks.</p>
+          <p>A blank can only be placed on top of an existing board tile. It counts as a physical tile for connecting a play, but acts like a space for word legality.</p>
+          <p>Visible blanks split words into separate words. For example change RACECAR into RACE ARE by adding a blank and an E.</p>
+          <div class="rules-example rules-example-bottom" aria-hidden="true">
+            <div class="board-cell">
+              <div class="tile tile-blank">
+                <span class="tile-blank-symbol"></span>
+                <span class="tile-points">0</span>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="rules-card">
           <h3>Rainbow Tiles</h3>
-          <p>Every opening rack includes one rainbow tile, randomly chosen from that rack's non-wild tiles. After that, each non-wild tile drawn into a rack has a 1-in-14 chance to become rainbow. Wild tiles cannot be rainbow, and marketplace tiles are never rainbow.</p>
+          <p>Every opening rack includes one rainbow tile, randomly chosen from that rack's non-wild, non-blank tiles. After that, each non-wild, non-blank tile drawn into a rack has a 1-in-14 chance to become rainbow. Wild tiles and blank tiles cannot be rainbow, and marketplace tiles are never rainbow.</p>
           <p>A rainbow tile doubles every changed word that contains it, including future changes while it remains the top tile. If another tile covers it, the rainbow bonus stops applying.</p>
             <div class="rules-example rules-example-bottom" aria-hidden="true">
               <div class="board-cell">
@@ -407,6 +421,12 @@
         </h2>
       </div>
       <div class="changelog-list">
+        <article class="changelog-entry">
+          <h3>Blank Tiles</h3>
+          <p class="changelog-date">July 2, 2026</p>
+          <p>Blank space tiles now appear in the pool in the same count as wild tiles. They can show up after opening racks and in the marketplace, but never as wild or rainbow tiles.</p>
+          <p>Blank tiles can only be placed on top of existing board tiles. They split visible words into separate scored words while still counting as physical tiles for board connection.</p>
+        </article>
         <article class="changelog-entry">
           <h3>Opening Soon Marketplace</h3>
           <p class="changelog-date">June 30, 2026</p>
@@ -557,6 +577,6 @@
   <script src="./jquery-4.0.0.min.js"></script>
   <script src="./lodash.js"></script>
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./dist/game-CqsYguyI.js"></script>
+  <script type="module" src="./dist/game-CgTSyE0L.js"></script>
 </body>
 </html>
