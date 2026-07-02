@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { letter_points } from "../src/letter-setup.js";
 
 const expectedLetterPoints = {
@@ -45,5 +48,27 @@ assert.equal(
   1,
   "only one letter should top out at 7 points"
 );
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const indexHtml = fs.readFileSync(path.join(rootDir, "public", "index.html"), "utf8");
+const expectedRulesRows = [
+  ["0", "?"],
+  ["1", "A, E, I, O"],
+  ["2", "H, L, N, R, S, T, U"],
+  ["3", "C, D, G, M, P, Y"],
+  ["4", "B, F"],
+  ["5", "K, V, W"],
+  ["6", "J, X, Z"],
+  ["7", "Q"]
+];
+
+assert.match(indexHtml, /<h3>Letter Point Values<\/h3>/, "rules should include a letter point values card");
+for (const [points, letters] of expectedRulesRows) {
+  assert.match(
+    indexHtml,
+    new RegExp(`<tr>\\s*<th scope="row">${points}<\\/th>\\s*<td>${letters.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/td>\\s*<\\/tr>`),
+    `rules should list ${letters} as ${points}-point letters`
+  );
+}
 
 console.log("Letter point checks passed.");
