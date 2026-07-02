@@ -592,15 +592,23 @@ function consumeTileAnimationKeyCount(counts, tile) {
   return true;
 }
 
+function shuffleItems(items) {
+  const shuffledItems = [...items];
+
+  for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffledItems[index], shuffledItems[swapIndex]] = [shuffledItems[swapIndex], shuffledItems[index]];
+  }
+
+  return shuffledItems;
+}
+
 function animateSequentialTileEnter(tileElements, options = {}) {
   const now = Date.now();
   const useQueue = options.useQueue !== false;
   let nextDelay = useQueue ? Math.max(0, tileEnterQueueAvailableAt - now) : 0;
-  const lodashShuffle = globalThis._?.shuffle;
   const variantIndexes = tileElements.map((_, index) => index % tileEnterDurations.length);
-  const shuffledVariantIndexes = typeof lodashShuffle === "function"
-    ? lodashShuffle(variantIndexes)
-    : variantIndexes.sort(() => Math.random() - 0.5);
+  const shuffledVariantIndexes = shuffleItems(variantIndexes);
 
   tileElements.forEach((tileElement, index) => {
     const variantIndex = shuffledVariantIndexes[index];
@@ -1403,16 +1411,10 @@ function shuffleVisibleRack() {
   }
 
   const originalTileIds = visibleRack.map((tile) => tile.id);
-  const lodashShuffle = globalThis._?.shuffle;
   let shuffledRack = visibleRack;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    shuffledRack = typeof lodashShuffle === "function"
-      ? lodashShuffle(visibleRack)
-      : visibleRack
-        .map((tile) => ({ tile, sort: Math.random() }))
-        .sort((first, second) => first.sort - second.sort)
-        .map(({ tile }) => tile);
+    shuffledRack = shuffleItems(visibleRack);
 
     if (shuffledRack.some((tile, index) => tile.id !== originalTileIds[index])) {
       break;
