@@ -19,7 +19,9 @@ assertIncludes("Marketplace Turn Pricing", "Changelog should describe marketplac
 assertIncludes("June 30, 2026", "Changelog entries should include dates.");
 assertIncludes("Bonus Square Placement", "Changelog should describe bonus square placement.");
 assertIncludes("center row or center column", "Changelog should mention center-line bonus exclusion.");
+assertIncludes("Letter Point Spread", "Changelog should describe the wider letter point spread.");
 assertIncludes("Letter Point Rebalance", "Changelog should describe letter point rebalance.");
-assertIncludes("1-to-5 scale", "Changelog should mention the new 1-to-5 letter scale.");
+assertIncludes("1-to-7 scale", "Changelog should mention the new 1-to-7 letter scale.");
+assertIncludes("Q stands alone at 7 points", "Changelog should mention the 7-point Q ceiling.");
 
 console.log("Changelog content checks passed.");

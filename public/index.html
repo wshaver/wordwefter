@@ -63,16 +63,16 @@
         <span class="brand-word brand-word-top" aria-hidden="true">
           <span class="brand-tile brand-tile-rainbow"><span class="brand-tile-letter">W</span><span class="brand-tile-points">5</span></span>
           <span class="brand-tile"><span class="brand-tile-letter">O</span><span class="brand-tile-points">1</span></span>
-          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">2</span></span>
           <span class="brand-tile"><span class="brand-tile-letter">D</span><span class="brand-tile-points">3</span></span>
         </span>
         <span class="brand-word brand-word-bottom" aria-hidden="true">
           <span class="brand-spacer"></span>
           <span class="brand-tile"><span class="brand-tile-letter">E</span><span class="brand-tile-points">1</span></span>
-          <span class="brand-tile"><span class="brand-tile-letter">F</span><span class="brand-tile-points">5</span></span>
-          <span class="brand-tile"><span class="brand-tile-letter">T</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">F</span><span class="brand-tile-points">4</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">T</span><span class="brand-tile-points">2</span></span>
           <span class="brand-tile"><span class="brand-tile-letter">E</span><span class="brand-tile-points">1</span></span>
-          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">1</span></span>
+          <span class="brand-tile"><span class="brand-tile-letter">R</span><span class="brand-tile-points">2</span></span>
         </span>
       </h1>
       <div class="game-controls" aria-label="Game controls">
@@ -282,15 +282,15 @@
           <div class="rules-board-example" aria-hidden="true">
             <div class="board-cell"></div>
             <div class="board-cell">
-              <div class="tile">S<span class="tile-points">1</span></div>
+              <div class="tile">S<span class="tile-points">2</span></div>
             </div>
             <div class="board-cell"></div>
             <div class="board-cell"></div>
             <div class="board-cell">
-              <div class="tile tile-active-placement">J<span class="tile-points">8</span></div>
+              <div class="tile tile-active-placement">J<span class="tile-points">6</span></div>
             </div>
             <div class="board-cell">
-              <div class="tile tile-active-placement">U<span class="tile-points">1</span></div>
+              <div class="tile tile-active-placement">U<span class="tile-points">2</span></div>
             </div>
             <div class="board-cell">
               <div class="tile tile-active-placement">M<span class="tile-points">3</span></div>
@@ -305,9 +305,9 @@
             <div class="board-cell"></div>
             <div class="board-cell"></div>
           </div>
-          <p class="rules-equation">JUMP: J8 + U1 + M3 + P3 = 15.</p>
-          <p class="rules-equation">SUM: S1 + U1 + M3 = 5, but it was already on the board and is not rescored.</p>
-          <p class="rules-equation">Turn score: 15.</p>
+          <p class="rules-equation">JUMP: J6 + U2 + M3 + P3 = 14.</p>
+          <p class="rules-equation">SUM: S2 + U2 + M3 = 7, but it was already on the board and is not rescored.</p>
+          <p class="rules-equation">Turn score: 14.</p>
         </article>
         <article class="rules-card">
           <h3>Bonus Squares</h3>
@@ -344,10 +344,10 @@
             </div>
             <div class="board-cell">
               <div class="tile tile-covered-underlay">T<span class="tile-points">1</span></div>
-              <div class="tile tile-covering-placement tile-stacked">N<span class="tile-stack-badge">2x</span><span class="tile-points">1</span></div>
+              <div class="tile tile-covering-placement tile-stacked">N<span class="tile-stack-badge">2x</span><span class="tile-points">2</span></div>
             </div>
           </div>
-          <p class="rules-equation">MEN: M3 x3 + E1 + N1 x2 = 12.</p>
+          <p class="rules-equation">MEN: M3 x3 + E1 + N2 x2 = 14.</p>
           <p class="rules-equation">M is stacked third, so it scores 3x. N is stacked second, so it scores 2x.</p>
         </article>
         <article class="rules-card">
@@ -398,7 +398,7 @@
           <p>A rainbow tile doubles every changed word that contains it, including future changes while it remains the top tile. If another tile covers it, the rainbow bonus stops applying.</p>
             <div class="rules-example rules-example-bottom" aria-hidden="true">
               <div class="board-cell">
-                <div class="tile tile-rainbow">R<span class="tile-points">1</span></div>
+                <div class="tile tile-rainbow">R<span class="tile-points">2</span></div>
               </div>
             </div>
             <p class="rules-equation">Word x2.</p>
@@ -434,6 +434,12 @@
           <p>After duplicate removal, this adds about 10,300 unique playable words, bringing the dictionary used for word validation to about 189,000 total words.</p>
         </article>
         <article class="changelog-entry">
+          <h3>Letter Point Spread</h3>
+          <p class="changelog-date">July 2, 2026</p>
+          <p>Letter values now use a wider 1-to-7 scale. A, E, I, and O remain the only 1-point letters, while Q is the only letter that tops out at 7 points.</p>
+          <p>High-impact letters now have more separation: K, V, and W are 5 points; J, X, and Z are 6 points; and Q stands alone at 7 points.</p>
+        </article>
+        <article class="changelog-entry">
           <h3>Opening Soon Marketplace</h3>
           <p class="changelog-date">June 30, 2026</p>
           <p>Players now see an Opening Soon sign instead of marketplace letters until they have completed their own first turn.</p>
@@ -460,7 +466,7 @@
         <article class="changelog-entry">
           <h3>Letter Point Rebalance</h3>
           <p class="changelog-date">June 30, 2026</p>
-          <p>Letter values now use a less top-heavy 1-to-5 scale. A, E, I, and O are the only 1-point letters, while high-impact letters such as J, Q, X, and Z now top out at 5 points.</p>
+          <p>Letter values were rebalanced so A, E, I, and O became the only 1-point letters.</p>
           <p>Common consonants such as N, R, S, and T moved up to 2 points, making everyday words a little more valuable while reducing big swings from rare letters.</p>
         </article>
       </div>
@@ -581,6 +587,6 @@
   </footer>
 
   <script src="./sortable.min.js"></script>
-  <script type="module" src="./dist/game-DzSKtEx2.js"></script>
+  <script type="module" src="./dist/game-CPUedtPh.js"></script>
 </body>
 </html>
